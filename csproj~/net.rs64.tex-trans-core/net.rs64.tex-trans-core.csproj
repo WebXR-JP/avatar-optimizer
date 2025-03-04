@@ -10,7 +10,7 @@
 
 
   <ItemGroup>
-    <Compile Include="../TexTransCore/**/*.cs"/>
+    <Compile Include="../../TexTransCore/**/*.cs"/>
   </ItemGroup>
 
 </Project>
