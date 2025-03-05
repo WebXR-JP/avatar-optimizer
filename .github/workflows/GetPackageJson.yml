@@ -1,4 +1,4 @@
-name: CreateZip
+name: GetPackageJson
 on:
   workflow_call:
     inputs:
@@ -12,7 +12,7 @@ on:
         required: false
 
 jobs:
-    Create-Zip:
+    Get-Package-Json:
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@v4
