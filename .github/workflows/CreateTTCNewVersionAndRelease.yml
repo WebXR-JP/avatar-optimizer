@@ -1,0 +1,31 @@
+name: CreateTTCNewVersionAndRelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+jobs:
+  UpdateTTC:
+    uses: ./.github/workflows/UpdateTTC.yml
+    with:
+      tag: ${{ inputs.tag }}
+
+  CreateZip:
+    uses: ./.github/workflows/CreateZip.yml
+    needs: [UpdateTTC]
+    with:
+      ref: ${{ inputs.tag }}
+  GetPackageJson:
+    uses: ./.github/workflows/GetPackageJson.yml
+    needs: [UpdateTTC]
+    with:
+      ref: ${{ inputs.tag }}
+
+  CreateRelease:
+    uses: ./.github/workflows/CreateRelease.yml
+    needs: [CreateZip, GetPackageJson]
+    with:
+      tag: ${{ inputs.tag }}

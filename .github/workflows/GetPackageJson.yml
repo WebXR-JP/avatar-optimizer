@@ -1,0 +1,26 @@
+name: CreateZip
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+        required: false
+
+jobs:
+    Create-Zip:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-tags: true
+            ref: ${{ inputs.ref }}
+
+        - uses: actions/upload-artifact@v4
+          with:
+            name: package
+            path: package.json

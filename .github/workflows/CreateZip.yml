@@ -1,0 +1,37 @@
+name: CreateZip
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+        required: false
+
+jobs:
+    Create-Zip:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-tags: true
+            ref: ${{ inputs.ref }}
+
+        - uses: actions/setup-dotnet@v4
+
+        - name: install ApiCompat
+          run: |
+            dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
+
+        - name: create zip
+          run: |
+            cd .github/CreateZip
+            dotnet run
+
+        - uses: actions/upload-artifact@v4
+          with:
+            name: tex-trans-core
+            path: tex-trans-core.zip
