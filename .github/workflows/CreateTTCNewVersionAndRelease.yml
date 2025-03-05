@@ -17,12 +17,12 @@ jobs:
     uses: ./.github/workflows/CreateZip.yml
     needs: [UpdateTTC]
     with:
-      ref: ${{ inputs.tag }}
+      tag: ${{ inputs.tag }}
   GetPackageJson:
     uses: ./.github/workflows/GetPackageJson.yml
     needs: [UpdateTTC]
     with:
-      ref: ${{ inputs.tag }}
+      tag: ${{ inputs.tag }}
 
   CreateRelease:
     uses: ./.github/workflows/CreateRelease.yml
