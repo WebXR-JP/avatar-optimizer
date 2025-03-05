@@ -2,12 +2,12 @@ name: CreateZip
 on:
   workflow_call:
     inputs:
-      ref:
+      tag:
         type: string
         required: false
   workflow_dispatch:
     inputs:
-      ref:
+      tag:
         type: string
         required: false
 
@@ -18,7 +18,7 @@ jobs:
         - uses: actions/checkout@v4
           with:
             fetch-tags: true
-            ref: ${{ inputs.ref }}
+            ref: ${{ inputs.tag }}
 
         - uses: actions/setup-dotnet@v4
 
@@ -27,11 +27,15 @@ jobs:
             dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
 
         - name: create zip
+          env:
+            TAG: ${{ inputs.tag }}
           run: |
             cd .github/CreateZip
             dotnet run
+            mv tex-trans-core.zip tex-trans-core-$TAG.zip
+
 
         - uses: actions/upload-artifact@v4
           with:
             name: tex-trans-core
-            path: tex-trans-core.zip
+            path: tex-trans-core-${{ inputs.tag }}.zip
