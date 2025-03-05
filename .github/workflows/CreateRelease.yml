@@ -21,6 +21,7 @@ jobs:
       with:
         name: ${{ inputs.tag }}
         tag_name: ${{ inputs.tag }}
+        prerelease: ${{ contains(inputs.tag,'-') }}
         generate_release_notes: true
         files: |
           tex-trans-core.zip
