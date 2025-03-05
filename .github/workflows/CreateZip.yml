@@ -32,6 +32,8 @@ jobs:
           run: |
             cd .github/CreateZip
             dotnet run
+
+            cd ../../
             mv tex-trans-core.zip tex-trans-core-$TAG.zip
 
 
