@@ -111,5 +111,15 @@ namespace net.rs64.TexTransCore
             if (v < 1.0f) { return (float)Math.Pow((Math.Abs(v) + 0.055f) / 1.055f, 2.4f); }
             return (float)Math.Pow(Math.Abs(v), 2.2f);
         }
+
+        public static int RoundToInt(float value)
+        {
+            return (int)Math.Round(value);
+        }
+
+        public static bool Approximately(float l, float r, float delta = float.Epsilon * 8f)
+        {
+            return Math.Abs(l - r) < delta;
+        }
     }
 }
