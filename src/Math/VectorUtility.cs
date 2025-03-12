@@ -2,9 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using net.rs64.TexTransCore;
 
-namespace net.rs64.TexTransTool.TTMathUtil
+namespace net.rs64.TexTransCore.TTMathUtil
 {
     public static class VectorUtility
     {
