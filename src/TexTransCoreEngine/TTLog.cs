@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 
 namespace net.rs64.TexTransCore
@@ -22,10 +23,10 @@ namespace net.rs64.TexTransCore
             ExceptionCall?.Invoke(e, additionalStackTrace);
         }
 
-        public static Action<string, object[]> LogCall;
-        public static Action<string, object[]> WarningCall;
-        public static Action<string, object[]> ErrorCall;
-        public static Action<Exception, string> ExceptionCall;
+        public static Action<string, object[]>? LogCall;
+        public static Action<string, object[]>? WarningCall;
+        public static Action<string, object[]>? ErrorCall;
+        public static Action<Exception, string>? ExceptionCall;
     }
 
 
