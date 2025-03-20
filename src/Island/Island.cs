@@ -45,19 +45,64 @@ namespace net.rs64.TexTransCore.UVIsland
             var y = (float)(vec.X * Math.Sin(radian) + vec.Y * Math.Cos(radian));
             return new(x, y);
         }
+        public Vector2 GetNotRotatedMaxPos()
+        {
+            return Position + Size;
+        }
         public Vector2 GetRotatedMaxPos()
         {
-            return RotateVector(Size, Rotation);
+            return Position + RotateVector(Size, Rotation);
         }
 
         public IslandTransform Clone()
         {
-            return new()
-            {
-                Position = this.Position,
-                Size = this.Size,
-                Rotation = this.Rotation,
-            };
+            var newI = new IslandTransform();
+            newI.CopyFrom(this);
+            return newI;
+        }
+        public void CopyFrom(IslandTransform from)
+        {
+            Position = from.Position;
+            Size = from.Size;
+            Rotation = from.Rotation;
+        }
+        public float GetArea()
+        {
+            return Size.X * Size.Y;
+        }
+
+        public TTVector4 GetBox(bool applyRotate = true)
+        {
+            var box = new TTVector4(Position.X, Position.Y, Position.X, Position.Y);
+            var maxPos = applyRotate ? GetRotatedMaxPos() : GetNotRotatedMaxPos();
+            box.X = Math.Min(box.X, maxPos.X);
+            box.Y = Math.Min(box.Y, maxPos.Y);
+            box.Z = Math.Max(box.Z, maxPos.X);
+            box.W = Math.Max(box.W, maxPos.Y);
+            return box;
+        }
+        public bool Intersect(IslandTransform other, bool applyRotate = true)
+        {
+            var thisBox = GetBox(applyRotate);
+            var otherBox = other.GetBox(applyRotate);
+            return thisBox.X <= otherBox.Z && thisBox.Z >= otherBox.X
+            && thisBox.Y <= otherBox.W && thisBox.W >= otherBox.Y;
+        }
+        public IslandTransform IntersectBox(IslandTransform other)
+        {
+            if (TTMath.Approximately(Rotation, 0f) is false || TTMath.Approximately(other.Rotation, 0f) is false) { throw new Exception(); }
+            var thisBox = GetBox(false);
+            var otherBox = other.GetBox(false);
+
+            var interLeft = Math.Max(thisBox.X, otherBox.X);
+            var interBottom = Math.Max(thisBox.Y, otherBox.Y);
+
+            var interRight = Math.Min(thisBox.Z, otherBox.Z);
+            var interTop = Math.Min(thisBox.W, otherBox.W);
+
+            var min = new Vector2(interLeft, interBottom);
+            var max = new Vector2(interRight, interTop);
+            return new() { Position = min, Size = max - min };
         }
 
 

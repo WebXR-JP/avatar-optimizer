@@ -164,6 +164,14 @@ namespace net.rs64.TexTransCore
         ITexTransComputeKeyDictionary<ITTBlendKey> BlendKey { get; }
         ITexTransComputeKeyDictionary<string> GrabBlend { get; }
     }
+    public interface IAtlasComputeKey : ITTExtraComputeKeyQuery
+    {
+        ITTComputeKey RectangleTransMapping { get; }
+    }
+    public interface IAtlasSamplerComputeKey : ITTExtraComputeKeyQuery
+    {
+        ITexTransComputeKeyDictionary<ITTSamplerKey> AtlasSamplerKey { get; }
+    }
     public interface ISamplerComputeKey : ITTExtraComputeKeyQuery
     {
         IKeyValueStore<string, ITTSamplerKey> SamplerKey { get; }

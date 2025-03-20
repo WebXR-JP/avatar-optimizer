@@ -6,6 +6,7 @@ namespace net.rs64.TexTransCore
 
     public static class TTLog
     {
+        public static void Info(string code, params object[] args) { Log(code, args); }
         public static void Log(string code, params object[] args)
         {
             LogCall?.Invoke(code, args);

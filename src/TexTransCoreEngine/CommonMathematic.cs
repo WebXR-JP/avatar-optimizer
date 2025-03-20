@@ -121,5 +121,10 @@ namespace net.rs64.TexTransCore
         {
             return Math.Abs(l - r) < delta;
         }
+
+        public static float Saturate(float v)
+        {
+            return Math.Clamp(v, 0f, 1f);
+        }
     }
 }

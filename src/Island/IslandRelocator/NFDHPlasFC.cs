@@ -7,13 +7,13 @@ using net.rs64.TexTransCore.TTMathUtil;
 
 namespace net.rs64.TexTransCore.UVIsland
 {
-    internal class NFDHPlasFC : IIslandRelocator
+    public class NFDHPlasFC : IIslandRelocator
     {
         public RelocationResult Relocation(RelocationContext relocationContext, IslandTransform[] islandTransforms)
         {
-            return new(NextFitDecreasingHeightPlusFloorCeiling(islandTransforms, relocationContext.TargetSize, relocationContext.Padding), true);
+            return new(NextFitDecreasingHeightPlusFloorCeiling(islandTransforms, relocationContext.TargetHeight, relocationContext.Padding), true);
         }
-        public static bool NextFitDecreasingHeightPlusFloorCeiling(IslandTransform[] islands, Vector2 targetSize, float islandPadding = 0.01f)
+        public static bool NextFitDecreasingHeightPlusFloorCeiling(IslandTransform[] islands, float targetHeight, float islandPadding = 0.01f)
         {
             if (islands.Length == 0) { return false; }
 
@@ -27,6 +27,7 @@ namespace net.rs64.TexTransCore.UVIsland
                 else tf.Rotation = 0f;
             }
             Array.Sort(islands, (lId, rId) => TTMath.RoundToInt((lId.Size.Y - rId.Size.Y) * 1073741824));
+            Array.Reverse(islands);
 
             // using (var sortedIA = new NativeArray<IslandRect>(islands.Length, Allocator.Temp, NativeArrayOptions.UninitializedMemory))
             // {
@@ -37,14 +38,14 @@ namespace net.rs64.TexTransCore.UVIsland
             // Profiler.EndSample();
 
             // Profiler.BeginSample("TryNFDHPlasFC");
-            if (TryNFDHPlasFC(islands, targetSize, islandPadding))
+            if (TryNFDHPlasFC(islands, targetHeight, islandPadding))
             {
                 foreach (var tf in islands)
                 {
                     if (tf.Rotation != 0f)
                     {
                         tf.Size = Swap(tf.Size);
-                        tf.Position.X += tf.Size.X;
+                        tf.Position.Y += tf.Size.X;
                     }
                 }
                 // Profiler.EndSample();
@@ -61,7 +62,7 @@ namespace net.rs64.TexTransCore.UVIsland
             return size;
         }
 
-        internal static bool ValidateDeceasing(Span<IslandTransform> rectArray)
+        internal static bool ValidateDeceasing(IslandTransform[] rectArray)
         {
             var validateHeight = rectArray[0].Size.Y;
             foreach (var rect in rectArray)
@@ -83,7 +84,7 @@ namespace net.rs64.TexTransCore.UVIsland
             return false;
         }
 
-        static bool TryNFDHPlasFC(Span<IslandTransform> sortedIslands, Vector2 targetSize, float islandPadding = 0.01f)
+        static bool TryNFDHPlasFC(IslandTransform[] sortedIslands, float targetHeight, float islandPadding = 0.01f)
         {
             var uvWidthBox = new LinkedList<UVWidthBox>();
 
@@ -100,8 +101,8 @@ namespace net.rs64.TexTransCore.UVIsland
 
                 // Profiler.BeginSample("NewBox");
                 var isFirstBox = uvWidthBox.Any() is false;// 外枠に余白を作ってしまうから、初回は半分の padding にすることで回避する。
-                var Floor = isFirstBox ? islandPadding * 0.5f : uvWidthBox.Last.Value.Ceil + islandPadding;
-                var newWithBox = new UVWidthBox(Floor, islandTf.Size.Y, islandPadding, targetSize.X);
+                var Floor = isFirstBox ? islandPadding : uvWidthBox.Last.Value.Ceil + islandPadding * 2f;
+                var newWithBox = new UVWidthBox(Floor, islandTf.Size.Y, islandPadding, 1f);
 
                 uvWidthBox.AddLast(newWithBox);
                 // var pivot = newWithBox.TrySetBox(sortedIslands[i]);
@@ -116,7 +117,7 @@ namespace net.rs64.TexTransCore.UVIsland
             }
 
             var lastHeight = uvWidthBox.Last.Value.Ceil;
-            return (lastHeight + islandPadding * 0.5f) <= targetSize.Y;
+            return (lastHeight + islandPadding) <= targetHeight;
 
             bool TrySetBoxList(IslandTransform sortedIslands)
             {
@@ -162,7 +163,7 @@ namespace net.rs64.TexTransCore.UVIsland
                     var islandWidth = isFirst ? (Padding * 0.5f) + islandTf.Size.X + Padding : Padding + islandTf.Size.X + Padding;
                     if (emptyWidthSize > islandWidth)
                     {
-                        islandTf.Position.X = isFirst ? emptyXMin + (Padding * 0.5f) : emptyXMin + Padding;
+                        islandTf.Position.X = isFirst ? emptyXMin + Padding : emptyXMin + (Padding * 2f);
                         islandTf.Position.Y = Floor;
                         Lower.AddLast(islandTf);
                         return true;
@@ -170,13 +171,13 @@ namespace net.rs64.TexTransCore.UVIsland
                 }
                 {
                     var isFirst = Upper.Any() is false;
-                    var emptyXMin = GetFloorWithEmpty(Math.Clamp(Ceil - islandTf.Size.Y - Padding, Floor, Ceil));
+                    var emptyXMin = GetFloorWithEmpty(Math.Clamp(Ceil - islandTf.Size.Y, Floor, Ceil));
                     var emptyXMax = isFirst ? Width : Upper.Last.Value.Position.X;//ここ position が左下の端になるからそこまで埋まってるってことになるの
                     var emptyWidthSize = emptyXMax - emptyXMin;
-                    var islandWidth = isFirst ? Padding + islandTf.Size.X + (Padding * 0.5f) : Padding + islandTf.Size.X + Padding;
+                    var islandWidth = isFirst ? (Padding * 2f) + islandTf.Size.X + Padding : (Padding * 2f) + islandTf.Size.X + (Padding * 2f);
                     if (emptyWidthSize > islandWidth)
                     {
-                        islandTf.Position.X = isFirst ? emptyXMax - islandTf.Size.X - (Padding * 0.5f) : emptyXMax - islandTf.Size.X - Padding;
+                        islandTf.Position.X = isFirst ? emptyXMax - islandTf.Size.X - Padding : emptyXMax - islandTf.Size.X - (Padding * 2f);
                         islandTf.Position.Y = Ceil - islandTf.Size.Y;
                         Upper.AddLast(islandTf);
                         return true;
@@ -194,7 +195,7 @@ namespace net.rs64.TexTransCore.UVIsland
                 var targetF2Height = targetHeight - Floor;
 
                 foreach (var island in Lower)
-                    if (targetF2Height < island.Size.Y)
+                    if (targetF2Height < (island.Size.Y + Padding * 2f))
                     {
                         xMin = Math.Max(xMin, island.Position.X + island.Size.X);
                     }
@@ -206,10 +207,10 @@ namespace net.rs64.TexTransCore.UVIsland
                 if (VectorUtility.InRange(Floor, Ceil, targetHeight) is false) throw new Exception("TargetHeight is not in range!");
 
                 var xMax = Width;
-                var targetC2Height = targetHeight - Ceil;
+                var targetC2Height = Ceil - targetHeight;
 
                 foreach (var island in Upper)
-                    if (targetC2Height < island.Size.Y)
+                    if (targetC2Height < (island.Size.Y + Padding * 2f))
                     {
                         xMax = Math.Min(xMax, island.Position.X);
                     }
