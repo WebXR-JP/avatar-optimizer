@@ -86,6 +86,7 @@ namespace net.rs64.TexTransCore
         {
             var newRt = CreateRenderTexture(source.Width, source.Hight, source.ContainsChannel);
             CopyRenderTexture(newRt, source);
+            newRt.Name = source.Name + "_Cloned";
             return newRt;
         }
     }
