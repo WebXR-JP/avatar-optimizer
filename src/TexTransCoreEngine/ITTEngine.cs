@@ -168,6 +168,7 @@ namespace net.rs64.TexTransCore
     public interface IAtlasComputeKey : ITTExtraComputeKeyQuery
     {
         ITTComputeKey RectangleTransMapping { get; }
+        ITTComputeKey MergeAtlasedTextures { get; }
     }
     public interface IAtlasSamplerComputeKey : ITTExtraComputeKeyQuery
     {

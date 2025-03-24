@@ -1,0 +1,22 @@
+/*
+BEGIN__TT_COMPUTE_SHADER_HEADER
+
+Language HLSL
+LanguageVersion 2018
+
+TTComputeType General
+
+END__TT_COMPUTE_SHADER_HEADER
+*/
+
+RWTexture2D<float4> DistTex;
+RWTexture2D<float4> AddTex;
+
+[numthreads(32, 32, 1)] void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    float4 colDist = DistTex[id.xy];
+    float4 colAdd = AddTex[id.xy];
+
+    float4 col = colAdd.a > 0.0 ? colAdd : colDist;
+    DistTex[id.xy] = col;
+}
