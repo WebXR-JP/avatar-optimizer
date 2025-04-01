@@ -45,6 +45,14 @@ namespace net.rs64.TexTransCore
                 }
             }
         }
+        public Triangle ToTriangle(Span<Vector3> vert)
+        {
+            return new(vert[zero], vert[one], vert[two]);
+        }
+        public Triangle2D ToTriangle2D(Span<Vector2> vert)
+        {
+            return new(vert[zero], vert[one], vert[two]);
+        }
 
         public IEnumerator<int> GetEnumerator()
         {
@@ -53,41 +61,10 @@ namespace net.rs64.TexTransCore
             yield return two;
         }
 
-        public int[] ToArray()
-        {
-            return new int[3] { zero, one, two };
-        }
-        public List<int> ToList(List<int>? output = null)
-        {
-            if (output == null) { return new List<int>(3) { zero, one, two }; }
-            else
-            {
-                output.Clear();
-                output.Add(zero);
-                output.Add(one);
-                output.Add(two);
-                return output;
-            }
-        }
-
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return ToArray().GetEnumerator();
+            return GetEnumerator();
         }
-
-        public List<T> GetTriangle<T>(List<T> vert, List<T>? output = null)
-        {
-            if (output == null) { return new List<T> { vert[zero], vert[one], vert[two] }; }
-            else
-            {
-                output.Clear();
-                output.Add(vert[zero]);
-                output.Add(vert[one]);
-                output.Add(vert[two]);
-                return output;
-            }
-        }
-
         public override bool Equals(object obj)
         {
             return obj is TriangleIndex other && Equals(other);
@@ -169,22 +146,9 @@ namespace net.rs64.TexTransCore
         {
             return new Vector3[3] { zero, one, two };
         }
-        public List<Vector3> ToList(List<Vector3>? output = null)
-        {
-            if (output == null) { return new List<Vector3>(3) { zero, one, two }; }
-            else
-            {
-                output.Clear();
-                output.Add(zero);
-                output.Add(one);
-                output.Add(two);
-                return output;
-            }
-        }
-
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return ToArray().GetEnumerator();
+            return GetEnumerator();
         }
 
 
@@ -212,4 +176,69 @@ namespace net.rs64.TexTransCore
             }
         }
     }
+    [StructLayout(LayoutKind.Explicit)]
+    public struct Triangle2D : IEnumerable<Vector2>
+    {
+        [FieldOffset(0)] public Vector2 zero;
+        [FieldOffset(8)] public Vector2 one;
+        [FieldOffset(16)] public Vector2 two;
+
+        public Triangle2D(TriangleIndex TriIndex, Span<Vector2> vectors)
+        {
+            zero = vectors[TriIndex.zero];
+            one = vectors[TriIndex.one];
+            two = vectors[TriIndex.two];
+        }
+
+        public Triangle2D(Vector2 vector1, Vector2 vector2, Vector2 vector3)
+        {
+            zero = vector1;
+            one = vector2;
+            two = vector3;
+        }
+
+
+        public IEnumerator<Vector2> GetEnumerator()
+        {
+            yield return zero;
+            yield return one;
+            yield return two;
+        }
+
+        public Vector2[] ToArray()
+        {
+            return new Vector2[3] { zero, one, two };
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+
+        public Vector2 this[int i]
+        {
+            get
+            {
+                switch (i)
+                {
+                    case 0: { return zero; }
+                    case 1: { return one; }
+                    case 2: { return two; }
+                    default: throw new IndexOutOfRangeException();
+                }
+            }
+            set
+            {
+                switch (i)
+                {
+                    case 0: { zero = value; break; }
+                    case 1: { one = value; break; }
+                    case 2: { two = value; break; }
+                    default: throw new IndexOutOfRangeException();
+                }
+            }
+        }
+    }
+
 }

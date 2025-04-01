@@ -86,6 +86,7 @@ namespace net.rs64.TexTransCore
         {
             var newRt = CreateRenderTexture(source.Width, source.Hight, source.ContainsChannel);
             CopyRenderTexture(newRt, source);
+            newRt.Name = source.Name + "_Cloned";
             return newRt;
         }
     }
@@ -163,6 +164,15 @@ namespace net.rs64.TexTransCore
     {
         ITexTransComputeKeyDictionary<ITTBlendKey> BlendKey { get; }
         ITexTransComputeKeyDictionary<string> GrabBlend { get; }
+    }
+    public interface IAtlasComputeKey : ITTExtraComputeKeyQuery
+    {
+        ITTComputeKey RectangleTransMapping { get; }
+        ITTComputeKey MergeAtlasedTextures { get; }
+    }
+    public interface IAtlasSamplerComputeKey : ITTExtraComputeKeyQuery
+    {
+        ITexTransComputeKeyDictionary<ITTSamplerKey> AtlasSamplerKey { get; }
     }
     public interface ISamplerComputeKey : ITTExtraComputeKeyQuery
     {
