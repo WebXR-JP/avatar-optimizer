@@ -98,7 +98,8 @@ namespace net.rs64.TexTransCore
 
     public interface ITexTransDriveStorageBufferHolder
     {
-        ITTStorageBuffer AllocateStorageBuffer(int length, bool downloadable = false);
+        // ここの T に入るものは常の 4 の倍数であるサイズを持つ必要がある
+        ITTStorageBuffer AllocateStorageBuffer<T>(int length, bool downloadable = false) where T : unmanaged;
         ITTStorageBuffer UploadStorageBuffer<T>(ReadOnlySpan<T> data, bool downloadable = false) where T : unmanaged;
         /// <summary>
         /// 一度ダウンロードしたら二度と使用できない。
