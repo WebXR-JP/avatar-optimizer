@@ -1,7 +1,7 @@
 {
   "name": "net.rs64.tex-trans-core",
   "displayName": "TexTransCore",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "unity": "2022.3",
   "description": "C# generic core library for TexTransTool",
   "author": {
