@@ -48,10 +48,11 @@ namespace net.rs64.TexTransCore
             computeHandler.SetStorageBuffer(id, storageBuffer);
             return storageBuffer;
         }
-        public static ITTStorageBuffer SetStorageBufferFromAllocate<TTCE>(this TTCE engine, ITTComputeHandler computeHandler, int id, int dataLength, bool downloadable = false)
+        public static ITTStorageBuffer SetStorageBufferFromAllocate<TTCE,T>(this TTCE engine, ITTComputeHandler computeHandler, int id, int dataLength, bool downloadable = false)
         where TTCE : ITexTransDriveStorageBufferHolder
+        where T : unmanaged
         {
-            var storageBuffer = engine.AllocateStorageBuffer(dataLength, downloadable);
+            var storageBuffer = engine.AllocateStorageBuffer<T>(dataLength, downloadable);
             computeHandler.SetStorageBuffer(id, storageBuffer);
             return storageBuffer;
         }

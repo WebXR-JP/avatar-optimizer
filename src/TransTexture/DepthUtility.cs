@@ -77,7 +77,7 @@ namespace net.rs64.TexTransCore.TransTexture
         }
         public static DepthBufferHolder Create<TTCE>(TTCE engine, (int x, int y) sourceSize)
         where TTCE : ITexTransDriveStorageBufferHolder
-        { return new(engine.AllocateStorageBuffer(sourceSize.x * sourceSize.y * 4), sourceSize); }
+        { return new(engine.AllocateStorageBuffer<uint>(sourceSize.x * sourceSize.y), sourceSize); }
         public void Dispose() { DepthBuffer = null!; }
     }
 }

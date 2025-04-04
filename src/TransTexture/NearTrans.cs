@@ -35,8 +35,7 @@ namespace net.rs64.TexTransCore.TransTexture
 
             var keyQ = engine.GetExKeyQuery<INearTransComputeKey>();
             var pixelCount = targetTex.Width * targetTex.Hight;
-            var pdMapBufferLen = pixelCount * 4 * 4;// w * h * sizeof(float4)
-            using var positionPaddingDistanceMapBuffer = engine.AllocateStorageBuffer(pdMapBufferLen);
+            using var positionPaddingDistanceMapBuffer = engine.AllocateStorageBuffer<TTVector4>(pixelCount);
 
 
 

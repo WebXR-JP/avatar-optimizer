@@ -55,9 +55,9 @@ namespace net.rs64.TexTransCore
         }
 
 
-        public ITTStorageBuffer AllocateStorageBuffer(int length, bool downloadable = false)
+        public ITTStorageBuffer AllocateStorageBuffer<T>(int length, bool downloadable = false) where T : unmanaged
         {
-            return Tracing(_texTransCoreEngine.AllocateStorageBuffer(length, downloadable));
+            return Tracing(_texTransCoreEngine.AllocateStorageBuffer<T>(length, downloadable));
         }
 
         public ITTStorageBuffer UploadStorageBuffer<T>(ReadOnlySpan<T> data, bool downloadable = false) where T : unmanaged
