@@ -123,7 +123,11 @@ float4 MinMax(Rect rect,float2 mapSize, float heightScaling,float padding)
 
 
     float sourceArea = RectArea(sourceRect.Size,sourceRect.Rotation,float2(SourceMapSize));
-    float targetArea = RectArea(targetRect.Size,targetRect.Rotation,float2(TargetMapSize));
+    // 非正方形な出力先となる場合 TargetMapSize の中身は非正方形になる (たとえば (2048,1024) のように)。
+    // だが targetRect は 縦が小さくなった場合、それに合わせて上下を引き伸ばしたり、縦が大きくなった場合に縦を小さくするといったスケーリングが行われていない
+    // だから 横幅をコピーして縦幅にし AtlasTexture のスケーリングの基準である正方形状態にして矩形の面積を求める必要がある。
+    float2 targetMapScaleSize = float2(TargetMapSize.x,TargetMapSize.x);
+    float targetArea = RectArea(targetRect.Size,targetRect.Rotation,targetMapScaleSize);
     float scaling = clamp( sourceArea / targetArea ,0 ,64);// safety
 
     float2 paddingRectScale = float2(Padding,Padding) / targetRect.Size;
