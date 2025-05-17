@@ -24,7 +24,7 @@ namespace net.rs64.TexTransCore
             ExceptionCall?.Invoke(e, additionalStackTrace);
         }
 
-        internal static void Assert(bool v, string code = "", params object[] args)
+        public static void Assert(bool v, string code = "", params object[] args)
         {
             if (v) { return; }
 
