@@ -24,10 +24,19 @@ namespace net.rs64.TexTransCore
             ExceptionCall?.Invoke(e, additionalStackTrace);
         }
 
+        public static void Assert(bool v, string code = "", params object[] args)
+        {
+            if (v) { return; }
+
+            AssertionFailedPreCall?.Invoke(code, args);
+            throw new TTException("TTLog Assertion filed!\n" + code + "\n", args);
+        }
+
         public static Action<string, object[]>? LogCall;
         public static Action<string, object[]>? WarningCall;
         public static Action<string, object[]>? ErrorCall;
         public static Action<Exception, string>? ExceptionCall;
+        public static Action<string, object[]>? AssertionFailedPreCall;
     }
 
 

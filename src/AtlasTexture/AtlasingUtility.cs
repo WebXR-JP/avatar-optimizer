@@ -45,6 +45,8 @@ namespace net.rs64.TexTransCore.AtlasTexture
             , float islandPadding
         ) where TTCE : ITexTransCreateTexture, ITexTransGetComputeHandler, ITexTransDriveStorageBufferHolder, ITexTransComputeKeyQuery
         {
+            TTLog.Assert(drawTargetSourceVirtualIslands.Length == drawTargetMovedVirtualIslands.Length,"VirtualIslands.Length is not equal");
+            TTLog.Assert(drawTargetSourceVirtualIslands.Length is not 0, "Target Rect is zero");
 
             var atlasHeightScale = targetRT.Hight / (float)targetRT.Width;
             var inputRecs = new InputRect[drawTargetSourceVirtualIslands.Length];
