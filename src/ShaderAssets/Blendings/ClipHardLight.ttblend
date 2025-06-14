@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Clip/HardLight
-KeyName ja クリスタ/ハードライト
+KeyName ja-JP クリスタ/ハードライト
 
 END__TT_COMPUTE_SHADER_HEADER
 */

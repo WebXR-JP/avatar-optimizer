@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key NotBlend
-KeyName ja 合成なし
+KeyName ja-JP 合成なし
 
 END__TT_COMPUTE_SHADER_HEADER
 */

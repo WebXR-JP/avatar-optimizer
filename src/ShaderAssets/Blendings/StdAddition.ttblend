@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Addition
-KeyName ja 加算-覆い焼き(リニア)
+KeyName ja-JP 加算-覆い焼き(リニア)
 
 END__TT_COMPUTE_SHADER_HEADER
 */

@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Clip/LinearBurn
-KeyName ja クリスタ/焼きこみ(リニア)
+KeyName ja-JP クリスタ/焼きこみ(リニア)
 
 END__TT_COMPUTE_SHADER_HEADER
 */
