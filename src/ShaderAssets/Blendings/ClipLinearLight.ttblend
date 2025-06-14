@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Clip/LinearLight
-KeyName ja クリスタ/リニアライト
+KeyName ja-JP クリスタ/リニアライト
 
 END__TT_COMPUTE_SHADER_HEADER
 */

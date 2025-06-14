@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Clip/VividLight
-KeyName ja クリスタ/ビビッドライト
+KeyName ja-JP クリスタ/ビビッドライト
 
 END__TT_COMPUTE_SHADER_HEADER
 */

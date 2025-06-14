@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Dissolve
-KeyName ja ディザ合成
+KeyName ja-JP ディザ合成
 
 END__TT_COMPUTE_SHADER_HEADER
 */

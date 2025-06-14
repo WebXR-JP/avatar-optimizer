@@ -125,8 +125,6 @@ TTComputeType General
 
 TexTransTool 内部で GrabBlend と呼ばれている物を記述するための存在、基本的にはただのコンピュートシェーダー。
 
-必須情報として下記 [ColorSpace](#colorspace) が必要になること以外は General と同じ。
-
 ## TT-Blending
 
 TexTransTool の 合成モードを追加できる仕組みでもある。
@@ -149,12 +147,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
-
 Key SampleBlend/SimpleAdded
 
-KeyName en SampleBlend/SimpleAdded
-KeyName ja サンプルブレンド/シンプル加算
+KeyName en-US SampleBlend/SimpleAdded
+KeyName ja-JP サンプルブレンド/シンプル加算
 
 END__TT_COMPUTE_SHADER_HEADER
 */
@@ -169,23 +165,6 @@ float4 ColorBlend(float4 BaseColor, float4 AddColor)
 ### 追加の必須情報
 
 Blending として使用するために必要な追加の必須情報です。
-
-#### ColorSpace
-
-引数や戻り値の色空間を指定する存在です。
-
-example
-
-```text
-ColorSpace Gamma
-```
-
-選択肢はこれらが使用できます。
-
-- `Gamma`
-- `Linear`
-
-`Gamma` というのはいわゆる sRGB です。
 
 #### Key
 
@@ -211,16 +190,16 @@ TexTransTool デフォルトの物以外の場合は、この階層が必ず 1�
 TexTransTool 内で インスペクターに表示する場合の表示名を変更できる存在です。
 
 ```text
-KeyName en SampleBlend/SimpleAdded
-KeyName ja サンプルブレンド/シンプル加算
+KeyName en-US SampleBlend/SimpleAdded
+KeyName ja-JP サンプルブレンド/シンプル加算
 ```
 
 この KeyName の場合に限り Value の中身の扱いが少し変わり、Value の開始から一つ目の 空白 までは LanguageCode として扱い、その先を KeyName の Value つまり表示名という扱いになります。
 
 LanguageCode の選択肢
 
-- ja
-- en
+- ja-JP
+- en-US
 
 これは TexTransTool の言語設定に基づいていて、今後増える可能性もあります。
 それぞれの言語にて、定義されていない場合は [Key](#key) にフォールバックされるので気を付けましょう。

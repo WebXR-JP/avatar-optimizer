@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key DarkenColorOnly
-KeyName ja カラー比較(暗)
+KeyName ja-JP カラー比較(暗)
 
 END__TT_COMPUTE_SHADER_HEADER
 */

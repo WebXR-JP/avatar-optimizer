@@ -6,7 +6,7 @@ LanguageVersion 2018
 
 TTComputeType GrabBlend
 
-ColorSpace Gamma
+
 
 END__TT_COMPUTE_SHADER_HEADER
 */

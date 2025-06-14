@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key AdditionGlow
-KeyName ja 加算発光
+KeyName ja-JP 加算発光
 
 END__TT_COMPUTE_SHADER_HEADER
 */

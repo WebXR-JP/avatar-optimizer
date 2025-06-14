@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Clip/Overlay
-KeyName ja クリスタ/オーバーレイ
+KeyName ja-JP クリスタ/オーバーレイ
 
 END__TT_COMPUTE_SHADER_HEADER
 */

@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Saturation
-KeyName ja 彩度
+KeyName ja-JP 彩度
 
 END__TT_COMPUTE_SHADER_HEADER
 */

@@ -6,10 +6,10 @@ LanguageVersion 2018
 
 TTComputeType Blending
 
-ColorSpace Gamma
+
 
 Key Difference
-KeyName ja 差の絶対値
+KeyName ja-JP 差の絶対値
 
 END__TT_COMPUTE_SHADER_HEADER
 */
