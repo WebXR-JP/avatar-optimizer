@@ -29,4 +29,6 @@ float4 BilinearSampling(float2 pos)
     return lerp(downCol, upCol, frac(sourceScalePos.y));
 }
 
+float4 TTSampling(float2 pos, float scaling);
+
 #endif

@@ -5,7 +5,7 @@ RWTexture2D<float> ScalingMap;
 RWTexture2D<float> TargetDistanceMap;
 RWTexture2D<float4> TargetTex;
 
-//$$$SAMPLER_CODE$$$
+#include "SamplerTemplate.hlsl"
 
 [numthreads(16, 16, 1)] void CSMain(uint3 id : SV_DispatchThreadID)
 {
