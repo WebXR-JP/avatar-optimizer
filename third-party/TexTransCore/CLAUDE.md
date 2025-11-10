@@ -1,6 +1,6 @@
 # CLAUDE.md - TexTransCore
 
-このファイルは、TexTransCore (テクスチャ処理 C# ライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
+このファイルは、TexTransCore (テクスチャ処理 C# ライブラリ) を扱う際に Claude Code へ のガイダンスを提供します。
 
 ## プロジェクト概要
 
@@ -28,6 +28,7 @@ third-party/TexTransCore/
   │   └── [サブディレクトリ]      # 機能別モジュール
   ├── bin/Release/net10.0/wasi-wasm/  # WASM ビルド出力 (git追跡外)
   │   └── publish/               # Publish 出力 (DLL + deps.json)
+  │   └── publish/               # Publish 出力 (DLL + deps.json)
   ├── obj/                        # ビルド中間ファイル (git追跡外)
   ├── LICENSE.md                  # ライセンス
   └── README.md                   # プロジェクト説明
@@ -39,25 +40,50 @@ third-party/TexTransCore/
 # .NET 10 RC2 への PATH 設定（初回のみ）
 export PATH="$HOME/.dotnet:$HOME/.wasmtime/bin:$PATH"
 
+# 推奨: フルパス使用（PATH 設定が引き継がれやすい）
+/home/halby/.dotnet/dotnet build -c Release
+
 # プロジェクトのビルド (.NET 10 で自動的に wasi-wasm ターゲット)
 dotnet build
 
-# リリースビルド (WASM ターゲット)
+# リリースビルド (WASM ターゲット) - Linux/macOS ではここまで
 dotnet build -c Release
 
-# WASM Publish (DLL + 依存関係)
-dotnet publish -c Release -r wasi-wasm
+# WIT バインディング確認（自動生成）
+ls -la obj/Release/net10.0/wasi-wasm/wit_bindgen/
+
+# WASM Publish (DLL + 依存関係) - 現在 componentize-dotnet のターゲット制限で失敗
+# dotnet publish -c Release -r wasi-wasm
 
 # クリーンビルド
 dotnet clean && dotnet build -c Release
 
 # 標準 .NET ライブラリとしてのビルド
 dotnet build -p:RuntimeIdentifier=""
+
+# 🪟 Windows のみ: NativeAOT-LLVM WASM コンパイル
+# PowerShell で実行: $env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+# dotnet build -c Release  # WASM バイナリ生成
+```
+
+### ビルド出力の確認
+
+```bash
+# マネージド DLL 確認（Linux/macOS/Windows で利用可能）
+ls -lh bin/Release/net10.0/wasi-wasm/TexTransCore.dll
+
+# WIT バインディング確認（自動生成）
+ls -la obj/Release/net10.0/wasi-wasm/wit_bindgen/
+
+# WASM ネイティブバイナリ（Windows のみ）
+ls -lh bin/Release/net10.0/wasi-wasm/native/  # 生成されていない (Linux/macOS)
 ```
 
 ## WASM 化ロードマップ
 
-### 現状 (Phase 1: NativeAOT-LLVM 化 完了)
+### 進捗状況
+
+#### Phase 1: NativeAOT-LLVM 化 ✅ 完了
 
 TexTransCore は **Phase 1** で以下の更新が完了しました:
 
@@ -66,12 +92,42 @@ TexTransCore は **Phase 1** で以下の更新が完了しました:
 - ✅ **WIT インターフェース定義** (`textrans.wit`) の作成
 - ✅ **nuget.config** による実験的パッケージソースの設定
 - ✅ **WASM ビルド・Publish** の成功確認
+- ✅ **ILLink エラー修正** (PublishTrimmed/TrimmerSingleWarn設定)
 
-**現在の出力**:
+**出力**:
 - `bin/Release/net10.0/wasi-wasm/TexTransCore.dll` (マネージド DLL)
 - `bin/Release/net10.0/wasi-wasm/publish/` (Publish 出力)
 
-**次フェーズ**: Phase 2 では componentize-dotnet を統合し、JavaScript/WebGPU との連携実装を開始予定
+#### Phase 2: componentize-dotnet 統合 🟡 進行中
+
+**実装完了**:
+- ✅ **BytecodeAlliance.Componentize.DotNet.Wasm.SDK v0.7.0-preview00010** インストール
+- ✅ **wit-bindgen による自動バインディング生成**
+  - `TextransComponentWorld.wit.exports.textrans.core.v0_1_0.ICore` インターフェース
+  - `CoreInterop` interop レイヤー
+  - `TextureResource` resource パターン実装
+- ✅ **src/WasmComponent.cs で CoreImpl 実装**
+  - テクスチャリソース管理 (作成・破棄・検証)
+  - メモリ制限チェック (256MB/テクスチャ)
+  - グローバル using による型解決
+- ✅ **プロジェクト設定の最適化**
+  - `PublishTrimmed=true` による NativeAOT-LLVM 対応
+  - `MSBuildEnableWorkloadResolver=false` で componentize-dotnet の最適化
+
+**WIT バインディング出力** (自動生成):
+```
+obj/Release/net10.0/wasi-wasm/wit_bindgen/
+  ├── TextransComponent.cs
+  ├── TextransComponentWorld.wit.exports.textrans.core.v0_1_0.CoreInterop.cs
+  ├── TextransComponentWorld.wit.exports.textrans.core.v0_1_0.ICore.cs
+  ├── TextransComponentWorld_component_type.wit
+  └── TextransComponentWorld_wasm_import_linkage_attribute.cs
+```
+
+**未実装 (プラットフォーム制限)**:
+- ⚠️ **NativeAOT-LLVM WASM コンパイル** (Windows のみサポート)
+  - Linux/macOS では ilc コンパイラ不可
+  - Windows CI/CD パイプラインで実行予定
 
 ### Phase 2 以降の課題
 
@@ -80,78 +136,68 @@ TexTransCore は **Phase 1** で以下の更新が完了しました:
 3. **メモリ管理**: WASM の線形メモリ（4GB 制限）に対応する必要がある
 4. **パフォーマンス**: WASM での実行速度が要件を満たすか検証が必要
 
-### 実装状況と推奨アプローチ (Phase 2 以降)
+### 実装完了: componentize-dotnet による WIT コンポーネント化
 
-#### 1. **Mono AOT + Emscripten による WASM コンパイル** (最も完全)
+NativeAOT-LLVM + WebAssembly Interface Types (WIT) による実装が完了しました。
 
-C# → IL → Mono AOT コンパイル → ネイティブコード → Emscripten → WASM
+**実装ファイル**:
+- `textrans.wit`: WIT インターフェース定義（既存）
+- `src/WasmComponent.cs`: CoreImpl 実装（新規）
+- `src/GlobalUsings.cs`: グローバル using 指示文（新規）
 
-**利点**:
-- 既存のコードをほぼ変更なしで使用可能
-- 完全なランタイムサポート
-- パフォーマンスが良い
-
-**課題**:
-- Mono ランタイムのバイナリサイズが大きい
-- セットアップが複雑
-
-**参考資料**:
-- [Mono WASM Support](https://github.com/dotnet/runtime/tree/main/src/mono/wasm)
-- [Emscripten ドキュメント](https://emscripten.org/docs/)
-
-#### 2. **componentize-dotnet による WIT コンポーネント化** (推奨)
-
-NativeAOT-LLVM + WebAssembly Interface Types (WIT)
-
-**利点**:
-- 言語非依存のインターフェース定義
-- バイナリサイズがより小さい
-- JavaScript との相互運用がシンプル
-
-**課題**:
-- インターフェース定義作成が必要
-- componentize-dotnet はまだ実験的
-
-**実装ステップ**:
+**実装例** (src/WasmComponent.cs):
 ```csharp
-// src/ITextureProcessor.cs
-namespace TexTransCore;
+using System;
+using System.Collections.Generic;
+using TextransComponentWorld.wit.exports.textrans.core.v0_1_0;
 
 /// <summary>
-/// WIT インターフェース定義
+/// WASM component implementation of the textrans:core interface.
 /// </summary>
-public interface ITextureProcessor
+public static class CoreImpl
 {
-    public record ProcessingInput(byte[] TextureData, int MaxSize);
-    public record ProcessingOutput(byte[] CompressedData, int OriginalSize, int CompressedSize);
+    public class TextureResource : ICore.TextureResource, ICore.ITextureResource
+    {
+        // テクスチャメタデータ (width, height, channel, memory_size)
+        public uint Width() { /* ... */ }
+        public uint Height() { /* ... */ }
+        public uint MemorySize() { /* ... */ }
+    }
 
-    ProcessingOutput ProcessTexture(ProcessingInput input);
+    // 静的メソッド（WIT component model 仕様）
+    public static string GetVersion() => "1.0.0";
+    public static string GetName() => "TexTransCore";
+    public static uint CreateRenderTexture(uint width, uint height, byte channel) { /* ... */ }
+    public static void DisposeRenderTexture(uint id) { /* ... */ }
+    public static bool IsTextureValid(uint id) { /* ... */ }
+    public static (uint, uint, byte, uint) GetTextureInfo(uint id) { /* ... */ }
 }
 ```
 
-#### 3. **C# → C++ → WASM の段階的変換** (最も手動)
+**WIT インターフェース** (textrans.wit - 既存):
+```wit
+interface core {
+  type render-texture-id = u32;
+  type texture-channel = u8;
 
-CppSharp や SWIG を使用して C# ロジックを C++ に変換
+  resource texture-resource {
+    width: func() -> u32;
+    height: func() -> u32;
+    memory-size: func() -> u32;
+  }
 
-**利点**:
-- 既存の C# ツールが使える
-- きめ細かい制御が可能
+  get-version: func() -> string;
+  get-name: func() -> string;
+  create-render-texture: func(width: u32, height: u32, channel: texture-channel) -> result<render-texture-id, string>;
+  dispose-render-texture: func(id: render-texture-id);
+  is-texture-valid: func(id: render-texture-id) -> bool;
+  get-texture-info: func(id: render-texture-id) -> result<tuple<u32, u32, u8, u32>, string>;
+}
 
-**課題**:
-- 手動作業が多い
-- 変換の過程でバグが混入しやすい
-
-#### 4. **代替案: Node.js ネイティブアドオン (FFI)**
-
-.NET DLL を Node.js ネイティブアドオン (node-ffi / NAPI) でラップ
-
-**利点**:
-- C# コードを変更しない
-- 開発が簡単
-
-**課題**:
-- ブラウザ環境で動作しない（Node.js のみ）
-- プラットフォーム固有のバイナリが必要
+world textrans-component {
+  export core;
+}
+```
 
 ### WASM 化実装チェックリスト
 
@@ -184,21 +230,30 @@ WASM 化を実装する際は、以下のチェックリストを参照：
 
 ### Phase 2 実装計画
 
-**Phase 1 完了後の次ステップ:**
+**Phase 2 進捗状況:**
 
-1. **componentize-dotnet の統合** (2-3 週間)
-   - [ ] componentize-dotnet NuGet パッケージの導入
-   - [ ] WIT インターフェースの実装 (textrans.wit)
-   - [ ] C# バインディング生成
+1. **componentize-dotnet の統合** ✅ 完了
+   - ✅ BytecodeAlliance.Componentize.DotNet.Wasm.SDK v0.7.0-preview00010 インストール
+   - ✅ WIT インターフェース実装 (textrans.wit)
+   - ✅ C# バインディング自動生成 (wit-bindgen)
+   - ✅ CoreImpl WIT component 実装
 
-2. **WebGPU 連携の実装** (2-4 週間)
-   - [ ] JavaScript 側 WebGPU ドライバの実装
-   - [ ] HLSL → WGSL シェーダー変換
-   - [ ] Compute Shader 実行インターフェース
+2. **NativeAOT-LLVM ビルド完成化** 🟡 進行中
+   - ⚠️ Windows 環境での WASM バイナリ生成
+     - ilc コンパイラは Windows のみ利用可能
+     - GitHub Actions ワークフローで Windows ランナー使用予定
+   - [ ] dist/textrans-core.wasm 生成
+   - [ ] ファイルサイズ最適化
 
-3. **vrm-optimizer への統合** (1-2 週間)
+3. **JavaScript ローダー実装** ⏳ 予定
+   - [ ] WASM モジュールローダー (dist/textrans-core.js)
+   - [ ] TypeScript 型定義 (dist/textrans-core.d.ts)
+   - [ ] メモリ管理とリソース生存期間管理
+   - [ ] エラーハンドリング
+
+4. **vrm-optimizer への統合** ⏳ 予定
    - [ ] WASM モジュールの npm パッケージ化
-   - [ ] TypeScript 型定義の自動生成
+   - [ ] TypeScript API 設計
    - [ ] E2E テスト (ブラウザ環境)
 
 ## 依存関係とバージョン管理
@@ -223,30 +278,60 @@ WASM 化を実装する際は、以下のチェックリストを参照：
 2. **既存実装の保全**: C# コード自体に大きな変更を加えない
 3. **ビルド可能性の維持**: WASM 化への道筋を明確にしておく
 
+### Phase 2 開発に関する注意事項
+
+**プラットフォーム別ビルド機能**:
+| 機能 | Linux/macOS | Windows |
+|------|-----------|---------|
+| C# コンパイル | ✅ | ✅ |
+| WIT バインディング自動生成 | ✅ | ✅ |
+| マネージド DLL (WASM ターゲット) | ✅ | ✅ |
+| NativeAOT-LLVM WASM ネイティブ | ❌ | ✅ |
+| WASM コンポーネント (wasm ファイル) | ❌ | ✅ |
+
+**Core Implementation (src/WasmComponent.cs) の修正時の注意**:
+- `TextureResource` クラスは `ICore.TextureResource` を継承必須
+- 静的メソッド（`GetVersion`, `GetName`, `CreateRenderTexture` など）は wit-bindgen の生成コードから直接呼び出される
+- ネストされたクラス `CoreImpl.TextureResource` の構造は変更禁止（WIT resource パターン）
+- メモリ制限チェック (256MB/テクスチャ) は WASM 互換性の重要要件
+
+**グローバル using の重要性** (src/GlobalUsings.cs):
+- wit-bindgen 生成コードに `System`, `System.Collections.Generic` などの using が不足している
+- グローバル using により、生成コード側での型解決を支援
+- 新しいシステム型を使用する場合は GlobalUsings.cs に追加すること
+
 ## ビルド出力
 
-### Phase 1 (現在: NativeAOT-LLVM 化完了)
+### 現在のビルド出力 (Phase 2 進行中)
 
+**Linux/macOS/Windows で利用可能**:
 ```bash
-# WASM ターゲットのリリースビルド
-dotnet build -c Release
+# マネージド DLL (WIT バインディング付き)
+bin/Release/net10.0/wasi-wasm/TexTransCore.dll         # 75 KB (最適化済み)
+bin/Release/net10.0/wasi-wasm/TexTransCore.deps.json   # 依存関係情報
 
-# 出力ファイル (WASM ターゲット)
-bin/Release/net10.0/wasi-wasm/TexTransCore.dll         # マネージド DLL
-bin/Release/net10.0/wasi-wasm/TexTransCore.deps.json  # 依存関係情報
-
-# Publish 出力
-dotnet publish -c Release -r wasi-wasm
-bin/Release/net10.0/wasi-wasm/publish/TexTransCore.dll
-bin/Release/net10.0/wasi-wasm/publish/TexTransCore.deps.json
+# WIT バインディング (自動生成)
+obj/Release/net10.0/wasi-wasm/wit_bindgen/
+  ├── TextransComponent.cs                              # WIT component 登録
+  ├── TextransComponentWorld.wit.exports.*.CoreInterop.cs   # Interop レイヤー
+  ├── TextransComponentWorld.wit.exports.*.ICore.cs     # インターフェース定義
+  └── TextransComponentWorld_component_type.wit         # Component metadata
 ```
 
-### Phase 2 (予定: componentize-dotnet 統合後)
+**Windows のみで生成** (Windows CI/CD で実行):
+```bash
+# WASM ネイティブバイナリ (NativeAOT-LLVM コンパイル)
+bin/Release/net10.0/wasi-wasm/native/TexTransCore.wasm      # WASM バイナリ
+bin/Release/net10.0/wasi-wasm/native/TexTransCore.txt       # ビルドログ
+bin/Release/net10.0/wasi-wasm/native/TexTransCore.unopt.il  # 最適化前 IL
+```
+
+### Phase 2 完成時の予定出力
 
 ```bash
-# WASM バイナリ
-dist/textrans-core.wasm           # IL コンパイル済み WASM モジュール
-dist/textrans-core.js             # JavaScript ローダー
-dist/textrans-core.d.ts           # TypeScript 型定義
-dist/textrans-core.wit            # WebAssembly Interface Types
+# JavaScript インターフェース
+dist/textrans-core.wasm                  # WASM バイナリ (NativeAOT-LLVM)
+dist/textrans-core.loader.js             # WASM ローダー
+dist/textrans-core.d.ts                  # TypeScript 型定義
+dist/textrans-core.component.wit         # WIT コンポーネント定義
 ```

@@ -20,12 +20,19 @@
     <!-- NativeAOT-LLVM / WASM Configuration -->
     <RuntimeIdentifier>wasi-wasm</RuntimeIdentifier>
     <UseAppHost>false</UseAppHost>
-    <PublishTrimmed>false</PublishTrimmed>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <DebugSymbols>false</DebugSymbols>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishAot>false</PublishAot>
     <SelfContained>true</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>none</DebugType>
     <!-- Library project configuration -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <!-- componentize-dotnet configuration -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +42,20 @@
   <!-- Trimming root assembly configuration for library -->
   <ItemGroup>
     <TrimmerRootAssembly Include="TexTransCore" />
+  </ItemGroup>
+
+  <!-- WIT Interface configuration for componentize-dotnet -->
+  <PropertyGroup>
+    <!-- Ensure generated bindings include required using statements -->
+    <WitGeneratedFilesRoot>obj/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/wit_bindgen</WitGeneratedFilesRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Wit Update="textrans.wit" World="textrans-component" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
   </ItemGroup>
 
 </Project>
