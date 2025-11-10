@@ -202,36 +202,77 @@ export async function packTexturesNFDH(
   atlasHeight: number,
   padding: number = PADDING,
 ): Promise<PackingResult> {
-  const islands: IslandTransform[] = sizes.map((size, i) => ({
-    position: { x: 0, y: 0 },
-    size: { x: size.width / atlasWidth, y: size.height / atlasHeight },
-    rotation: 0,
-    originalIndex: i,
-  }))
+  // テクスチャサイズの自動スケーリングで再試行する内部関数
+  async function tryPackWithScaling(
+    textureSizes: Array<{ width: number; height: number }>,
+    currentAtlasWidth: number,
+    currentAtlasHeight: number,
+    scaleMultiplier: number = 1.0,
+  ): Promise<PackingResult> {
+    const islands: IslandTransform[] = textureSizes.map((size, i) => ({
+      position: { x: 0, y: 0 },
+      size: { x: size.width / currentAtlasWidth, y: size.height / currentAtlasHeight },
+      rotation: 0,
+      originalIndex: i,
+    }))
 
-  const success = nextFitDecreasingHeightPlusFloorCeiling(
-    islands,
-    1.0, // Target height is normalized to 1.0
-    padding / atlasWidth,
-  )
+    const success = nextFitDecreasingHeightPlusFloorCeiling(
+      islands,
+      1.0, // Target height is normalized to 1.0
+      padding / currentAtlasWidth,
+    )
 
-  if (!success) {
-    throw new Error('Failed to pack textures using NFDH algorithm.')
+    if (success) {
+      const packed = islands.map((tf) => ({
+        index: tf.originalIndex,
+        x: Math.round(tf.position.x * currentAtlasWidth),
+        y: Math.round(tf.position.y * currentAtlasHeight),
+        width: Math.round(tf.size.x * currentAtlasWidth),
+        height: Math.round(tf.size.y * currentAtlasHeight),
+        originalWidth: sizes[tf.originalIndex].width,
+        originalHeight: sizes[tf.originalIndex].height,
+      }))
+
+      return {
+        atlasWidth: currentAtlasWidth,
+        atlasHeight: currentAtlasHeight,
+        packed,
+      }
+    }
+
+    // パッキングに失敗した場合、テクスチャサイズを半分にしてリトライ
+    const nextScaleMultiplier = scaleMultiplier * 0.5
+
+    // 最小サイズ（1x1）を下回らないようにチェック
+    const minScaledWidth = Math.max(
+      1,
+      Math.floor(Math.min(...textureSizes.map((s) => s.width)) * nextScaleMultiplier),
+    )
+    const minScaledHeight = Math.max(
+      1,
+      Math.floor(Math.min(...textureSizes.map((s) => s.height)) * nextScaleMultiplier),
+    )
+
+    if (minScaledWidth < 1 || minScaledHeight < 1) {
+      throw new Error(
+        `Failed to pack textures using NFDH algorithm. Could not fit textures even after scaling down to 1x1 pixels.`,
+      )
+    }
+
+    // テクスチャサイズをスケーリング
+    const scaledSizes = textureSizes.map((size) => ({
+      width: Math.max(1, Math.floor(size.width * nextScaleMultiplier)),
+      height: Math.max(1, Math.floor(size.height * nextScaleMultiplier)),
+    }))
+
+    // 再帰的に再試行
+    return tryPackWithScaling(
+      scaledSizes,
+      currentAtlasWidth,
+      currentAtlasHeight,
+      nextScaleMultiplier,
+    )
   }
 
-  const packed = islands.map((tf) => ({
-    index: tf.originalIndex,
-    x: Math.round(tf.position.x * atlasWidth),
-    y: Math.round(tf.position.y * atlasHeight),
-    width: Math.round(tf.size.x * atlasWidth),
-    height: Math.round(tf.size.y * atlasHeight),
-    originalWidth: sizes[tf.originalIndex].width,
-    originalHeight: sizes[tf.originalIndex].height,
-  }))
-
-  return {
-    atlasWidth,
-    atlasHeight,
-    packed,
-  }
+  return tryPackWithScaling(sizes, atlasWidth, atlasHeight, 1.0)
 }
