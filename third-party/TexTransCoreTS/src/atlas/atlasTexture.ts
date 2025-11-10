@@ -15,6 +15,7 @@ import type {
   CreateImageDataFactory,
   UVMapping,
   PackedTexture,
+  PackingResult,
 } from '../types'
 import { getCanvasContext, canvasToBuffer, scaleCanvas } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
@@ -68,31 +69,31 @@ async function _atlasTexturesImpl(
     textures.map((texture) => _extractTextureImage(texture)),
   )
 
-  // 2.5 テクスチャをダウンスケーリング（オプション）
+  // 3. テクスチャをダウンスケーリング（オプション）
   let scaledImages = textureImages
   if (textureScale < 1.0) {
     scaledImages = textureImages.map((img) => _scaleTextureImage(img, textureScale))
   }
 
-  // 3. パッキング計算
+  // 4. パッキング計算（maxSize のアトラスに自動的にスケーリングしながらパック）
   const sizes = scaledImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
 
-  const packing = await packTexturesNFDH(sizes, maxSize, maxSize, padding)
+  const finalPacking = await packTexturesNFDH(sizes, maxSize, maxSize, padding)
 
-  // 4. アトラスキャンバスを生成
-  const atlasCanvas = createCanvasFactory(packing.atlasWidth, packing.atlasHeight)
+  // 5. アトラスキャンバスを生成
+  const atlasCanvas = createCanvasFactory(finalPacking.atlasWidth, finalPacking.atlasHeight)
   const atlasCtx = getCanvasContext(atlasCanvas)
 
   // 背景をクリア（透明）
-  atlasCtx.clearRect(0, 0, packing.atlasWidth, packing.atlasHeight)
+  atlasCtx.clearRect(0, 0, finalPacking.atlasWidth, finalPacking.atlasHeight)
 
   // 各テクスチャをアトラスに描画
-  for (let i = 0; i < packing.packed.length; i++) {
-    const packed = packing.packed[i]
-    const img = scaledImages[i]
+  for (let i = 0; i < finalPacking.packed.length; i++) {
+    const packedInfo = finalPacking.packed[i]
+    const img = scaledImages[packedInfo.index]
 
     // テンポラリキャンバスを作成してImageDataを描画
     // node-canvas では putImageData が不完全なため、別のキャンバスに描画してから合成
@@ -114,17 +115,17 @@ async function _atlasTexturesImpl(
     }
 
     // テンポラリキャンバスをメインキャンバスに描画
-    atlasCtx.drawImage(tempCanvas, packed.x, packed.y)
+    atlasCtx.drawImage(tempCanvas, packedInfo.x, packedInfo.y)
   }
 
-  // 5. アトラス画像をテクスチャとして登録
+  // 6. アトラス画像をテクスチャとして登録
   const atlasBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
-  const atlasTexture = _registerAtlasTexture(document, atlasBuffer, packing)
+  const atlasTexture = _registerAtlasTexture(document, atlasBuffer, finalPacking)
 
-  // 6. UV 座標マッピング情報を生成
+  // 7. UV 座標マッピング情報を生成
   const mappings = _generateUVMappings(
     document,
-    packing,
+    finalPacking,
     textures,
   )
 
@@ -139,8 +140,8 @@ async function _atlasTexturesImpl(
   remapAllPrimitiveUVs(
     document,
     mappings,
-    packing.atlasWidth,
-    packing.atlasHeight,
+    finalPacking.atlasWidth,
+    finalPacking.atlasHeight,
     textureSizes,
   )
 
@@ -148,10 +149,10 @@ async function _atlasTexturesImpl(
     document,
     mapping: mappings,
     atlasMetadata: {
-      width: packing.atlasWidth,
-      height: packing.atlasHeight,
+      width: finalPacking.atlasWidth,
+      height: finalPacking.atlasHeight,
       textureCount: textures.length,
-      packingEfficiency: _calculatePackingEfficiency(packing),
+      packingEfficiency: _calculatePackingEfficiency(finalPacking),
     },
   }
 }
@@ -236,7 +237,7 @@ function _registerAtlasTexture(
  */
 function _generateUVMappings(
   document: Document,
-  packing: any,
+  finalPacking: any,
   originalTextures: Texture[],
 ): UVMapping[] {
   const mappings: UVMapping[] = []
@@ -260,7 +261,7 @@ function _generateUVMappings(
     if (baseColorTexture) {
       const textureIndex = originalTextures.indexOf(baseColorTexture)
       if (textureIndex !== -1) {
-        const packed = packing.packed.find(
+        const packed = finalPacking.packed.find(
           (p: PackedTexture) => p.index === textureIndex,
         )
         if (packed) {
@@ -269,12 +270,12 @@ function _generateUVMappings(
             textureSlot: 'baseColorTexture',
             originalTextureIndex: textureIndex,
             uvMin: {
-              u: packed.x / packing.atlasWidth,
-              v: packed.y / packing.atlasHeight,
+              u: packed.x / finalPacking.atlasWidth,
+              v: packed.y / finalPacking.atlasHeight,
             },
             uvMax: {
-              u: (packed.x + packed.width) / packing.atlasWidth,
-              v: (packed.y + packed.height) / packing.atlasHeight,
+              u: (packed.x + packed.width) / finalPacking.atlasWidth,
+              v: (packed.y + packed.height) / finalPacking.atlasHeight,
             },
           })
         }
@@ -286,7 +287,7 @@ function _generateUVMappings(
     if (normalTexture) {
       const textureIndex = originalTextures.indexOf(normalTexture)
       if (textureIndex !== -1) {
-        const packed = packing.packed.find(
+        const packed = finalPacking.packed.find(
           (p: PackedTexture) => p.index === textureIndex,
         )
         if (packed) {
@@ -295,12 +296,12 @@ function _generateUVMappings(
             textureSlot: 'normalTexture',
             originalTextureIndex: textureIndex,
             uvMin: {
-              u: packed.x / packing.atlasWidth,
-              v: packed.y / packing.atlasHeight,
+              u: packed.x / finalPacking.atlasWidth,
+              v: packed.y / finalPacking.atlasHeight,
             },
             uvMax: {
-              u: (packed.x + packed.width) / packing.atlasWidth,
-              v: (packed.y + packed.height) / packing.atlasHeight,
+              u: (packed.x + packed.width) / finalPacking.atlasWidth,
+              v: (packed.y + packed.height) / finalPacking.atlasHeight,
             },
           })
         }
@@ -312,7 +313,7 @@ function _generateUVMappings(
     if (metallicRoughnessTexture) {
       const textureIndex = originalTextures.indexOf(metallicRoughnessTexture)
       if (textureIndex !== -1) {
-        const packed = packing.packed.find(
+        const packed = finalPacking.packed.find(
           (p: PackedTexture) => p.index === textureIndex,
         )
         if (packed) {
@@ -321,12 +322,12 @@ function _generateUVMappings(
             textureSlot: 'metallicRoughnessTexture',
             originalTextureIndex: textureIndex,
             uvMin: {
-              u: packed.x / packing.atlasWidth,
-              v: packed.y / packing.atlasHeight,
+              u: packed.x / finalPacking.atlasWidth,
+              v: packed.y / finalPacking.atlasHeight,
             },
             uvMax: {
-              u: (packed.x + packed.width) / packing.atlasWidth,
-              v: (packed.y + packed.height) / packing.atlasHeight,
+              u: (packed.x + packed.width) / finalPacking.atlasWidth,
+              v: (packed.y + packed.height) / finalPacking.atlasHeight,
             },
           })
         }
@@ -338,7 +339,7 @@ function _generateUVMappings(
     if (occlusionTexture) {
       const textureIndex = originalTextures.indexOf(occlusionTexture)
       if (textureIndex !== -1) {
-        const packed = packing.packed.find(
+        const packed = finalPacking.packed.find(
           (p: PackedTexture) => p.index === textureIndex,
         )
         if (packed) {
@@ -347,12 +348,12 @@ function _generateUVMappings(
             textureSlot: 'occlusionTexture',
             originalTextureIndex: textureIndex,
             uvMin: {
-              u: packed.x / packing.atlasWidth,
-              v: packed.y / packing.atlasHeight,
+              u: packed.x / finalPacking.atlasWidth,
+              v: packed.y / finalPacking.atlasHeight,
             },
             uvMax: {
-              u: (packed.x + packed.width) / packing.atlasWidth,
-              v: (packed.y + packed.height) / packing.atlasHeight,
+              u: (packed.x + packed.width) / finalPacking.atlasWidth,
+              v: (packed.y + packed.height) / finalPacking.atlasHeight,
             },
           })
         }
@@ -364,7 +365,7 @@ function _generateUVMappings(
     if (emissiveTexture) {
       const textureIndex = originalTextures.indexOf(emissiveTexture)
       if (textureIndex !== -1) {
-        const packed = packing.packed.find(
+        const packed = finalPacking.packed.find(
           (p: PackedTexture) => p.index === textureIndex,
         )
         if (packed) {
@@ -373,12 +374,12 @@ function _generateUVMappings(
             textureSlot: 'emissiveTexture',
             originalTextureIndex: textureIndex,
             uvMin: {
-              u: packed.x / packing.atlasWidth,
-              v: packed.y / packing.atlasHeight,
+              u: packed.x / finalPacking.atlasWidth,
+              v: packed.y / finalPacking.atlasHeight,
             },
             uvMax: {
-              u: (packed.x + packed.width) / packing.atlasWidth,
-              v: (packed.y + packed.height) / packing.atlasHeight,
+              u: (packed.x + packed.width) / finalPacking.atlasWidth,
+              v: (packed.y + packed.height) / finalPacking.atlasHeight,
             },
           })
         }
@@ -520,7 +521,7 @@ function _scaleTextureImage(
 /**
  * パッキング効率を計算
  */
-function _calculatePackingEfficiency(packing: any): number {
+function _calculatePackingEfficiency(packing: PackingResult): number {
   const atlasArea = packing.atlasWidth * packing.atlasHeight
   const usedArea = packing.packed.reduce(
     (sum: number, p: PackedTexture) => sum + p.width * p.height,

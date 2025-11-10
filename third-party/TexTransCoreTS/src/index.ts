@@ -7,7 +7,6 @@
 
 // Public API のみをエクスポート
 export { atlasTexturesInDocument } from './atlas/atlasTexture'
-export { packTexturesNFDH } from './atlas/nfdh-packer'
 export type {
   AtlasOptions,
   AtlasResult,
