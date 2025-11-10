@@ -643,15 +643,198 @@ npm run dev
 
 ```typescript
 import { atlasTexturesInDocument } from '@xrift/textranscore-ts'
+import { createCanvas } from 'canvas' // Node.js 環境の場合
 
 // glTF-Transform ドキュメント内のテクスチャをアトラス化
-const result = await atlasTexturesInDocument(document, {
-  maxSize: 2048,
-  padding: 4,
-})
+const result = await atlasTexturesInDocument(
+  document,
+  { maxSize: 2048, padding: 4 },
+  createCanvas // Canvas ファクトリ関数を注入
+)
 
 if (result.isErr()) {
   console.error(`Error: ${result.error.message}`)
 }
 const { document: atlasedDoc, mapping } = result.value
 ```
+
+### 実装状態（2025-11-10）
+
+#### 完成済みの機能 ✅
+
+1. **Canvas 互換性の確保**
+   - node-canvas の `putImageData` 非サポート問題を修正
+   - ブラウザと Node.js 環境の両方で動作するよう設計
+   - Canvas ファクトリ関数を通じた依存性注入パターン
+
+2. **テクスチャ抽出と Bin Packing**
+   - glTF ドキュメントからテクスチャを抽出
+   - NFDH アルゴリズムでテクスチャレイアウトを計算
+   - パッキング効率を最適化
+
+3. **テクスチャアトラスの生成**
+   - 複数のテクスチャを単一キャンバスに統合
+   - テンポラリキャンバスを使用した環境別の描画対応
+   - DataURL への変換に対応
+
+4. **CLI統合**
+   - `.glb` / `.gltf` / `.vrm` ファイルの入力に対応
+   - Canvas ファクトリ関数の正しい注入
+   - エラーハンドリングと結果出力
+
+#### 未実装の機能 🚧
+
+1. **アトラス画像の glTF-Transform への登録**
+   ```typescript
+   // TODO: 生成されたアトラスを document のテクスチャとして登録
+   const atlasImage = /* canvas から ImageData を取得 */
+   const atlasTexture = /* glTF-Transform のテクスチャを作成 */
+   ```
+
+2. **UV 座標の再マッピング**
+   ```typescript
+   // TODO: プリミティブの UV 座標をアトラス座標に更新
+   // 現在のマッピング情報は計算されているが、ドキュメントに反映されていない
+   primitives.forEach((prim) => {
+     // UVAttribute を新しい座標に更新
+   })
+   ```
+
+3. **VRM 拡張機能への対応**
+   - VRM メタデータの更新（materialProperties など）
+   - VRM 固有の constraints の保持
+   - 不要になったテクスチャ参照の削除
+
+#### 現在のパイプライン
+
+```
+入力ファイル (.glb/.gltf/.vrm)
+    ↓
+[glTF-Transform ドキュメント解析]
+    ↓
+[テクスチャ抽出]（glTF 汎用）
+    ↓
+[Bin Packing 計算]（アトラスレイアウト決定）
+    ↓
+[Canvas アトラス生成]（ブラウザ/Node.js 対応）
+    ↓
+[✅ ここまで完成]
+    ↓
+[❌ アトラス画像をドキュメントに登録]（未実装）
+    ↓
+[❌ UV 座標を再マッピング]（未実装）
+    ↓
+[❌ VRM メタデータを更新]（未実装）
+    ↓
+出力ファイル
+```
+
+### 次のステップ（優先順）
+
+#### Phase 2: アトラスを glTF ドキュメントに統合
+
+**目標**: テクスチャアトラスを glTF ドキュメントに正しく登録
+
+```typescript
+// 実装スケルトン：atlasTexture.ts の _atlasTexturesImpl() 内
+// ステップ 5-6 の TODO 部分
+
+// 1. Canvas から PNG データを取得
+const pngBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
+
+// 2. glTF-Transform のテクスチャを作成
+const atlasImage = new Uint8Array(pngBuffer)
+const atlasTexture = document.createTexture('atlas')
+  .setImage(atlasImage)
+  .setMimeType('image/png')
+
+// 3. 古いテクスチャを参照から削除して、新しいアトラスを参照に置き換える
+document.getRoot().listMaterials().forEach((material) => {
+  // baseColor テクスチャを新しいアトラスに置き換える
+  if (material.getBaseColorTexture()) {
+    material.setBaseColorTexture(atlasTexture)
+  }
+  // 他のテクスチャスロットも同様に処理
+})
+```
+
+#### Phase 3: UV 座標の再マッピング
+
+**目標**: プリミティブの UV 座標をアトラス座標に更新
+
+```typescript
+// 実装スケルトン：新規ファイル atlas-uv-mapping.ts
+
+export function remapPrimitiveUVs(
+  document: Document,
+  uvMappings: UVMapping[],
+  packing: PackingResult,
+): void {
+  const atlasWidth = packing.atlasWidth
+  const atlasHeight = packing.atlasHeight
+
+  uvMappings.forEach(({ primitiveIndex, textureSlot, uvMin, uvMax }) => {
+    const primitive = document.getRoot().listPrimitives()[primitiveIndex]
+    if (!primitive) return
+
+    // UV Attribute を取得して再マッピング
+    const uvAttribute = primitive.getAttribute('TEXCOORD_0')
+    if (!uvAttribute) return
+
+    const array = uvAttribute.getArray()
+    // UV 座標を [uvMin, uvMax] の範囲に正規化
+    for (let i = 0; i < array.length; i += 2) {
+      const u = array[i]
+      const v = array[i + 1]
+
+      // オリジナルの [0, 1] 座標をアトラス座標に変換
+      const atlasU = uvMin.u + u * (uvMax.u - uvMin.u)
+      const atlasV = uvMin.v + v * (uvMax.v - uvMin.v)
+
+      array[i] = atlasU
+      array[i + 1] = atlasV
+    }
+  })
+}
+```
+
+#### Phase 4: VRM メタデータの更新（オプション）
+
+**目標**: VRM 固有の情報を保持・更新
+
+- VRM MetallicRoughness テクスチャの統合
+- VRM MaterialProperties の更新
+- 不要なテクスチャ参照の削除
+
+### テスト戦略
+
+#### ユニットテスト
+- NFDH packing アルゴリズム（既存）
+- UV マッピング計算（新規）
+
+#### 統合テスト
+- 複数テクスチャの Canvas 合成
+- glTF ドキュメントへの登録と読み込み確認
+
+#### 手動確認
+```bash
+# Phase 2 完成後
+npx tsx __tests__/manual/atlas-integration.manual.ts
+
+# 出力ファイルを Blender や VRM Viewer で視覚的確認
+```
+
+### 既知の制限
+
+1. **VRM メタデータ非依存**
+   - 現在の実装は純粋な glTF 処理のみ
+   - VRM 固有の機能（アーマチュア、形状キー）には対応していない
+   - `.vrm` ファイルでも `.glb` ファイルと同じように処理される
+
+2. **テクスチャ品質**
+   - PNG 形式での出力（可逆圧縮）
+   - WebP/AVIF への圧縮は別の処理として実装予定
+
+3. **メモリ効率**
+   - 大きなテクスチャ（2048x2048 以上）処理時のメモリ使用量に注意
+   - Node.js 環境での canvas バッファ管理に留意
