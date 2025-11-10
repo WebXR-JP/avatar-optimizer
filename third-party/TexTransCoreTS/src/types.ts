@@ -32,6 +32,8 @@ export interface AtlasOptions {
   maxSize?: number
   /** テクスチャ間のパディング（ピクセル）デフォルト: 4 */
   padding?: number
+  /** テクスチャのダウンスケール係数 (0.1-1.0)。デフォルト: 1.0（縮小なし） */
+  textureScale?: number
 }
 
 /**

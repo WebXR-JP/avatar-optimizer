@@ -62,6 +62,7 @@ export function optimizeVRM(
       // Call atlasTexturesInDocument
       return atlasTexturesInDocument(document, {
         maxSize: options.maxTextureSize,
+        textureScale: options.textureScale,
       }, createCanvasFactory).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
         // Map AtlasError types to OptimizationError
         let mappedError: Types.OptimizationError;

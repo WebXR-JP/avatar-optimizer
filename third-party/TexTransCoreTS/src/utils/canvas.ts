@@ -87,3 +87,38 @@ export async function canvasToBuffer(
   const arrayBuffer = await blob.arrayBuffer()
   return new Uint8Array(arrayBuffer)
 }
+
+/**
+ * Canvas をダウンスケーリング（縮小）
+ * テクスチャサイズを削減する際に使用
+ *
+ * @param sourceCanvas - ソースキャンバス
+ * @param scale - スケール係数 (0.1-1.0)
+ * @param createCanvasFactory - Canvas 生成ファクトリ
+ * @returns スケール済みキャンバス
+ */
+export function scaleCanvas(
+  sourceCanvas: Canvas,
+  scale: number,
+  createCanvasFactory: (width: number, height: number) => Canvas,
+): Canvas {
+  if (scale <= 0 || scale > 1) {
+    throw new Error('Scale must be between 0 and 1')
+  }
+
+  if (scale === 1) {
+    // 縮小不要
+    return sourceCanvas
+  }
+
+  const newWidth = Math.ceil(sourceCanvas.width * scale)
+  const newHeight = Math.ceil(sourceCanvas.height * scale)
+
+  const targetCanvas = createCanvasFactory(newWidth, newHeight)
+  const targetCtx = getCanvasContext(targetCanvas)
+
+  // drawImage で縮小描画
+  targetCtx.drawImage(sourceCanvas, 0, 0, newWidth, newHeight)
+
+  return targetCanvas
+}

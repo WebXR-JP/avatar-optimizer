@@ -17,6 +17,7 @@ program
   .option('-o, --output <path>', 'Path to output VRM file', 'output.vrm')
   .option('--compress-textures', 'Enable texture compression', true)
   .option('--option-max-texture-size <size>', 'Maximum texture size in pixels', '2048')
+  .option('--texture-scale <scale>', 'Texture downscaling factor (0.1-1.0)', '1.0')
   .option('--reduce-meshes', 'Enable mesh reduction', false)
   .option('--target-polygon-count <count>', 'Target polygon count for mesh reduction')
   .action(async (input, options) => {
@@ -38,9 +39,16 @@ program
       })
 
       // Prepare optimization options
+      const textureScale = parseFloat(options.textureScale)
+      if (isNaN(textureScale) || textureScale < 0.1 || textureScale > 1.0) {
+        console.error('❌ Error: Texture scale must be between 0.1 and 1.0')
+        process.exit(1)
+      }
+
       const optimizationOptions: OptimizationOptions = {
         compressTextures: options.compressTextures,
         maxTextureSize: parseInt(options.optionMaxTextureSize, 10),
+        textureScale: textureScale,
         reduceMeshes: options.reduceMeshes,
         targetPolygonCount: options.targetPolygonCount
           ? parseInt(options.targetPolygonCount, 10)
