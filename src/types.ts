@@ -3,6 +3,7 @@ import type { AtlasError } from '@xrift/textranscore-ts'
 export interface OptimizationOptions {
   compressTextures: boolean
   maxTextureSize: number
+  textureScale?: number
   reduceMeshes: boolean
   targetPolygonCount?: number
 }

@@ -12,6 +12,7 @@ export default defineConfig([
     clean: true,
     minify: false,
     treeshake: true,
+    outDir: 'dist',
     external: ['canvas'],
   },
   // CLI build

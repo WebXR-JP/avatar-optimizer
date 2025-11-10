@@ -16,7 +16,7 @@ import type {
   UVMapping,
   PackedTexture,
 } from '../types'
-import { getCanvasContext, canvasToBuffer } from '../utils/canvas'
+import { getCanvasContext, canvasToBuffer, scaleCanvas } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
 import { remapAllPrimitiveUVs } from './uv-remapping'
 
@@ -55,6 +55,7 @@ async function _atlasTexturesImpl(
 ): Promise<AtlasResult> {
   const maxSize = options.maxSize ?? 2048
   const padding = options.padding ?? 4
+  const textureScale = options.textureScale ?? 1.0
 
   // 1. ドキュメント内のテクスチャを収集
   const textures = document.getRoot().listTextures()
@@ -67,8 +68,14 @@ async function _atlasTexturesImpl(
     textures.map((texture) => _extractTextureImage(texture)),
   )
 
+  // 2.5 テクスチャをダウンスケーリング（オプション）
+  let scaledImages = textureImages
+  if (textureScale < 1.0) {
+    scaledImages = textureImages.map((img) => _scaleTextureImage(img, textureScale))
+  }
+
   // 3. パッキング計算
-  const sizes = textureImages.map((img) => ({
+  const sizes = scaledImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
@@ -85,7 +92,7 @@ async function _atlasTexturesImpl(
   // 各テクスチャをアトラスに描画
   for (let i = 0; i < packing.packed.length; i++) {
     const packed = packing.packed[i]
-    const img = textureImages[i]
+    const img = scaledImages[i]
 
     // テンポラリキャンバスを作成してImageDataを描画
     // node-canvas では putImageData が不完全なため、別のキャンバスに描画してから合成
@@ -125,7 +132,7 @@ async function _atlasTexturesImpl(
   _replaceMaterialTextures(document, textures, atlasTexture, mappings)
 
   // 8. プリミティブの UV 座標を再マッピング
-  const textureSizes = textureImages.map((img) => ({
+  const textureSizes = scaledImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
@@ -460,6 +467,54 @@ function _replaceMaterialTextures(
       texture.dispose()
     }
   })
+}
+
+/**
+ * テクスチャ画像をダウンスケーリング
+ * Canvas を使用して画像をスケーリング
+ */
+function _scaleTextureImage(
+  textureImage: {
+    width: number
+    height: number
+    data: Uint8ClampedArray
+  },
+  scale: number,
+): {
+  width: number
+  height: number
+  data: Uint8ClampedArray
+} {
+  if (scale === 1) return textureImage
+
+  const newWidth = Math.ceil(textureImage.width * scale)
+  const newHeight = Math.ceil(textureImage.height * scale)
+
+  // 注：ここで Canvas API を使用していないため、単純な間隔抽出法を使用
+  // 実際には Canvas の drawImage で高品質なスケーリングが可能
+  // ただし非同期処理が必要になるため、ここでは同期的に実装
+  const scaledData = new Uint8ClampedArray(newWidth * newHeight * 4)
+
+  for (let y = 0; y < newHeight; y++) {
+    for (let x = 0; x < newWidth; x++) {
+      // ニアレストネイバー法で色をサンプリング
+      const srcX = Math.floor(x / scale)
+      const srcY = Math.floor(y / scale)
+      const srcIndex = (srcY * textureImage.width + srcX) * 4
+      const dstIndex = (y * newWidth + x) * 4
+
+      scaledData[dstIndex] = textureImage.data[srcIndex]
+      scaledData[dstIndex + 1] = textureImage.data[srcIndex + 1]
+      scaledData[dstIndex + 2] = textureImage.data[srcIndex + 2]
+      scaledData[dstIndex + 3] = textureImage.data[srcIndex + 3]
+    }
+  }
+
+  return {
+    width: newWidth,
+    height: newHeight,
+    data: scaledData,
+  }
 }
 
 /**
