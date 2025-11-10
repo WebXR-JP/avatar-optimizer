@@ -62,6 +62,7 @@
   },
   "dependencies": {
     "commander": "^14.0.2",
-    "neverthrow": "^8.2.0"
+    "neverthrow": "^8.2.0",
+    "@xrift/textranscore-ts": "workspace:*"
   }
 }
