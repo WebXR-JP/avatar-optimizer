@@ -11,8 +11,10 @@ import type {
   AtlasOptions,
   AtlasResult,
   AtlasError,
+  CreateCanvasFactory,
+  CreateImageDataFactory, // 追加
 } from '../types'
-import { createCanvas, getCanvasContext, canvasToDataURL } from '../utils/canvas'
+import { getCanvasContext, canvasToDataURL } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
 
 /**
@@ -20,16 +22,18 @@ import { packTexturesNFDH } from './nfdh-packer'
  *
  * @param document - glTF-Transform ドキュメント
  * @param options - アトラス化オプション
+ * @param createCanvasFactory - Canvas インスタンスを作成するためのファクトリ関数
+ * @param createImageDataFactory - ImageData インスタンスを作成するためのファクトリ関数
  * @returns アトラス化済みドキュメント と UV マッピング情報
  */
 export function atlasTexturesInDocument(
   document: Document,
   options: AtlasOptions = {},
+  createCanvasFactory: CreateCanvasFactory,
+  createImageDataFactory?: CreateImageDataFactory,
 ): ResultAsync<AtlasResult, AtlasError> {
-  const maxSize = options.maxSize ?? 2048
-
   return ResultAsync.fromPromise(
-    _atlasTexturesImpl(document, maxSize),
+    _atlasTexturesImpl(document, options, createCanvasFactory, createImageDataFactory),
     (error) => ({
       type: 'UNKNOWN_ERROR' as const,
       message: `Atlas failed: ${String(error)}`,
@@ -42,8 +46,13 @@ export function atlasTexturesInDocument(
  */
 async function _atlasTexturesImpl(
   document: Document,
-  maxSize: number,
+  options: AtlasOptions,
+  createCanvasFactory: CreateCanvasFactory,
+  createImageDataFactory?: CreateImageDataFactory,
 ): Promise<AtlasResult> {
+  const maxSize = options.maxSize ?? 2048
+  const padding = options.padding ?? 4
+
   // 1. ドキュメント内のテクスチャを収集
   const textures = document.getRoot().listTextures()
   if (textures.length === 0) {
@@ -61,10 +70,10 @@ async function _atlasTexturesImpl(
     height: img.height,
   }))
 
-  const packing = await packTexturesNFDH(sizes, maxSize, maxSize)
+  const packing = await packTexturesNFDH(sizes, maxSize, maxSize, padding)
 
   // 4. アトラスキャンバスを生成
-  const atlasCanvas = createCanvas(packing.atlasWidth, packing.atlasHeight)
+  const atlasCanvas = createCanvasFactory(packing.atlasWidth, packing.atlasHeight)
   const atlasCtx = getCanvasContext(atlasCanvas)
 
   // 背景をクリア（透明）
@@ -75,13 +84,27 @@ async function _atlasTexturesImpl(
     const packed = packing.packed[i]
     const img = textureImages[i]
 
-    // Canvas に ImageData を描画
-    const imageData = new ImageData(
-      new Uint8ClampedArray(img.data),
-      img.width,
-      img.height,
-    )
-    atlasCtx.putImageData(imageData, packed.x, packed.y)
+    // テンポラリキャンバスを作成してImageDataを描画
+    // node-canvas では putImageData が不完全なため、別のキャンバスに描画してから合成
+    const tempCanvas = createCanvasFactory(img.width, img.height)
+    const tempCtx = getCanvasContext(tempCanvas)
+
+    // ImageData を作成（オプション）
+    if (createImageDataFactory) {
+      const imageData = createImageDataFactory(
+        new Uint8ClampedArray(img.data),
+        img.width,
+        img.height,
+      )
+      tempCtx.putImageData(imageData, 0, 0)
+    } else {
+      // node-canvas では putImageData が使用不可能な場合がある
+      // 代替方法：Canvas の内部バッファに直接アクセス（node-canvas 固有）
+      _drawImageDataToCanvas(tempCtx, img.data, img.width, img.height)
+    }
+
+    // テンポラリキャンバスをメインキャンバスに描画
+    atlasCtx.drawImage(tempCanvas, packed.x, packed.y)
   }
 
   // 5. アトラス画像をテクスチャとして登録
@@ -129,6 +152,38 @@ async function _extractTextureImage(texture: Texture): Promise<{
     height,
     data: new Uint8ClampedArray(data.buffer), // Convert to Uint8ClampedArray
   };
+}
+
+/**
+ * ImageData を Canvas に直接描画（node-canvas 互換版）
+ * node-canvas では putImageData が不完全なため、getImageData と putImageData の組み合わせで対応
+ */
+function _drawImageDataToCanvas(
+  ctx: any,
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): void {
+  // node-canvas でのバイパス方法：
+  // Canvas のピクセルデータを直接操作する（node-canvas 固有）
+  try {
+    // ImageData オブジェクトを作成できない場合は、
+    // Canvas の getImageData を使用して既存のオブジェクトを取得し、データをコピー
+    const existingImageData = ctx.getImageData(0, 0, width, height)
+    // データをコピー
+    const targetData = existingImageData.data
+    for (let i = 0; i < data.length; i++) {
+      targetData[i] = data[i]
+    }
+    // 更新を反映
+    ctx.putImageData(existingImageData, 0, 0)
+  } catch (_error) {
+    // putImageData が完全に失敗する場合は、フォールバック
+    // ログするが、処理は継続（透明背景のままになる）
+    console.warn(
+      'Warning: putImageData not fully supported in this environment',
+    )
+  }
 }
 
 /**

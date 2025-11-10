@@ -14,7 +14,10 @@
     // "declarationMap": true, // Removed
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": ".",
+    "paths": {
+      "@xrift/textranscore-ts": ["./third-party/TexTransCoreTS/src"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -9,4 +9,5 @@ export default defineConfig({
   splitting: false,
   shims: true,
   outDir: 'dist',
+  external: ['canvas'],
 })

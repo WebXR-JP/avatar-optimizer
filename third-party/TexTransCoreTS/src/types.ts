@@ -169,3 +169,20 @@ export interface CanvasContext {
   putImageData(imagedata: ImageData, dx: number, dy: number): void
   clearRect(x: number, y: number, w: number, h: number): void
 }
+
+/**
+ * Canvas インスタンスを作成するためのファクトリ関数
+ * 外部から注入されることを想定
+ */
+export type CreateCanvasFactory = (width: number, height: number) => Canvas;
+
+/**
+ * ImageData インスタンスを作成するためのファクトリ関数
+ * 外部から注入されることを想定
+ */
+export type CreateImageDataFactory = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+) => ImageData;
+
