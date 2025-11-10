@@ -18,6 +18,7 @@ import type {
 } from '../types'
 import { getCanvasContext, canvasToBuffer } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
+import { remapAllPrimitiveUVs } from './uv-remapping'
 
 /**
  * glTF-Transform ドキュメント内のテクスチャをアトラス化
@@ -122,6 +123,19 @@ async function _atlasTexturesImpl(
 
   // 7. マテリアルの参照を更新（古いテクスチャ → アトラス）
   _replaceMaterialTextures(document, textures, atlasTexture, mappings)
+
+  // 8. プリミティブの UV 座標を再マッピング
+  const textureSizes = textureImages.map((img) => ({
+    width: img.width,
+    height: img.height,
+  }))
+  remapAllPrimitiveUVs(
+    document,
+    mappings,
+    packing.atlasWidth,
+    packing.atlasHeight,
+    textureSizes,
+  )
 
   return {
     document,
