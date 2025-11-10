@@ -586,46 +586,23 @@ export type { OptimizationOptions, VRMStatistics }
 - ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
 - ❌ 外部向けの非同期関数（Promise + throw を使用）
 
-## TODO: third-party ライブラリの WASM 化
+## TeX​TransCore ライブラリ
 
-### TexTransCore の WASM コンパイル化
+TexTransCore は C# で実装されたテクスチャ処理ライブラリで、`third-party/` に subtree として統合されています。
 
-**現状**:
-- TexTransCore (テクスチャ処理 C# ライブラリ) が `third-party/` に subtree として統合されている
-- 現在は net8.0 DLL としてビルドされているが、JavaScript から直接呼び出すために WASM 化が必要
+詳細な開発ガイドは `third-party/TexTransCore/CLAUDE.md` を参照してください：
 
-**課題**:
-- TexTransCore は Unity 向けに設計されており、WASI/WASM 互換性が低い
-- 単純な `wasi-wasm` RuntimeIdentifier では、ライブラリとしてのエントリーポイント要件と互換性がない
-- `componentize-dotnet` 使用による WIT コンポーネント化も検討が必要
+- **C# 開発ガイドライン**: 型設計、エラーハンドリング、ドキュメント作成
+- **WASM 化ロードマップ**: 実装アプローチ、チェックリスト、次のステップ
+- **開発コマンド**: ビルド、テスト実行方法
 
-**推奨アプローチ** (優先度順):
+### クイックリンク
 
-1. **Mono AOT + Emscripten による WASM コンパイル**
-   - C# → IL → Mono AOT → ネイティブコード → Emscripten → WASM
-   - セットアップが複雑だが、最も完全な WASM 互換性が期待できる
-   - [Mono WASM Support](https://github.com/dotnet/runtime/tree/main/src/mono/wasm)
+```bash
+# TexTransCore のビルド
+cd third-party/TexTransCore
+dotnet build -c Release
 
-2. **componentize-dotnet による WIT コンポーネント化**
-   - NativeAOT-LLVM + WIT インターフェース定義
-   - 言語非依存のインターフェースが必要な場合に有効
-   - セットアップは 1 より簡潔
-
-3. **C# → C++ → WASM の段階的変換**
-   - CppSharp や SWIG を使用して C# を C++ に変換
-   - 最も手動作業が多いが、細かい制御が可能
-
-4. **代替案: Node.js FFI バインディング**
-   - .NET DLL を node-ffi/NAPI でラップする
-   - WASM ではなく、ネイティブバイナリとしての統合
-
-**実装時の注意点**:
-- TexTransCore の依存関係が WASM 互換か確認が必要
-- ファイル I/O や OS 固有の機能を避ける必要がある
-- テクスチャ処理は計算量が多いため、WASM での性能検証が重要
-
-**次のステップ**:
-1. 実装方式の選定 (Mono AOT vs componentize-dotnet vs 代替案)
-2. 依存関係の互換性調査
-3. プロトタイプビルド
-4. パフォーマンステスト
+# TexTransCore の開発ガイド
+cat third-party/TexTransCore/CLAUDE.md
+```
