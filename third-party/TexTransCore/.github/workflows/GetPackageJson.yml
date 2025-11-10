@@ -1,0 +1,26 @@
+name: GetPackageJson
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: false
+
+jobs:
+    Get-Package-Json:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-tags: true
+            ref: ${{ inputs.tag }}
+
+        - uses: actions/upload-artifact@v4
+          with:
+            name: package
+            path: package.json

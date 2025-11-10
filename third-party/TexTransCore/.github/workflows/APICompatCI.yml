@@ -1,0 +1,25 @@
+name: ApiCompatCI
+on: push
+
+jobs:
+  Get-Latest-Tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.GetLatestTag.outputs.latest_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch tags
+        run: git fetch --prune --unshallow --tags
+
+      - name: get tag
+        id: GetLatestTag
+        run: |
+          echo "latest_tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
+  Api-Compat-CI:
+      needs: [Get-Latest-Tag]
+      uses: ./.github/workflows/ApiCompatibilityChecker.yml
+      with:
+        left: ${{ needs.Get-Latest-Tag.outputs.tag }}
+        right: ${{ github.sha }}
