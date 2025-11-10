@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>TexTransCore</AssemblyName>
+    <RootNamespace>TexTransCore</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    
+    <!-- NuGet Package Metadata (Optional) -->
+    <Version>1.0.0</Version>
+    <Authors>rs64</Authors>
+    <Description>A texture transformation and processing library for VRM models</Description>
+    <License>MIT</License>
+    <PackageProjectUrl>https://github.com/rs64/TexTransCore</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+</Project>

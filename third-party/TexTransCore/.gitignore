@@ -3,3 +3,13 @@
 /**/obj~
 /**/bin~
 tex-trans-core.zip
+
+# IDE
+.vscode/
+.vs/
+*.user
+*.sln.iml
+
+# dotnet
+.net/
+.dotnet/
