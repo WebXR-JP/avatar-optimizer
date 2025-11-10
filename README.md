@@ -189,6 +189,44 @@ __tests__/
 npx tsx __tests__/manual/cli.manual.ts
 ```
 
+## 外部ライブラリ
+
+### TexTransCore
+
+このプロジェクトは、高度なテクスチャ処理を実現するために [TexTransCore](https://github.com/ReinaS-64892/TexTransCore) を統合しています。
+
+#### TexTransCore とは
+
+**TexTransCore** は、[Reina_Sakiria](https://github.com/ReinaS-64892)さんが開発したテクスチャ処理のための .NET ライブラリです。[TexTransTool](https://github.com/ReinaS-64892/TexTransTool) の汎用 C# コアコンポーネントとして設計されており、Unity に依存しない純粋な .NET ライブラリとして利用できます。
+
+#### WASM 化の進捗
+
+本リポジトリ内におけるTexTransCore は現在、WebAssembly (WASM) への対応を進めています：
+
+- **Phase 1 (完了)**: NativeAOT-LLVM 化
+  - .NET 10.0 RC2 + NativeAOT-LLVM による WASM ビルド対応
+  - WIT (WebAssembly Interface Types) インターフェース定義
+  - マネージド DLL の生成と最適化
+
+- **Phase 2 (進行中)**: componentize-dotnet 統合
+  - JavaScript からの直接呼び出し対応
+  - WIT コンポーネントモデルの実装
+  - WASM ネイティブバイナリ生成 (Windows CI/CD)
+
+#### 開発者向け情報
+
+TexTransCore の開発や WASM 化ロードマップの詳細は、以下を参照してください：
+
+```bash
+cat third-party/TexTransCore/CLAUDE.md
+```
+
+#### ライセンス
+
+TexTransCore は MIT ライセンスの下で公開されています。詳細は [ThirdPartyNotices.txt](./ThirdPartyNotices.txt) を参照してください。
+
+---
+
 ## ライセンス
 
 MIT
