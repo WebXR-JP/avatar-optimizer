@@ -1,5 +1,5 @@
 // Optimization functions
-export { calculateVRMStatistics, optimizeVRM } from './optimizer'
+export { calculateVRMStatistics, optimizeVRM, validateVRMFile } from './optimizer'
 
 // Type exports
 export type {
@@ -9,4 +9,6 @@ export type {
   TextureSlotInfo,
   ValidationError,
   VRMStatistics,
+  VRMValidationResult,
+  VRMValidationIssue,
 } from './types'

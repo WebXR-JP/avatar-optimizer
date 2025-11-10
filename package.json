@@ -59,7 +59,8 @@
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.38.0",
-    "canvas": "^3.2.0"
+    "canvas": "^3.2.0",
+    "vrm-validator": "^2.0.0-dev.3.10"
   },
   "dependencies": {
     "commander": "^14.0.2",

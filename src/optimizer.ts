@@ -211,3 +211,90 @@ export function calculateVRMStatistics(
     })
   )
 }
+
+/**
+ * VRM ファイルをバリデーションします
+ * vrm-validator を使用して VRM の整合性と仕様準拠を確認
+ *
+ * @param file VRM ファイル
+ * @returns バリデーション結果
+ */
+export function validateVRMFile(
+  file: File,
+): ResultAsync<Types.VRMValidationResult, Types.ValidationError> {
+  // ファイル型の検証（同期）
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    return ResultAsync.fromPromise(
+      Promise.reject(new Error('Invalid file')),
+      () => ({
+        type: 'INVALID_FILE_TYPE' as const,
+        message: 'Invalid file: expected a File object',
+      })
+    )
+  }
+
+  // ファイルをArrayBufferに変換してバリデーション実行
+  return ResultAsync.fromPromise(file.arrayBuffer(), (error) => ({
+    type: 'INVALID_FILE_TYPE' as const,
+    message: `Failed to read file: ${String(error)}`,
+  }))
+    .andThen((arrayBuffer) => _validateVRMBytes(new Uint8Array(arrayBuffer)))
+}
+
+/**
+ * Uint8Array から VRM をバリデーションします（内部用）
+ */
+function _validateVRMBytes(
+  data: Uint8Array,
+): ResultAsync<Types.VRMValidationResult, Types.ValidationError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // vrm-validator を動的にインポート
+      // @ts-expect-error - vrm-validator は型定義がないため
+      const vrmValidator = await import('vrm-validator')
+
+      // バリデーション実行
+      const report = await vrmValidator.validateBytes(data, {
+        uri: 'model.vrm',
+        format: 'glb',
+      })
+
+      // バリデーション結果を VRMValidationResult 形式に変換
+      // issues は { messages: [...], numErrors: number, ... } 構造
+      const messages = (report.issues?.messages || []) as any[]
+      const isValid = (report.issues?.numErrors || 0) === 0
+      const issues: Types.VRMValidationIssue[] = messages.map((message: any) => ({
+        code: message.code || 'UNKNOWN',
+        message: message.message || 'Unknown issue',
+        severity: _mapSeverity(message.severity),
+        pointer: message.pointer,
+      }))
+
+      return {
+        isValid,
+        issues,
+        info: report.info,
+      } as Types.VRMValidationResult
+    })(),
+    (error) => ({
+      type: 'VALIDATOR_ERROR' as const,
+      message: `VRM validation failed: ${String(error)}`,
+    })
+  )
+}
+
+/**
+ * vrm-validator の severity をマップします（内部用）
+ */
+function _mapSeverity(severity: string): 'error' | 'warning' | 'info' {
+  switch (severity) {
+    case 'Error':
+      return 'error'
+    case 'Warning':
+      return 'warning'
+    case 'Information':
+      return 'info'
+    default:
+      return 'info'
+  }
+}

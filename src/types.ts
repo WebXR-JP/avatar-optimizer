@@ -38,11 +38,34 @@ export interface TextureSlotInfo {
 }
 
 /**
+ * VRM バリデーション結果の詳細情報
+ */
+export interface VRMValidationIssue {
+  code: string
+  message: string
+  severity: 'error' | 'warning' | 'info'
+  pointer?: string
+}
+
+/**
+ * VRM バリデーション結果
+ */
+export interface VRMValidationResult {
+  isValid: boolean
+  issues: VRMValidationIssue[]
+  info?: {
+    generator?: string
+    version?: string
+  }
+}
+
+/**
  * バリデーション処理のエラー型
  */
 export type ValidationError =
   | { type: 'INVALID_FILE_TYPE'; message: string }
   | { type: 'VALIDATION_FAILED'; message: string }
+  | { type: 'VALIDATOR_ERROR'; message: string }
 
 /**
  * テクスチャ処理などの内部処理のエラー型
