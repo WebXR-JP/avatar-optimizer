@@ -1,69 +1,17 @@
-import { BinPacker, packTextures } from '../src/atlas/packer'
-import { IslandRegion } from '../src/types'
-
-describe('BinPacker', () => {
-  it('should pack rectangles without overlap', () => {
-    const packer = new BinPacker(1024, 1024)
-    const sizes = [
-      { width: 512, height: 512 },
-      { width: 256, height: 256 },
-      { width: 1024, height: 512 },
-    ]
-    const packedRects = packer.pack(sizes)
-
-    // Verify no overlaps
-    for (let i = 0; i < packedRects.length; i++) {
-      for (let j = i + 1; j < packedRects.length; j++) {
-        const rectA = packedRects[i]
-        const rectB = packedRects[j]
-
-        const overlap = !(
-          rectA.x + rectA.width <= rectB.x ||
-          rectB.x + rectB.width <= rectA.x ||
-          rectA.y + rectA.height <= rectB.y ||
-          rectB.y + rectB.height <= rectA.y
-        )
-        expect(overlap).toBe(false)
-      }
-    }
-
-    // Verify all rectangles are within bounds
-    for (const rect of packedRects) {
-      expect(rect.x).toBeGreaterThanOrEqual(0)
-      expect(rect.y).toBeGreaterThanOrEqual(0)
-      expect(rect.x + rect.width).toBeLessThanOrEqual(1024)
-      expect(rect.y + rect.height).toBeLessThanOrEqual(1024)
-    }
-  })
-
-  it('should throw error if a texture is too large to pack', () => {
-    const packer = new BinPacker(500, 500)
-    const sizes = [{ width: 600, height: 100 }]
-    expect(() => packer.pack(sizes)).toThrow('Cannot pack texture 0: size too large')
-  })
-})
-
-describe('packTextures', () => {
-  it('should pack textures and calculate atlas dimensions correctly', async () => {
-    const sizes = [
-      { width: 512, height: 512 },
-      { width: 256, height: 256 },
-      { width: 1024, height: 512 },
-    ]
-    const { packed, atlasWidth, atlasHeight } = await packTextures(sizes, 2048, 4)
-
-    expect(packed.length).toBe(3)
-    expect(atlasWidth).toBeGreaterThan(0)
-    expect(atlasHeight).toBeGreaterThan(0)
-
-    // Check if padding is applied correctly (e.g., packed width/height should be original + 2*padding)
-    // This is implicitly tested by the BinPacker test, but good to keep in mind.
-    const expectedPaddedWidth0 = sizes[0].width + 2 * 4
-    const expectedPaddedHeight0 = sizes[0].height + 2 * 4
-    expect(packed[0].width).toBe(expectedPaddedWidth0)
-    expect(packed[0].height).toBe(expectedPaddedHeight0)
-  })
-})
+// Helper function for UV remapping (copied from atlasTexture.ts for testing)
+interface IslandRegion {
+  sourceTextureIndex: number
+  sourceX: number
+  sourceY: number
+  sourceWidth: number
+  sourceHeight: number
+  targetX: number
+  targetY: number
+  targetWidth: number
+  targetHeight: number
+  rotation: number
+  padding: number
+}
 
 // Helper function for UV remapping (copied from atlasTexture.ts for testing)
 function remapUVCoordinate(

@@ -6,6 +6,25 @@
 import type { Primitive, Texture } from '@gltf-transform/core'
 
 /**
+ * 2D ベクトル
+ */
+export interface Vector2 {
+  x: number
+  y: number
+}
+
+/**
+ * パッキング対象となるテクスチャアイランドの情報
+ * C# の IslandTransform に相当
+ */
+export interface IslandTransform {
+  position: Vector2
+  size: Vector2
+  rotation: number
+  originalIndex: number
+}
+
+/**
  * テクスチャアトラス化のオプション
  */
 export interface AtlasOptions {
