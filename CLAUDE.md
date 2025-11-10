@@ -1,11 +1,10 @@
 # CLAUDE.md
 
-このファイルは、@xrift/vrm-optimizer (VRM モデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
+このファイルは、@xrift/avatar-optimizer (3Dモデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
 
 ## プロジェクト概要
 
-**@xrift/vrm-optimizer** は WebXR アプリケーション向けの VRM モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザとノード環境の両方で動作します。
-
+**@xrift/avatar-optimizer** は WebXR アプリケーション向けの 3Dモデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザとノード環境の両方で動作します。
 ## プロジェクト構成
 
 ### スタック
@@ -588,7 +587,7 @@ export type { OptimizationOptions, VRMStatistics }
 
 ## TeX​TransCore ライブラリ
 
-TexTransCore は C# で実装されたテクスチャ処理ライブラリで、`third-party/` に subtree として統合されています。
+TexTransCore は C# で実装されたテクスチャ処理ライブラリで、`third-party/TexTransCore` に subtree として統合されています。
 
 詳細な開発ガイドは `third-party/TexTransCore/CLAUDE.md` を参照してください：
 
@@ -605,4 +604,54 @@ dotnet build -c Release
 
 # TexTransCore の開発ガイド
 cat third-party/TexTransCore/CLAUDE.md
+```
+
+## TexTransCoreTS TypeScript 実装
+
+**TexTransCoreTS** (`third-party/TexTransCoreTS/`) は TexTransCore のテクスチャアトラス化機能を TypeScript で再実装しています。
+
+### 目的
+
+- ブラウザとNode.js両環境で動作するテクスチャアトラス化
+- @xrift/vrm-optimizer に組み込むための軽量な実装
+- テクスチャアトラス化とそれに伴うモデル UV 再マッピングのみに特化
+
+### 主要機能
+
+- **Bin Packing** (`MaxRects` アルゴリズム): 効率的なテクスチャレイアウト計算
+- **テクスチャアトラス化**: 複数のテクスチャを1つのアトラスに統合
+- **UV 座標再マッピング**: glTF-Transform ドキュメント内のプリミティティブ UV を更新
+
+### 開発ガイド
+
+詳細は `third-party/TexTransCoreTS/CLAUDE.md` を参照：
+
+```bash
+# TexTransCoreTS のインストール・ビルド
+cd third-party/TexTransCoreTS
+npm install
+npm run build
+
+# テスト実行
+npm test
+
+# 開発モード（ウォッチ）
+npm run dev
+```
+
+### API 概要
+
+```typescript
+import { atlasTexturesInDocument } from '@xrift/textranscore-ts'
+
+// glTF-Transform ドキュメント内のテクスチャをアトラス化
+const result = await atlasTexturesInDocument(document, {
+  maxSize: 2048,
+  padding: 4,
+})
+
+if (result.isErr()) {
+  console.error(`Error: ${result.error.message}`)
+}
+const { document: atlasedDoc, mapping } = result.value
 ```
