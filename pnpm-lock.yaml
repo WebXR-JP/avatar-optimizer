@@ -72,6 +72,9 @@ importers:
       typescript-eslint:
         specifier: ^8.38.0
         version: 8.46.3(eslint@9.39.1)(typescript@5.9.3)
+      vrm-validator:
+        specifier: ^2.0.0-dev.3.10
+        version: 2.0.0-dev.3.10
 
   third-party/TexTransCoreTS:
     dependencies:
@@ -2744,6 +2747,9 @@ packages:
   v8-to-istanbul@9.3.0:
     resolution: {integrity: sha512-kiGUalWN+rgBJ/1OHZsBtU4rXZOfj/7rKQxULKlIzwzQSvMJUUNgPwJEEh7gU6xEVxC0ahoOBvN2YI8GH6FNgA==}
     engines: {node: '>=10.12.0'}
+
+  vrm-validator@2.0.0-dev.3.10:
+    resolution: {integrity: sha512-H6j+OktWaGDvqfcndcEc13PFzwM0RFh9pu/fnV4tzGNg6TSxeGyPMHQmCTfehJqC/GV4DTJ2tL4r4anHVPGSdg==}
 
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
@@ -5914,6 +5920,8 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
+
+  vrm-validator@2.0.0-dev.3.10: {}
 
   walker@1.0.8:
     dependencies:
