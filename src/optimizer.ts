@@ -65,11 +65,26 @@ export function optimizeVRM(
         ? _calculateTextureScale(maxTextureSize, options.maxTextureSize)
         : 1.0
 
+      // Store original extensions before atlasing
+      const originalExtensionsUsed = Array.from(document.getRoot().listExtensionsUsed())
+
       // Call atlasTexturesInDocument
       return atlasTexturesInDocument(document, {
         maxSize: options.maxTextureSize,
         textureScale: textureScale,
-      }, createCanvasFactory).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
+      }, createCanvasFactory).map((atlasResult) => {
+        // Restore original extensions to the optimized document
+        const optimizedRoot = atlasResult.document.getRoot()
+
+        // Re-add extensions that were in the original document
+        for (const ext of originalExtensionsUsed) {
+          if (!optimizedRoot.listExtensionsUsed().includes(ext)) {
+            optimizedRoot.addExtension(ext)
+          }
+        }
+
+        return atlasResult
+      }).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
         // Map AtlasError types to OptimizationError
         let mappedError: Types.OptimizationError;
         switch (atlasError.type) {
@@ -102,7 +117,11 @@ export function optimizeVRM(
         (async () => {
           const { WebIO } = await import('@gltf-transform/core')
           const io = new WebIO()
-          const newArrayBuffer = await io.writeBinary(atlasResult.document)
+
+          // Preserve original document's extensions in the optimized document
+          const optimizedDoc = atlasResult.document
+
+          const newArrayBuffer = await io.writeBinary(optimizedDoc)
           const newUint8Array = new Uint8Array(newArrayBuffer)
           return new File([newUint8Array], file.name, { type: file.type })
         })(),
