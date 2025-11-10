@@ -2,3 +2,9 @@ node_modules
 dist
 *.log
 .DS_Store
+
+# Test directories
+__tests__/input/*
+__tests__/output/*
+!__tests__/input/.gitkeep
+!__tests__/output/.gitkeep

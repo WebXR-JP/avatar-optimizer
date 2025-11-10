@@ -1,12 +1,30 @@
 import { defineConfig } from 'tsup'
 
-export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['esm', 'cjs'],
-  dts: true,
-  splitting: false,
-  sourcemap: true,
-  clean: true,
-  minify: false,
-  treeshake: true,
-})
+export default defineConfig([
+  // Library build
+  {
+    name: 'library',
+    entry: ['src/index.ts'],
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: true,
+    minify: false,
+    treeshake: true,
+  },
+  // CLI build
+  {
+    name: 'cli',
+    entry: ['src/cli.ts'],
+    format: ['cjs'],
+    dts: false,
+    splitting: false,
+    sourcemap: false,
+    clean: false,
+    minify: false,
+    treeshake: true,
+    outDir: 'dist',
+    outExtension: () => ({ js: '.cjs' }),
+  },
+])

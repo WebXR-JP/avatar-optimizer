@@ -19,8 +19,11 @@
 
 ```
 src/
-  ├── index.ts          # メインエントリーポイント (エクスポート管理)
-  └── [実装ファイル]
+  ├── index.ts          # メインエントリーポイント (ライブラリエクスポート管理)
+  ├── cli.ts            # CLI エントリーポイント (Commander ベース)
+  ├── optimizer.ts      # 最適化ロジック
+  ├── preprocessor.ts   # 前処理パイプライン
+  └── types.ts          # 型定義集約
 
 __tests__/
   ├── *.test.ts         # Jest 自動テスト
@@ -28,15 +31,28 @@ __tests__/
   ├── input/            # 手動確認用入力ファイル (.gitignore)
   ├── output/           # 手動実行スクリプトの出力 (.gitignore)
   └── manual/           # 手動実行確認スクリプト (git追跡)
+       └── cli.manual.ts # CLI 手動テストスクリプト
 
-dist/                   # ビルド出力 (ESM/CJS/型定義)
+dist/                   # ビルド出力 (ESM/CJS/型定義 + CLI)
+  ├── index.js          # ライブラリ ESM
+  ├── index.cjs         # ライブラリ CJS
+  ├── index.d.ts        # 型定義
+  └── cli.cjs           # CLI バイナリ (実行可能)
 ```
 
 ### 主要な API
 
+#### ライブラリ API
+
 - `preprocessVRM(file, options)`: VRM 検証→最適化→統計計算の一括処理
 - `optimizeVRM(file, options)`: テクスチャ圧縮・メッシュ削減による最適化
 - `calculateVRMStatistics(file)`: VRM 統計計算 (ポリゴン数、テクスチャ数など)
+
+#### CLI コマンド
+
+```bash
+xrift-optimize <input> -o <output> [options]
+```
 
 詳細は `README.md` を参照してください。
 
@@ -46,7 +62,7 @@ dist/                   # ビルド出力 (ESM/CJS/型定義)
 # 依存関係インストール
 npm install
 
-# ビルド
+# ビルド (ライブラリ + CLI)
 npm run build
 
 # ウォッチモード (開発時)
@@ -54,6 +70,16 @@ npm run dev
 
 # 公開前ビルド
 npm run prepublishOnly
+
+# CLI のローカルテスト
+node dist/cli.cjs input.vrm -o output.vrm
+
+# CLI を グローバルコマンドとしてインストール（開発時）
+npm link
+xrift-optimize input.vrm -o output.vrm
+
+# 手動テストスクリプトの実行
+npx tsx __tests__/manual/cli.manual.ts
 ```
 
 ## 重要な開発ルール
@@ -63,6 +89,119 @@ npm run prepublishOnly
 3. **モジュール形式**: 名前付きエクスポートを使用 (ESM/CJS の両形式をサポート)
 4. **依存関係最小化**: ピア依存関係は @gltf-transform のみ
 5. **テスト**: `__tests__/` ディレクトリ内で純粋関数のテストを記述
+6. **CLI ビルド**: `src/cli.ts` は CommonJS (`.cjs`) として独立ビルド。ブラウザとの互換性は不要
+
+## CLI 開発ガイドライン
+
+### CLI アーキテクチャ
+
+- **エントリーポイント**: `src/cli.ts`
+- **ビルド出力**: `dist/cli.cjs` (Node.js 実行可能、shebang 付き)
+- **パーサー**: Commander.js
+- **ファイル I/O**: `fs/promises` (Node.js 専用)
+
+### CLI 実装のベストプラクティス
+
+#### 1. ライブラリ関数の再利用
+
+CLI は `optimizeVRM`, `calculateVRMStatistics` などのライブラリ関数をラッパーとして使用：
+
+```typescript
+import { optimizeVRM, type OptimizationOptions } from './index'
+
+async function runCLI() {
+  // ファイル読み込み → File オブジェクト変換 → ライブラリ関数呼び出し → 出力
+  const file = new File([buffer], filename, { type: 'model/gltf-binary' })
+  const result = await optimizeVRM(file, options)
+
+  if (result.isErr()) {
+    // neverthrow エラー処理
+    console.error(`Error: ${result.error.message}`)
+    process.exit(1)
+  }
+}
+```
+
+#### 2. エラーハンドリング
+
+- ライブラリ関数は `ResultAsync` を返すため、`.isErr()` でチェック
+- CLI 固有のエラー（ファイルシステム）は try-catch で対応
+- 常に適切な exit code を設定 (`process.exit(0)` / `process.exit(1)`)
+
+```typescript
+try {
+  const buffer = await readFile(inputPath)
+  // ... ライブラリ呼び出し ...
+} catch (error) {
+  console.error(`❌ Unexpected error: ${String(error)}`)
+  process.exit(1)
+}
+```
+
+#### 3. ユーザーフレンドリーな出力
+
+- 進捗表示 (📖, ⚙️, 💾 など適度なシンボルを使用)
+- 成功メッセージ (✅)
+- エラーメッセージ (❌)
+- ファイルサイズ削減率の表示
+
+#### 4. オプション管理
+
+Commander で定義したオプションは型安全に処理：
+
+```typescript
+program
+  .option('-o, --output <path>', 'Path to output', 'output.vrm')
+  .option('--max-texture-size <size>', 'Max texture size', '2048')
+  .action(async (input, options) => {
+    // options は { output: string, maxTextureSize: string } 型
+    const maxSize = parseInt(options.maxTextureSize, 10)
+  })
+```
+
+### ビルド設定
+
+`tsup.config.ts` で CLI を独立ビルド：
+
+```typescript
+{
+  name: 'cli',
+  entry: ['src/cli.ts'],
+  format: ['cjs'],           // Node.js 用 CommonJS
+  outExtension: () => ({ js: '.cjs' }),  // .cjs 拡張子
+  dts: false,                // CLI は型定義不要
+  sourcemap: false,          // パフォーマンス最適化
+}
+```
+
+`package.json` の `bin` フィールド：
+
+```json
+{
+  "bin": {
+    "xrift-optimize": "./dist/cli.cjs"
+  }
+}
+```
+
+### CLI テスト戦略
+
+- **機能テスト**: `__tests__/manual/cli.manual.ts` で実際のファイル処理を確認
+- **テスト入力ファイル**:
+  - `__tests__/fixtures/`: git 追跡されるサンプル（CI/CD でも使用）
+  - `__tests__/input/`: 開発者が配置する実ファイル（.gitignore）
+- **出力確認**: `__tests__/output/` で結果を検証
+
+```bash
+# 手動テスト実行
+npx tsx __tests__/manual/cli.manual.ts
+
+# ローカル CLI テスト
+node dist/cli.cjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
+
+# グローバルコマンドでテスト（npm link 後）
+xrift-optimize __tests__/fixtures/sample.glb -o __tests__/output/result.glb
+```
 
 ## AI 支援開発のためのコーディング規約
 
@@ -240,102 +379,147 @@ async function optimizeVRMDocument(
 - 副作用なし (バグの原因が減少)
 - 再利用性向上 (組み合わせ可能)
 
-### 例外処理のベストプラクティス (neverthrow による Result 型)
+### 例外処理のベストプラクティス (neverthrow による Result 型に統一)
 
-**例外は原則として Result 型で扱う。** `neverthrow` ライブラリを使用して、エラーハンドリングを型安全かつ明示的に行います：
+エラーハンドリングは `neverthrow` のパターンに統一し、条件判定を簡潔にします。
+
+#### 1. 同期関数またはバリデーション：Result 型
+
+同期関数や純粋なバリデーション処理では `neverthrow` の `Result` 型を使用します：
 
 ```typescript
 import { ok, err, Result } from 'neverthrow'
 
-// ❌ 悪い例: 例外をスロー
-export async function loadVRMDocument(file: File): Promise<Document> {
-  if (!file || file.type !== 'model/gltf-binary') {
-    throw new Error('Invalid file: expected VRM binary file')
+// 同期的なバリデーション：Result 型を返す
+function validateFile(file: File): Result<void, ValidationError> {
+  if (!file) {
+    return err({
+      type: 'INVALID_FILE_TYPE' as const,
+      message: 'File is required',
+    })
   }
-  try {
-    const io = new WebIO()
-    const document = await io.readBinary(
-      new Uint8Array(await file.arrayBuffer()),
-    )
-    if (!document) {
-      throw new Error('Failed to parse VRM document')
-    }
-    return document
-  } catch (error) {
-    throw error
-  }
-}
-
-// ✅ 良い例: Result 型でエラーを返す
-export async function loadVRMDocument(
-  file: File,
-): Promise<Result<Document, LoadError>> {
-  if (!file || file.type !== 'model/gltf-binary') {
+  if (file.type !== 'model/gltf-binary') {
     return err({
       type: 'INVALID_FILE_TYPE' as const,
       message: 'Expected VRM binary file',
     })
   }
-
-  try {
-    const io = new WebIO()
-    const document = await io.readBinary(
-      new Uint8Array(await file.arrayBuffer()),
-    )
-    if (!document) {
-      return err({
-        type: 'PARSE_FAILED' as const,
-        message: 'Failed to parse VRM document',
-      })
-    }
-    return ok(document)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return err({
-      type: 'LOAD_ERROR' as const,
-      message: `Failed to load VRM: ${message}`,
-    })
-  }
+  return ok(undefined)
 }
 
-// Result 型の使用方法
-const documentResult = await loadVRMDocument(file)
-
-// パターンマッチング
-documentResult
-  .map((doc) => doc.getRoot().listMeshes())
-  .mapErr((err) => console.error(`Load failed: ${err.message}`))
-
-// またはマニュアルチェック
-if (documentResult.isErr()) {
-  const error = documentResult.error
-  console.error(`Failed (${error.type}): ${error.message}`)
-} else {
-  const document = documentResult.value
-  // document を使用
+// 使用
+const validationResult = validateFile(file)
+if (validationResult.isErr()) {
+  console.error(validationResult.error.message)
+  return
 }
 ```
 
-**エラー型の定義**:
+#### 2. 非同期関数：ResultAsync（外部向け・内部向け統一）
+
+すべての非同期関数は `ResultAsync` を使用し、エラーハンドリングを型安全に組み立てます。これにより条件判定が統一され、`Promise + throw` の複雑性を排除できます：
 
 ```typescript
-// src/types.ts
-export type LoadError =
-  | { type: 'INVALID_FILE_TYPE'; message: string }
-  | { type: 'PARSE_FAILED'; message: string }
-  | { type: 'LOAD_ERROR'; message: string }
+import { ResultAsync, ok, err } from 'neverthrow'
 
-export type OptimizationError =
-  | { type: 'VALIDATION_FAILED'; message: string }
-  | { type: 'OPTIMIZATION_FAILED'; message: string }
+// Public API でも内部向けでも ResultAsync を使用
+export function optimizeVRM(
+  file: File,
+  options: OptimizationOptions,
+): ResultAsync<File, OptimizationError> {
+  // ファイル型の同期バリデーション
+  const validationResult = validateFileSync(file)
+  if (validationResult.isErr()) {
+    return ResultAsync.fromSomePromise(Promise.reject(validationResult.error))
+  }
+
+  // 非同期処理をチェーン
+  return ResultAsync.fromPromise(
+    file.arrayBuffer(),
+    (error) => ({
+      type: 'LOAD_FAILED' as const,
+      message: `Failed to read file: ${String(error)}`,
+    })
+  )
+    .andThen((arrayBuffer) =>
+      ResultAsync.fromPromise(
+        loadDocument(arrayBuffer),
+        (error) => ({
+          type: 'DOCUMENT_PARSE_FAILED' as const,
+          message: String(error),
+        })
+      )
+    )
+    .map((document) => processFile(document))
+}
+
+// 内部向けヘルパー
+function _processTextureAsync(
+  texture: Texture,
+): ResultAsync<Texture, ProcessingError> {
+  return ResultAsync.fromPromise(
+    compressTexture(texture),
+    (error) => ({
+      type: 'PROCESSING_FAILED' as const,
+      message: String(error),
+    })
+  )
+}
+
+// チェーン例
+_processTextureAsync(texture)
+  .map((t) => optimizeTexture(t))
+  .andThen((t) => _validateTextureAsync(t))
+  .mapErr((err) => {
+    // 最終的なエラーハンドリング（ロギングなど）
+    console.error(`Error: ${err.message}`)
+    return err
+  })
 ```
 
-**メリット**:
+呼び出し側では統一されたパターンで処理します：
 
-- エラーが型安全（`type` フィールドで分岐）
-- 呼び出し元が強制的にエラーハンドリングを考慮
-- try-catch が不要で制御フローが明確
-- 予期しない例外から守られる
+```typescript
+// 呼び出し側（外部向けでも内部向けでも同じパターン）
+const result = await optimizeVRM(file, options)
+
+if (result.isErr()) {
+  console.error(`Optimization failed (${result.error.type}): ${result.error.message}`)
+  // エラー時の処理
+  return
+}
+
+const optimizedFile = result.value
+// 成功時の処理
+```
+
+**エラー型の定義** (src/types.ts):
+
+```typescript
+export type OptimizationError =
+  | { type: 'INVALID_FILE_TYPE'; message: string }
+  | { type: 'LOAD_FAILED'; message: string }
+  | { type: 'DOCUMENT_PARSE_FAILED'; message: string }
+  | { type: 'TEXTURE_EXTRACTION_FAILED'; message: string }
+  | { type: 'UNKNOWN_ERROR'; message: string }
+
+export type ValidationError =
+  | { type: 'INVALID_FILE_TYPE'; message: string }
+  | { type: 'VALIDATION_FAILED'; message: string }
+
+export type ProcessingError =
+  | { type: 'PROCESSING_FAILED'; message: string }
+  | OptimizationError
+```
+
+**使い分けの原則**:
+
+| 関数タイプ | 戻り値型 | エラー処理 | 用途 |
+| --- | --- | --- | --- |
+| 非同期関数（全て） | `ResultAsync<T, E>` | Result 型チェーン | Public API・内部向け共通 |
+| 同期/バリデーション | `Result<T, E>` | Result 型チェーン | 純粋なバリデーション処理 |
+
+この統一パターンにより、外部向け・内部向けを区別せず、一貫したエラーハンドリングロジックを適用できます。
 
 ### モジュールインターフェース管理
 
@@ -394,7 +578,12 @@ export type { OptimizationOptions, VRMStatistics, PreprocessingResult }
 - **TypeScript**: 5.0+
 - **@gltf-transform/core**: 4.0+ (ピア依存関係)
 - **@gltf-transform/extensions**: 4.0+ (ピア依存関係)
-- **neverthrow**: 6.0+ (Result 型によるエラーハンドリング)
+- **neverthrow**: 6.0+ (同期バリデーション・内部非同期処理の Result 型)
 - **tsup**: 8.0+ (ビルドツール)
 
 ピア依存関係を安装するユーザーに対して同じバージョンを強制してください。
+
+**neverthrow の使用対象**:
+- ✅ 同期関数の戻り値（Result 型）
+- ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
+- ❌ 外部向けの非同期関数（Promise + throw を使用）

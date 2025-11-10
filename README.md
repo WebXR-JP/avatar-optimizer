@@ -105,6 +105,82 @@ VRM モデルの統計を計算。
   - `fileSizeMB`: ファイルサイズ (MB)
   - `vramEstimateMB`: 推定 VRAM 使用量 (MB)
 
+## CLI (コマンドラインツール)
+
+`xrift-optimize` CLI を使用して、コマンドラインから VRM ファイルを最適化できます。
+
+### インストール
+
+グローバルにインストール：
+
+```bash
+npm install -g @xrift/avatar-optimizer
+```
+
+または、ローカル開発時：
+
+```bash
+npm link
+```
+
+### 基本的な使用方法
+
+```bash
+xrift-optimize input.vrm -o output.vrm
+```
+
+### コマンドラインオプション
+
+```
+Usage: xrift-optimize [options] <input>
+
+VRM model optimization CLI tool
+
+Arguments:
+  input                           Path to input VRM file
+
+Options:
+  -V, --version                   output the version number
+  -o, --output <path>             Path to output VRM file (default: "output.vrm")
+  --compress-textures             Enable texture compression (default: true)
+  --max-texture-size <size>       Maximum texture size in pixels (default: "2048")
+  --reduce-meshes                 Enable mesh reduction (default: false)
+  --target-polygon-count <count>  Target polygon count for mesh reduction
+  -h, --help                      display help for command
+```
+
+### 使用例
+
+#### デフォルト設定で最適化
+
+```bash
+xrift-optimize avatar.vrm -o avatar-optimized.vrm
+```
+
+#### テクスチャサイズを指定
+
+```bash
+xrift-optimize avatar.vrm -o avatar-optimized.vrm --max-texture-size 1024
+```
+
+#### メッシュ削減を有効化
+
+```bash
+xrift-optimize avatar.vrm -o avatar-optimized.vrm --reduce-meshes --target-polygon-count 10000
+```
+
+#### ヘルプを表示
+
+```bash
+xrift-optimize --help
+```
+
+#### バージョンを確認
+
+```bash
+xrift-optimize --version
+```
+
 ## 開発
 
 ```bash
@@ -116,6 +192,29 @@ npm run build
 
 # ウォッチモード
 npm run dev
+
+# CLI のローカルテスト
+node dist/cli.cjs input.vrm -o output.vrm
+
+# または npm link を使用して
+npm link
+xrift-optimize input.vrm -o output.vrm
+```
+
+### テストディレクトリ
+
+```
+__tests__/
+  ├── fixtures/        # テスト用サンプルファイル (git追跡)
+  ├── input/          # 手動テスト用入力ファイル (.gitignore)
+  ├── output/         # CLI出力ファイル (.gitignore)
+  └── manual/         # 手動テストスクリプト (git追跡)
+```
+
+手動テストスクリプトの実行：
+
+```bash
+npx tsx __tests__/manual/cli.manual.ts
 ```
 
 ## ライセンス
