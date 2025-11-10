@@ -1,14 +1,12 @@
-// Main preprocessing function
-export { preprocessVRM } from './preprocessor'
-
 // Optimization functions
 export { calculateVRMStatistics, optimizeVRM } from './optimizer'
 
 // Type exports
 export type {
+  OptimizationError,
   OptimizationOptions,
-  PreprocessingOptions,
-  PreprocessingResult,
+  ProcessingError,
   TextureSlotInfo,
+  ValidationError,
   VRMStatistics,
 } from './types'

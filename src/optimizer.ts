@@ -1,5 +1,9 @@
+import { ResultAsync } from 'neverthrow'
+
 import type { Document } from '@gltf-transform/core'
+
 import type {
+  OptimizationError,
   OptimizationOptions,
   TextureSlotInfo,
   VRMStatistics,
@@ -10,24 +14,72 @@ import type {
  * テクスチャ圧縮、メッシュ削減などの処理を実行
  *
  * Phase 1: baseColorテクスチャの抽出・分類
+ *
+ * @param file VRM ファイル
+ * @param _options 最適化オプション
+ * @returns 最適化されたファイルの Result
  */
-export async function optimizeVRM(
+export function optimizeVRM(
   file: File,
   _options: OptimizationOptions,
-): Promise<File> {
-  try {
-    // ファイルをArrayBufferに変換
-    const arrayBuffer = await file.arrayBuffer()
+): ResultAsync<File, OptimizationError> {
+  // ファイル型の検証（同期）
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    return ResultAsync.fromPromise(
+      Promise.reject(new Error('Invalid file')),
+      () => ({
+        type: 'INVALID_FILE_TYPE' as const,
+        message: 'Invalid file: expected a File object',
+      })
+    )
+  }
 
-    // gltf-transformでドキュメントをロード
-    // ブラウザ環境ではWebIOを使用
-    const { WebIO } = await import('@gltf-transform/core')
-    const io = new WebIO()
-    const document = await io.readBinary(new Uint8Array(arrayBuffer))
+  // ファイルをArrayBufferに変換
+  return ResultAsync.fromPromise(file.arrayBuffer(), (error) => ({
+    type: 'LOAD_FAILED' as const,
+    message: `Failed to read file: ${String(error)}`,
+  }))
+    .andThen((arrayBuffer) => _loadDocument(arrayBuffer))
+    .andThen((document) => _extractAndLogTextures(document))
+    .map(() => file) // 現在のバージョンではファイルをそのまま返す
+}
 
-    // baseColorテクスチャを抽出・分類
-    const textureSlotInfo = await extractBaseColorTextures(document)
+/**
+ * ArrayBuffer から glTF-Transform ドキュメントをロードします（内部用）
+ */
+function _loadDocument(
+  arrayBuffer: ArrayBuffer,
+): ResultAsync<Document, OptimizationError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const { WebIO } = await import('@gltf-transform/core')
+      const io = new WebIO()
+      const document = await io.readBinary(new Uint8Array(arrayBuffer))
+      if (!document) {
+        throw new Error('Document is null')
+      }
+      return document
+    })(),
+    (error) => ({
+      type: 'DOCUMENT_PARSE_FAILED' as const,
+      message: `Failed to parse VRM document: ${String(error)}`,
+    })
+  )
+}
 
+/**
+ * baseColor テクスチャを抽出してログに出力します（内部用）
+ */
+function _extractAndLogTextures(
+  document: Document,
+): ResultAsync<void, OptimizationError> {
+  return ResultAsync.fromPromise(
+    extractBaseColorTextures(document),
+    (error) => ({
+      type: 'TEXTURE_EXTRACTION_FAILED' as const,
+      message: `Failed to extract textures: ${String(error)}`,
+    })
+  ).map((textureSlotInfo) => {
     // デバッグ用にコンソールに出力
     if (textureSlotInfo.textures.length > 0) {
       console.error('[VRM Optimizer] Extracted baseColor textures:', {
@@ -37,15 +89,7 @@ export async function optimizeVRM(
         details: textureSlotInfo.textures,
       })
     }
-
-    // 現在のバージョンではテクスチャの変換処理は実装していない
-    // そのままファイルを返す（将来的にアトラス化処理を追加）
-    return file
-  } catch (error) {
-    console.error('[VRM Optimizer] Error during optimization:', error)
-    // エラーが発生した場合は元のファイルを返す
-    return file
-  }
+  })
 }
 
 /**
@@ -73,7 +117,7 @@ async function extractBaseColorTextures(
   for (const material of document.getRoot().listMaterials()) {
     const materialName = material.getName() || 'unnamed'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pbr = material.getExtension<Record<string, any>>(
+    const pbr = material.getExtension<any>(
       'KHR_materials_pbrSpecularGlossiness',
     ) || { baseColorTexture: null }
 
@@ -179,17 +223,23 @@ async function extractBaseColorTextures(
  *
  * TODO: 具体的な実装は後で
  */
-export async function calculateVRMStatistics(
+export function calculateVRMStatistics(
   _file: File,
-): Promise<VRMStatistics> {
+): ResultAsync<VRMStatistics, OptimizationError> {
   // 現在のバージョンではダミー統計情報を返す
-  return {
-    polygonCount: 0,
-    textureCount: 0,
-    materialCount: 0,
-    boneCount: 0,
-    meshCount: 0,
-    fileSizeMB: 0,
-    vramEstimateMB: 0,
-  }
+  return ResultAsync.fromPromise(
+    Promise.resolve({
+      polygonCount: 0,
+      textureCount: 0,
+      materialCount: 0,
+      boneCount: 0,
+      meshCount: 0,
+      fileSizeMB: 0,
+      vramEstimateMB: 0,
+    }),
+    (error) => ({
+      type: 'UNKNOWN_ERROR' as const,
+      message: `Failed to calculate statistics: ${String(error)}`,
+    })
+  )
 }

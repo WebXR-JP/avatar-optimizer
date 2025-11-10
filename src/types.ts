@@ -5,17 +5,6 @@ export interface OptimizationOptions {
   targetPolygonCount?: number
 }
 
-export interface PreprocessingOptions {
-  optimize: boolean
-  optimization?: OptimizationOptions
-}
-
-export interface PreprocessingResult {
-  file: File
-  originalStats: VRMStatistics
-  finalStats: VRMStatistics
-}
-
 export interface VRMStatistics {
   polygonCount: number
   textureCount: number
@@ -45,3 +34,28 @@ export interface TextureSlotInfo {
   /** 総テクスチャバイト数 */
   totalBytes: number
 }
+
+/**
+ * optimizeVRM 関数のエラー型
+ * 型安全なエラーハンドリング用
+ */
+export type OptimizationError =
+  | { type: 'INVALID_FILE_TYPE'; message: string }
+  | { type: 'LOAD_FAILED'; message: string }
+  | { type: 'DOCUMENT_PARSE_FAILED'; message: string }
+  | { type: 'TEXTURE_EXTRACTION_FAILED'; message: string }
+  | { type: 'UNKNOWN_ERROR'; message: string }
+
+/**
+ * バリデーション処理のエラー型
+ */
+export type ValidationError =
+  | { type: 'INVALID_FILE_TYPE'; message: string }
+  | { type: 'VALIDATION_FAILED'; message: string }
+
+/**
+ * テクスチャ処理などの内部処理のエラー型
+ */
+export type ProcessingError =
+  | { type: 'PROCESSING_FAILED'; message: string }
+  | OptimizationError

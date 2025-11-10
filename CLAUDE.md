@@ -22,7 +22,6 @@ src/
   ├── index.ts          # メインエントリーポイント (ライブラリエクスポート管理)
   ├── cli.ts            # CLI エントリーポイント (Commander ベース)
   ├── optimizer.ts      # 最適化ロジック
-  ├── preprocessor.ts   # 前処理パイプライン
   └── types.ts          # 型定義集約
 
 __tests__/
@@ -44,7 +43,6 @@ dist/                   # ビルド出力 (ESM/CJS/型定義 + CLI)
 
 #### ライブラリ API
 
-- `preprocessVRM(file, options)`: VRM 検証→最適化→統計計算の一括処理
 - `optimizeVRM(file, options)`: テクスチャ圧縮・メッシュ削減による最適化
 - `calculateVRMStatistics(file)`: VRM 統計計算 (ポリゴン数、テクスチャ数など)
 
@@ -556,8 +554,8 @@ export async function calculateVRMStatistics(
 }
 
 // index.ts (メインエクスポート)
-export { optimizeVRM, calculateVRMStatistics, preprocessVRM }
-export type { OptimizationOptions, VRMStatistics, PreprocessingResult }
+export { optimizeVRM, calculateVRMStatistics }
+export type { OptimizationOptions, VRMStatistics }
 ```
 
 これは AI が間違った内部関数を呼び出すのを防ぎます。
