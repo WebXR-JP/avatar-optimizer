@@ -1,0 +1,36 @@
+name: UpdateTTC
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+
+        
+jobs:
+  Update-TTC:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+
+      - name: run UpdateTTC cshapr script
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          cd .github/UpdateTTC
+          dotnet run $TAG
+
+      - name: git commit
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          git config user.name  "GitHub Action"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ./package.json
+          git commit -m "chore: update TexTransCore $TAG!"
+          git tag $TAG
+          git push
+          git push origin $TAG

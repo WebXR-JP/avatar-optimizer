@@ -1,0 +1,165 @@
+/*
+BEGIN__TT_COMPUTE_SHADER_HEADER
+
+Language HLSL
+LanguageVersion 2018
+
+TTComputeType General
+
+END__TT_COMPUTE_SHADER_HEADER
+*/
+
+#define PARALLEL_COUNT 256
+// #define PARALLEL_COUNT 1
+
+cbuffer gv
+{
+    uint2 TargetMapSize;
+    uint2 SourceMapSize;
+    float Padding; // Target の UVScale での距離 デフォルトだと 0.01f って感じ
+    float HeightScaling; //縦長のとき 2 など大きくなる、横長のとき 0.5 など小さくなる
+
+    float AlimentPadding2;
+    float AlimentPadding3;
+}
+
+RWTexture2D<float2> TransMap;
+RWTexture2D<float> ScalingMap;
+RWTexture2D<float> WriteMap;
+
+struct InputRect
+{
+    // SourceMap サイズの空間そのままのため 縦長だった場合 事実上縦方向が半分のサイズになっていることがある
+    // Target の方とは違い、Sourceへのマッピングへ特に補正がいらない。
+    float2 SourcePosition;
+    float2 SourceSize;
+
+    float SourceRotation;
+
+    float AlimentPadding11;
+    float AlimentPadding12;
+    float AlimentPadding13;
+
+    // 正方形の空間の前提の位置大きさの前提なので HeightScaling などを用いて補正しながら扱う必要がある。
+    // HeightScaling が 2 の場合 x 0~1 , Y 0~2 の空間になるということ、気をつける必要がある。
+    float2 TargetPosition;
+    float2 TargetSize;
+
+    float TargetRotation;
+
+    float AlimentPadding21;
+    float AlimentPadding22;
+    float AlimentPadding23;
+};
+
+StructuredBuffer<InputRect> MappingRect;
+
+
+struct Rect
+{
+    float2 Position;
+    float2 Size;
+
+    float Rotation;
+};
+
+float2 RotateVector(float2 vec, float radian)
+{
+    float x = vec.x * cos(radian) - vec.y * sin(radian);
+    float y = vec.x * sin(radian) + vec.y * cos(radian);
+    return float2(x, y);
+}
+float RectArea(float2 size, float rotation,float2 mapSize)
+{
+    float2 vec1 = RotateVector(float2(size.x,0.0),rotation) * mapSize;
+    float2 vec2 = RotateVector(float2(0.0,size.y),rotation) * mapSize;
+    float a = cross(float3(vec1,0.0), float3(vec2, 0)).z;
+    return abs(a);
+}
+float4 MinMax(Rect rect,float2 mapSize, float heightScaling,float padding)
+{
+    float2 mapScale = mapSize;
+    mapScale.y *= 1 / heightScaling;
+    float2 paddingVec = float2(padding,padding);
+
+    float2 origin  = (rect.Position + RotateVector(paddingVec * -1        , rect.Rotation)) * mapScale;
+    float2 rightUp = (rect.Position + RotateVector(rect.Size + paddingVec , rect.Rotation)) * mapScale;
+
+    float2 leftUp    = (rect.Position + RotateVector(float2(paddingVec.x * -1         , rect.Size.y + paddingVec.y), rect.Rotation)) * mapScale;
+    float2 rightDown = (rect.Position + RotateVector(float2(rect.Size.x + paddingVec.x, paddingVec.y * -1)         , rect.Rotation)) * mapScale;
+
+    float2 MinPos = origin;
+    float2 MaxPos = origin;
+
+    MinPos = min(MinPos, leftUp);
+    MaxPos = max(MaxPos, leftUp);
+
+    MinPos = min(MinPos, rightUp);
+    MaxPos = max(MaxPos, rightUp);
+
+    MinPos = min(MinPos, rightDown);
+    MaxPos = max(MaxPos, rightDown);
+
+    return float4(MinPos,MaxPos);
+}
+
+[numthreads(1, PARALLEL_COUNT, 1)] void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    uint thisID = id.y;
+    uint idMax = PARALLEL_COUNT;
+    uint rectID = id.x;
+
+    InputRect input = MappingRect[rectID];
+
+    Rect sourceRect;
+    sourceRect.Position = input.SourcePosition;
+    sourceRect.Size = input.SourceSize;
+    sourceRect.Rotation = input.SourceRotation;
+
+    Rect targetRect;
+    targetRect.Position = input.TargetPosition;
+    targetRect.Size = input.TargetSize;
+    targetRect.Rotation = input.TargetRotation;
+
+
+    float sourceArea = RectArea(sourceRect.Size,sourceRect.Rotation,float2(SourceMapSize));
+    // 非正方形な出力先となる場合 TargetMapSize の中身は非正方形になる (たとえば (2048,1024) のように)。
+    // だが targetRect は 縦が小さくなった場合、それに合わせて上下を引き伸ばしたり、縦が大きくなった場合に縦を小さくするといったスケーリングが行われていない
+    // だから 横幅をコピーして縦幅にし AtlasTexture のスケーリングの基準である正方形状態にして矩形の面積を求める必要がある。
+    float2 targetMapScaleSize = float2(TargetMapSize.x,TargetMapSize.x);
+    float targetArea = RectArea(targetRect.Size,targetRect.Rotation,targetMapScaleSize);
+    float scaling = clamp( sourceArea / targetArea ,0 ,64);// safety
+
+    float2 paddingRectScale = float2(Padding,Padding) / targetRect.Size;
+
+    float4 rect = MinMax(targetRect , float2(TargetMapSize) ,HeightScaling ,Padding);
+    int2 minVal = max( int2(floor(rect.xy)), int2(0,0));
+    int2 maxVal = min( int2(ceil(rect.zw)), TargetMapSize);
+
+    int ySize = maxVal.y - minVal.y;
+    for (int yID = thisID; ySize > yID; yID += idMax)
+    {
+        int y = minVal.y + yID;
+        for (int x = minVal.x; maxVal.x > x; x += 1)
+        {
+            float2 pos = float2(x + 0.5, y + 0.5);
+            int2 posIndex = int2(x, y);
+
+            float2 normalizedPos = float2(pos.x / TargetMapSize.x, (pos.y / TargetMapSize.y) * HeightScaling);
+            float2 rectRelativePos = RotateVector(normalizedPos - targetRect.Position, targetRect.Rotation * -1) / targetRect.Size;
+
+            float2 transSourcePos = sourceRect.Position + RotateVector(rectRelativePos * sourceRect.Size, sourceRect.Rotation);
+
+            bool isWriteX = (paddingRectScale.x * -1) < rectRelativePos.x && rectRelativePos.x < (1 + paddingRectScale.x);
+            bool isWriteY = (paddingRectScale.y * -1) < rectRelativePos.y && rectRelativePos.y < (1 + paddingRectScale.y);
+
+            if(isWriteX && isWriteY){
+                TransMap[posIndex] = transSourcePos;
+                ScalingMap[posIndex] = scaling;
+                WriteMap[posIndex] = 1.0;
+            }
+
+        }
+    }
+
+}

@@ -1,0 +1,66 @@
+name: ApiCompatibilityChecker
+on:
+  workflow_call:
+    inputs:
+      left:
+        type: string
+        required: true
+      right:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      left:
+        type: string
+        required: true
+      right:
+        type: string
+        required: true
+
+jobs:
+    Api-Compatibility-Checker:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-tags: true
+            fetch-depth: '0'
+            path: TexTransCore-Left
+            ref: ${{ inputs.left }}
+
+        - uses: actions/checkout@v4
+          with:
+            fetch-tags: true
+            fetch-depth: '0'
+            path: TexTransCore-Right
+            ref: ${{ inputs.right }}
+
+        - uses: actions/setup-dotnet@v4
+
+        - name: install ApiCompat
+          run: |
+            dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
+
+        - name: generate assembly
+          run: |
+            cd TexTransCore-Left/csproj~/net.rs64.tex-trans-core
+            dotnet build
+
+            cd ../../../TexTransCore-Right/csproj~/net.rs64.tex-trans-core
+            dotnet build
+
+            cd ../../../
+
+        - name: run compat
+          run: |
+            apicompat --left TexTransCore-Left/csproj~/net.rs64.tex-trans-core/bin/Debug/netstandard2.1/net.rs64.tex-trans-core.dll --right TexTransCore-Right/csproj~/net.rs64.tex-trans-core/bin/Debug/netstandard2.1/net.rs64.tex-trans-core.dll 2> CompatStdError.txt
+
+            echo "--- stderr ---"
+
+            cat CompatStdError.txt
+
+            if [ -s CompatStdError.txt ] ; then
+              exit 1
+            else
+              exit 0
+            fi

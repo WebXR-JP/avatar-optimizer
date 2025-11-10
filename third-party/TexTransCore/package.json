@@ -1,0 +1,13 @@
+{
+  "name": "net.rs64.tex-trans-core",
+  "displayName": "TexTransCore",
+  "version": "0.2.0",
+  "unity": "2022.3",
+  "description": "C# generic core library for TexTransTool",
+  "author": {
+    "name": "ReinaSakiria",
+    "url": "https://rs64.net/"
+  },
+  "url": "https://github.com/ReinaS-64892/TexTransCore",
+  "repo": "https://vpm.rs64.net/vpm.json"
+}
