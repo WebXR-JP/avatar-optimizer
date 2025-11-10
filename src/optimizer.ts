@@ -21,7 +21,8 @@ import type {
  */
 
 import { atlasTexturesInDocument, type AtlasError } from '@xrift/textranscore-ts'
-import * as Types from './types' // Import as namespace
+import type { CreateCanvasFactory } from '../third-party/TexTransCoreTS/src/types'
+import * as Types from './types'
 
 /**
  * VRM モデルを最適化します
@@ -30,12 +31,15 @@ import * as Types from './types' // Import as namespace
  * Phase 1: baseColorテクスチャの抽出・分類
  *
  * @param file VRM ファイル
- * @param _options 最適化オプション
+ * @param options 最適化オプション
+ * @param createCanvasFactory Canvas インスタンスを作成するためのファクトリ関数
+ * @param createImageDataFactory ImageData インスタンスを作成するためのファクトリ関数
  * @returns 最適化されたファイルの Result
  */
 export function optimizeVRM(
   file: File,
   options: Types.OptimizationOptions,
+  createCanvasFactory: CreateCanvasFactory,
 ): ResultAsync<File, Types.OptimizationError> {
   // ファイル型の検証（同期）
   if (!file || typeof file.arrayBuffer !== 'function') {
@@ -58,7 +62,7 @@ export function optimizeVRM(
       // Call atlasTexturesInDocument
       return atlasTexturesInDocument(document, {
         maxSize: options.maxTextureSize,
-      }).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
+      }, createCanvasFactory).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
         // Map AtlasError types to OptimizationError
         let mappedError: Types.OptimizationError;
         switch (atlasError.type) {

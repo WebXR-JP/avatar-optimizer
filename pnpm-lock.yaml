@@ -39,6 +39,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.39.0
         version: 8.46.3(eslint@9.39.1)(typescript@5.9.3)
+      canvas:
+        specifier: ^3.2.0
+        version: 3.2.0
       eslint:
         specifier: ^9.32.0
         version: 9.39.1

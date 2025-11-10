@@ -6,31 +6,6 @@
 import type { Canvas, CanvasContext } from '../types'
 
 /**
- * Canvas インスタンスを作成（ブラウザ/Node.js自動判定）
- */
-export function createCanvas(width: number, height: number): Canvas {
-  // ブラウザ環境
-  if (typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    return canvas as Canvas
-  }
-
-  // Node.js環境: canvas パッケージを使用
-  try {
-    // Dynamic require を避けるため、モジュールの存在を前提
-    // ※ 実際には npm install canvas が必要
-    const CanvasConstructor = require('canvas').Canvas
-    return new CanvasConstructor(width, height) as Canvas
-  } catch {
-    throw new Error(
-      'Canvas is not available in this environment. Install "canvas" package for Node.js support.',
-    )
-  }
-}
-
-/**
  * Canvas から 2D コンテキストを取得
  */
 export function getCanvasContext(canvas: Canvas): CanvasContext {

@@ -18,4 +18,5 @@ export type {
   Vector2,
   IslandTransform,
   PackedTexture,
+  CreateCanvasFactory, // 追加
 } from './types'

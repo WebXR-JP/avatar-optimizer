@@ -4,6 +4,8 @@ import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { Command } from 'commander'
 import { optimizeVRM, type OptimizationOptions } from './index'
+import type { CreateCanvasFactory } from '@xrift/textranscore-ts'
+import { createCanvas as nodeCreateCanvas } from 'canvas'
 
 const program = new Command()
 
@@ -14,7 +16,7 @@ program
   .argument('<input>', 'Path to input VRM file')
   .option('-o, --output <path>', 'Path to output VRM file', 'output.vrm')
   .option('--compress-textures', 'Enable texture compression', true)
-  .option('--max-texture-size <size>', 'Maximum texture size in pixels', '2048')
+  .option('--option-max-texture-size <size>', 'Maximum texture size in pixels', '2048')
   .option('--reduce-meshes', 'Enable mesh reduction', false)
   .option('--target-polygon-count <count>', 'Target polygon count for mesh reduction')
   .action(async (input, options) => {
@@ -38,16 +40,21 @@ program
       // Prepare optimization options
       const optimizationOptions: OptimizationOptions = {
         compressTextures: options.compressTextures,
-        maxTextureSize: parseInt(options.maxTextureSize, 10),
+        maxTextureSize: parseInt(options.optionMaxTextureSize, 10),
         reduceMeshes: options.reduceMeshes,
         targetPolygonCount: options.targetPolygonCount
           ? parseInt(options.targetPolygonCount, 10)
           : undefined,
       }
 
+      // Node.js 環境用の createCanvasFactory を定義
+      const createCanvasFactory: CreateCanvasFactory = (width, height) => {
+        return nodeCreateCanvas(width, height) as any // 型アサーションで Canvas 型に合わせる
+      }
+
       // Run optimization
       console.log('⚙️  Optimizing VRM...')
-      const result = await optimizeVRM(file, optimizationOptions)
+      const result = await optimizeVRM(file, optimizationOptions, createCanvasFactory)
 
       if (result.isErr()) {
         const error = result.error
