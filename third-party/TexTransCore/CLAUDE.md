@@ -94,38 +94,72 @@ TexTransCore は **Phase 1** で以下の実装が完了しました:
   - `dotnet.js` + ローダー (JavaScript)
   - `package.json` - npm パッケージメタデータ
 
-#### Phase 2: 最適化・API 設計 🟡 計画中 (将来の改善向け)
+#### Phase 2: GPU アクセス + API 設計 🟡 計画中
 
 **現在の状態 (2025-11-10)**:
 - ✅ browser-wasm で WASM バイナリ生成成功
 - ✅ JavaScript ローダー自動生成
+- ❌ GPU ComputeShader アクセス未実装
 - ⚠️ MonoAOT ネイティブ化は .NET 10 RTM 以降で再検討
 
-**Phase 2 の検討項目**:
-1. **C# パブリック API の設計**
-   - JavaScript から呼び出し可能な関数インターフェース
-   - JSExport 属性による JavaScript バインディング
-2. **パフォーマンス最適化**
-   - メモリ使用量の削減
-   - WASM バイナリサイズの圧縮
-3. **TypeScript サポート**
-   - 自動生成される型定義の改善
-   - IDE サポート向上
-4. **npm パッケージ化**
-   - `@xrift/textrans-core` として公開
-   - バージョン管理と自動更新
+**Phase 1: WebGPU JSブリッジ基盤実装** 🟡 計画中
+
+WebGPU へのアクセス基盤を構築します (詳細: `docs/WEBGPU_BRIDGE_IMPLEMENTATION.md`)。
+
+.NET 10 browser-wasm では C++ 相互運用が困難なため、JavaScript ブリッジ経由で WebGPU にアクセスする:
+
+**実装項目**:
+- **JavaScript WebGPU ラッパー** (`src/webgpu/`):
+  - `webgpu-bridge.ts`: メインエントリーポイント
+  - `device-manager.ts`: GPUDevice 初期化・管理
+  - `resource-registry.ts`: リソース ID 管理
+  - `texture-manager.ts`: GPUTexture 作成・破棄
+  - `buffer-manager.ts`: GPUBuffer 作成・破棄
+
+- **C# JSImport バインディング** (`src/WebGPUBridge/`):
+  - `WebGPUBridge.cs`: JSImport 関数定義
+  - `WebGPUDevice.cs`: ITexTransCoreEngine 部分実装
+  - `WebGPURenderTexture.cs`: ITTRenderTexture 実装
+  - `WebGPUStorageBuffer.cs`: ITTStorageBuffer 実装
+
+- **ビルド設定**:
+  - `tsup.config.ts`: TypeScript ビルド設定
+  - `TexTransCore.csproj`: 統合設定
+  - `Program.cs`: WebGPU モジュール読み込み
+
+**TODO**:
+- [ ] `webgpu-bridge.ts` 実装
+- [ ] `device-manager.ts` 実装
+- [ ] `resource-registry.ts` 実装
+- [ ] `texture-manager.ts` / `buffer-manager.ts` 実装
+- [ ] `WebGPUBridge.cs` JSImport 定義
+- [ ] `WebGPUDevice.cs` ITexTransCoreEngine 部分実装
+- [ ] `WebGPURenderTexture.cs` / `WebGPUStorageBuffer.cs` 実装
+- [ ] tsup ビルド設定作成
+- [ ] TexTransCore.csproj に TypeScript ビルド統合
+- [ ] Program.cs を更新し WebGPU モジュール読み込み
+- [ ] 最小限の動作確認テスト
+
+**Phase 2 以降で実装**:
+- [ ] ComputeShader コンパイル・実行
+- [ ] テクスチャ/バッファのアップロード・ダウンロード
+- [ ] `ITTComputeHandler` の完全実装
+- [ ] ブラウザ統合テスト
+- [ ] npm パッケージ化
 
 **利点**:
 - ✅ 現在の browser-wasm で既に ブラウザ実行可能
 - ✅ すべてのプラットフォーム (Windows/Linux/macOS) で同じビルド手順
 - ✅ 追加ツール不要（.NET 10 SDK のみ）
 - ✅ WASM 依存なし（単体で完結）
+- ✅ WebGPU で GPU 加速を実現（JavaScript ブリッジ経由）
 
 ### 現在の実装課題・検討項目
 
-1. **JavaScript インターフェース未設計**
-   - C# のパブリック API をまだ定義していない
-   - JSExport 属性による JavaScript バインディングが必要
+1. **GPU ComputeShader アクセス**
+   - .NET 10 browser-wasm は C++ 相互運用が困難
+   - **解決策**: JavaScript ブリッジ（JSImport）経由で WebGPU API を呼び出す
+   - 実装予定: Phase 2 で WebGPU JSブリッジの実装
 
 2. **メモリ管理**
    - WASM の線形メモリ（4GB 制限）への対応
@@ -137,27 +171,34 @@ TexTransCore は **Phase 1** で以下の実装が完了しました:
 
 4. **パフォーマンス検証**
    - WASM での実行速度が要件を満たすか未検証
-   - 本格的な統合テスト前に性能測定が必要
+   - WebGPU ブリッジのオーバーヘッド測定が必要
 
 ### Phase 2 以降の実装計画
 
-**短期 (Phase 2)**:
-1. JavaScript 呼び出し用 C# パブリック API 設計
-   - `TextureProcessor.ProcessAsync()` など基本関数の定義
-   - JSExport 属性を使用したエクスポート
-2. npm パッケージ化
-   - `publish/` フォルダを `@xrift/textrans-core` として公開
-   - package.json の更新
+**Phase 2 (ComputeShader 実行)**:
+1. ComputeShader コンパイル・実行
+   - WGSL シェーダーコンパイル
+   - BindGroup 管理
+   - ディスパッチロジック
+2. データ転送機能
+   - テクスチャアップロード/ダウンロード
+   - バッファアップロード/ダウンロード
+3. `ITTComputeHandler` の完全実装
 
-**中期**:
-1. TypeScript 型定義の改善
-2. ブラウザテスト環境の構築
-3. vrm-optimizer への統合
+**Phase 3 (統合テスト)**:
+1. ブラウザ統合テスト
+2. パフォーマンス測定
+3. エッジケース対応
 
-**長期**:
+**Phase 4 (npm パッケージ化)**:
+1. `@xrift/textrans-core` として公開
+2. TypeScript 型定義の改善
+3. ドキュメント完成
+
+**長期 (RTM 以降)**:
 1. MonoAOT ネイティブ化（.NET 10 RTM 以降）
-2. パフォーマンス最適化
-3. エッジケースの処理
+2. ComputeShader ライブラリの拡充
+3. vrm-optimizer への統合
 
 ## 依存関係とバージョン管理
 
