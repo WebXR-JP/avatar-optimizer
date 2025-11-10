@@ -9,12 +9,14 @@
 ## プロジェクト構成
 
 ### スタック
+
 - **TypeScript** (5.0+): 型安全なユーティリティ開発
 - **@gltf-transform/core** (4.0+): glTF/VRM モデル操作
 - **@gltf-transform/extensions** (4.0+): VRM 拡張機能サポート
 - **tsup** (8.0+): ビルドツール (ESM/CJS 出力)
 
 ### ディレクトリ構成
+
 ```
 src/
   ├── index.ts          # メインエントリーポイント (エクスポート管理)
@@ -84,10 +86,7 @@ export function calculateDistance(a: Vector3, b: Vector3): number {
 // __tests__/utils.test.ts 内
 describe('calculateDistance', () => {
   it('should calculate distance between two points', () => {
-    const result = calculateDistance(
-      { x: 0, y: 0, z: 0 },
-      { x: 3, y: 4, z: 0 }
-    )
+    const result = calculateDistance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 })
     expect(result).toBeCloseTo(5)
   })
 })
@@ -137,13 +136,14 @@ manualCheckTextureAtlas()
 
 **Fixture フォルダの使い分け**:
 
-| フォルダ | 内容 | Git追跡 | 用途 |
-|---------|------|--------|------|
-| `fixtures/` | 小さなテスト用VRM サンプル | ✅ 必須 | CI/CD やテストで使用 |
-| `input/` | 開発者が配置する実際のモデル | ❌ .gitignore | 手動実行時の処理検証用 |
-| `output/` | スクリプト実行時の出力結果 | ❌ .gitignore | ビジュアル確認用 |
+| フォルダ    | 内容                         | Git追跡       | 用途                   |
+| ----------- | ---------------------------- | ------------- | ---------------------- |
+| `fixtures/` | 小さなテスト用VRM サンプル   | ✅ 必須       | CI/CD やテストで使用   |
+| `input/`    | 開発者が配置する実際のモデル | ❌ .gitignore | 手動実行時の処理検証用 |
+| `output/`   | スクリプト実行時の出力結果   | ❌ .gitignore | ビジュアル確認用       |
 
 **.gitignore 設定例**:
+
 ```
 __tests__/input/*
 __tests__/output/*
@@ -152,6 +152,7 @@ __tests__/output/*
 ```
 
 **手動スクリプトの運用フロー**:
+
 1. `input/` に確認したいモデルを配置
 2. 手動スクリプトを実行: `npx tsx __tests__/manual/texture-atlas.manual.ts`
 3. `output/` の結果を Blender/VRM ビューアで目視確認
@@ -223,7 +224,7 @@ class VRMOptimizer {
 // ✅ 良い例: 純粋な関数型
 async function optimizeVRMDocument(
   file: File,
-  options: OptimizationOptions
+  options: OptimizationOptions,
 ): Promise<Document> {
   const document = await loadDocument(file)
   const optimized = document.clone()
@@ -234,6 +235,7 @@ async function optimizeVRMDocument(
 ```
 
 **利点**:
+
 - テスタビリティ向上 (入出力が明確)
 - 副作用なし (バグの原因が減少)
 - 再利用性向上 (組み合わせ可能)
@@ -252,7 +254,9 @@ export async function loadVRMDocument(file: File): Promise<Document> {
   }
   try {
     const io = new WebIO()
-    const document = await io.readBinary(new Uint8Array(await file.arrayBuffer()))
+    const document = await io.readBinary(
+      new Uint8Array(await file.arrayBuffer()),
+    )
     if (!document) {
       throw new Error('Failed to parse VRM document')
     }
@@ -264,24 +268,24 @@ export async function loadVRMDocument(file: File): Promise<Document> {
 
 // ✅ 良い例: Result 型でエラーを返す
 export async function loadVRMDocument(
-  file: File
+  file: File,
 ): Promise<Result<Document, LoadError>> {
   if (!file || file.type !== 'model/gltf-binary') {
     return err({
       type: 'INVALID_FILE_TYPE' as const,
-      message: 'Expected VRM binary file'
+      message: 'Expected VRM binary file',
     })
   }
 
   try {
     const io = new WebIO()
     const document = await io.readBinary(
-      new Uint8Array(await file.arrayBuffer())
+      new Uint8Array(await file.arrayBuffer()),
     )
     if (!document) {
       return err({
         type: 'PARSE_FAILED' as const,
-        message: 'Failed to parse VRM document'
+        message: 'Failed to parse VRM document',
       })
     }
     return ok(document)
@@ -289,7 +293,7 @@ export async function loadVRMDocument(
     const message = error instanceof Error ? error.message : 'Unknown error'
     return err({
       type: 'LOAD_ERROR' as const,
-      message: `Failed to load VRM: ${message}`
+      message: `Failed to load VRM: ${message}`,
     })
   }
 }
@@ -299,8 +303,8 @@ const documentResult = await loadVRMDocument(file)
 
 // パターンマッチング
 documentResult
-  .map(doc => doc.getRoot().listMeshes())
-  .mapErr(err => console.error(`Load failed: ${err.message}`))
+  .map((doc) => doc.getRoot().listMeshes())
+  .mapErr((err) => console.error(`Load failed: ${err.message}`))
 
 // またはマニュアルチェック
 if (documentResult.isErr()) {
@@ -327,6 +331,7 @@ export type OptimizationError =
 ```
 
 **メリット**:
+
 - エラーが型安全（`type` フィールドで分岐）
 - 呼び出し元が強制的にエラーハンドリングを考慮
 - try-catch が不要で制御フローが明確
@@ -338,20 +343,20 @@ export type OptimizationError =
 
 ```typescript
 // ❌ 悪い例: 内部実装詳細をエクスポート
-export function _parseVRMExtension(/* ... */) { }
-export function _validateMeshData(/* ... */) { }
-export function optimizeVRM(file: File) { }
-export function _cacheTextureData() { }
-export function debugGetInternalState() { }
+export function _parseVRMExtension(/* ... */) {}
+export function _validateMeshData(/* ... */) {}
+export function optimizeVRM(file: File) {}
+export function _cacheTextureData() {}
+export function debugGetInternalState() {}
 
 // ✅ 良い例: クリアなパブリック API、内部は隠蔽
 // optimize.ts
-function _parseVRMExtension(/* ... */) { }   // プライベートヘルパー
-function _validateMeshData(/* ... */) { }    // プライベートヘルパー
+function _parseVRMExtension(/* ... */) {} // プライベートヘルパー
+function _validateMeshData(/* ... */) {} // プライベートヘルパー
 
 export async function optimizeVRM(
   file: File,
-  options: OptimizationOptions
+  options: OptimizationOptions,
 ): Promise<File> {
   const document = await _loadVRMDocument(file)
   _validateMeshData(document)
@@ -359,7 +364,9 @@ export async function optimizeVRM(
   return _serializeDocument(optimized)
 }
 
-export async function calculateVRMStatistics(file: File): Promise<VRMStatistics> {
+export async function calculateVRMStatistics(
+  file: File,
+): Promise<VRMStatistics> {
   const document = await _loadVRMDocument(file)
   return _computeStats(document)
 }
@@ -383,6 +390,7 @@ export type { OptimizationOptions, VRMStatistics, PreprocessingResult }
 ## 依存関係とバージョン管理
 
 このプロジェクトのコアスタック：
+
 - **TypeScript**: 5.0+
 - **@gltf-transform/core**: 4.0+ (ピア依存関係)
 - **@gltf-transform/extensions**: 4.0+ (ピア依存関係)

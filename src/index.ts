@@ -2,13 +2,13 @@
 export { preprocessVRM } from './preprocessor'
 
 // Optimization functions
-export { optimizeVRM, calculateVRMStatistics } from './optimizer'
+export { calculateVRMStatistics, optimizeVRM } from './optimizer'
 
 // Type exports
 export type {
   OptimizationOptions,
   PreprocessingOptions,
   PreprocessingResult,
-  VRMStatistics,
   TextureSlotInfo,
+  VRMStatistics,
 } from './types'

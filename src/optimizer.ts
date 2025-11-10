@@ -1,5 +1,9 @@
 import type { Document } from '@gltf-transform/core'
-import type { OptimizationOptions, TextureSlotInfo, VRMStatistics } from './types'
+import type {
+  OptimizationOptions,
+  TextureSlotInfo,
+  VRMStatistics,
+} from './types'
 
 /**
  * VRM モデルを最適化します
@@ -50,7 +54,9 @@ export async function optimizeVRM(
  * @param document gltf-transformのドキュメント
  * @returns テクスチャスロット情報
  */
-async function extractBaseColorTextures(document: Document): Promise<TextureSlotInfo> {
+async function extractBaseColorTextures(
+  document: Document,
+): Promise<TextureSlotInfo> {
   const textureMap = new Map<
     string,
     {
@@ -72,7 +78,8 @@ async function extractBaseColorTextures(document: Document): Promise<TextureSlot
     ) || { baseColorTexture: null }
 
     // baseColorMapを取得（PBRメタリック・ラフネスモデル）
-    const baseColorTexture = material.getBaseColorTexture() || pbr.baseColorTexture
+    const baseColorTexture =
+      material.getBaseColorTexture() || pbr.baseColorTexture
 
     if (baseColorTexture) {
       const textureInfo = baseColorTexture.getTexture()
@@ -154,7 +161,10 @@ async function extractBaseColorTextures(document: Document): Promise<TextureSlot
     Array.from(textureMap.values()).flatMap((tex) => Array.from(tex.materials)),
   ).size
 
-  const totalBytes = Array.from(textureMap.values()).reduce((sum, tex) => sum + tex.bytes, 0)
+  const totalBytes = Array.from(textureMap.values()).reduce(
+    (sum, tex) => sum + tex.bytes,
+    0,
+  )
 
   return {
     slot: 'baseColor',
@@ -169,7 +179,9 @@ async function extractBaseColorTextures(document: Document): Promise<TextureSlot
  *
  * TODO: 具体的な実装は後で
  */
-export async function calculateVRMStatistics(_file: File): Promise<VRMStatistics> {
+export async function calculateVRMStatistics(
+  _file: File,
+): Promise<VRMStatistics> {
   // 現在のバージョンではダミー統計情報を返す
   return {
     polygonCount: 0,
