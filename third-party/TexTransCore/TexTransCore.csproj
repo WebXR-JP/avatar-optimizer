@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Prevent native AOT from being imported and triggered -->
+  <PropertyGroup>
+    <NativeAOT>false</NativeAOT>
+    <!-- Suppress the PublishTrimmed error from the LLVM compiler package -->
+    <_NativeCompilationBuild>false</_NativeCompilationBuild>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Library</OutputType>
@@ -17,18 +24,25 @@
     <License>MIT</License>
     <PackageProjectUrl>https://github.com/rs64/TexTransCore</PackageProjectUrl>
 
-    <!-- NativeAOT-LLVM / WASM Configuration -->
+    <!-- WASM Configuration for managed IL compilation -->
+    <!-- Note: We generate WASM components from managed DLL without native AOT -->
+    <!-- This uses the componentize-dotnet SDK with managed IL runtime -->
     <RuntimeIdentifier>wasi-wasm</RuntimeIdentifier>
     <UseAppHost>false</UseAppHost>
-    <PublishTrimmed>true</PublishTrimmed>
+    <!-- Disable trimming for managed DLL build -->
+    <!-- Phase 2 will enable trimming when implementing proper MonoAOT -->
+    <PublishTrimmed>false</PublishTrimmed>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
     <DebugSymbols>false</DebugSymbols>
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishAot>false</PublishAot>
-    <SelfContained>true</SelfContained>
+    <NativeCompile>false</NativeCompile>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>none</DebugType>
+    <!-- Explicit disabling of native AOT to prevent componentize-dotnet from triggering it -->
+    <GenerateNativeCompilationTarget>false</GenerateNativeCompilationTarget>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- Library project configuration -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- componentize-dotnet configuration -->
@@ -50,6 +64,7 @@
     <WitGeneratedFilesRoot>obj/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/wit_bindgen</WitGeneratedFilesRoot>
   </PropertyGroup>
 
+  <!-- WIT interface definition for componentize-dotnet -->
   <ItemGroup>
     <Wit Update="textrans.wit" World="textrans-component" />
   </ItemGroup>
@@ -57,5 +72,17 @@
   <ItemGroup>
     <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
   </ItemGroup>
+
+  <!-- Disable native AOT compilation entirely for managed DLL build -->
+  <!-- Phase 2 will implement proper MonoAOT WASM component generation -->
+  <Target Name="GenerateNativeCompilationTarget">
+    <!-- No-op: Native compilation skipped in managed DLL phase -->
+  </Target>
+
+  <!-- Override the main native compilation workflow target -->
+  <Target Name="_ComputeAssembliesToCompileToNative">
+    <!-- No-op: Native compilation skipped in managed DLL phase -->
+  </Target>
+
 
 </Project>
