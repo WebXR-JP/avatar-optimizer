@@ -12,9 +12,11 @@ import type {
   AtlasResult,
   AtlasError,
   CreateCanvasFactory,
-  CreateImageDataFactory, // 追加
+  CreateImageDataFactory,
+  UVMapping,
+  PackedTexture,
 } from '../types'
-import { getCanvasContext, canvasToDataURL } from '../utils/canvas'
+import { getCanvasContext, canvasToBuffer } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
 
 /**
@@ -108,13 +110,18 @@ async function _atlasTexturesImpl(
   }
 
   // 5. アトラス画像をテクスチャとして登録
-  // TODO: アトラス画像を glTF-Transform テクスチャとして登録
-  // 6. UV 座標を再マッピング
-  // TODO: プリミティブのインデックスを再マッピング
+  const atlasBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
+  const atlasTexture = _registerAtlasTexture(document, atlasBuffer, packing)
 
-  // 仮置き: 実装スケルトン
-  const mappings: any[] = []
-  await canvasToDataURL(atlasCanvas, 'image/png')
+  // 6. UV 座標マッピング情報を生成
+  const mappings = _generateUVMappings(
+    document,
+    packing,
+    textures,
+  )
+
+  // 7. マテリアルの参照を更新（古いテクスチャ → アトラス）
+  _replaceMaterialTextures(document, textures, atlasTexture, mappings)
 
   return {
     document,
@@ -187,9 +194,268 @@ function _drawImageDataToCanvas(
 }
 
 /**
+ * アトラス画像を glTF-Transform テクスチャとして登録
+ */
+function _registerAtlasTexture(
+  document: Document,
+  atlasBuffer: Uint8Array,
+  _packing: any,
+): Texture {
+  // アトラス用テクスチャを作成
+  const atlasTexture = document.createTexture('atlas-texture')
+    .setImage(atlasBuffer)
+    .setMimeType('image/png')
+
+  return atlasTexture
+}
+
+/**
+ * UV マッピング情報を生成
+ * プリミティブごとに、どのテクスチャスロットがアトラスのどこに配置されたかを記録
+ */
+function _generateUVMappings(
+  document: Document,
+  packing: any,
+  originalTextures: Texture[],
+): UVMapping[] {
+  const mappings: UVMapping[] = []
+
+  // プリミティブを収集（メッシュ → ノード → プリミティブ）
+  const primitives: any[] = []
+  const meshes = document.getRoot().listMeshes()
+  meshes.forEach((mesh) => {
+    mesh.listPrimitives().forEach((primitive) => {
+      primitives.push(primitive)
+    })
+  })
+
+  // 各プリミティブを検査して、使用されているテクスチャをマッピング
+  primitives.forEach((primitive, primitiveIndex) => {
+    const material = primitive.getMaterial()
+    if (!material) return
+
+    // baseColorTexture の確認
+    const baseColorTexture = material.getBaseColorTexture()
+    if (baseColorTexture) {
+      const textureIndex = originalTextures.indexOf(baseColorTexture)
+      if (textureIndex !== -1) {
+        const packed = packing.packed.find(
+          (p: PackedTexture) => p.index === textureIndex,
+        )
+        if (packed) {
+          mappings.push({
+            primitiveIndex,
+            textureSlot: 'baseColorTexture',
+            originalTextureIndex: textureIndex,
+            uvMin: {
+              u: packed.x / packing.atlasWidth,
+              v: packed.y / packing.atlasHeight,
+            },
+            uvMax: {
+              u: (packed.x + packed.width) / packing.atlasWidth,
+              v: (packed.y + packed.height) / packing.atlasHeight,
+            },
+          })
+        }
+      }
+    }
+
+    // normalTexture の確認
+    const normalTexture = material.getNormalTexture()
+    if (normalTexture) {
+      const textureIndex = originalTextures.indexOf(normalTexture)
+      if (textureIndex !== -1) {
+        const packed = packing.packed.find(
+          (p: PackedTexture) => p.index === textureIndex,
+        )
+        if (packed) {
+          mappings.push({
+            primitiveIndex,
+            textureSlot: 'normalTexture',
+            originalTextureIndex: textureIndex,
+            uvMin: {
+              u: packed.x / packing.atlasWidth,
+              v: packed.y / packing.atlasHeight,
+            },
+            uvMax: {
+              u: (packed.x + packed.width) / packing.atlasWidth,
+              v: (packed.y + packed.height) / packing.atlasHeight,
+            },
+          })
+        }
+      }
+    }
+
+    // metallicRoughnessTexture の確認
+    const metallicRoughnessTexture = material.getMetallicRoughnessTexture()
+    if (metallicRoughnessTexture) {
+      const textureIndex = originalTextures.indexOf(metallicRoughnessTexture)
+      if (textureIndex !== -1) {
+        const packed = packing.packed.find(
+          (p: PackedTexture) => p.index === textureIndex,
+        )
+        if (packed) {
+          mappings.push({
+            primitiveIndex,
+            textureSlot: 'metallicRoughnessTexture',
+            originalTextureIndex: textureIndex,
+            uvMin: {
+              u: packed.x / packing.atlasWidth,
+              v: packed.y / packing.atlasHeight,
+            },
+            uvMax: {
+              u: (packed.x + packed.width) / packing.atlasWidth,
+              v: (packed.y + packed.height) / packing.atlasHeight,
+            },
+          })
+        }
+      }
+    }
+
+    // occlusionTexture の確認
+    const occlusionTexture = material.getOcclusionTexture()
+    if (occlusionTexture) {
+      const textureIndex = originalTextures.indexOf(occlusionTexture)
+      if (textureIndex !== -1) {
+        const packed = packing.packed.find(
+          (p: PackedTexture) => p.index === textureIndex,
+        )
+        if (packed) {
+          mappings.push({
+            primitiveIndex,
+            textureSlot: 'occlusionTexture',
+            originalTextureIndex: textureIndex,
+            uvMin: {
+              u: packed.x / packing.atlasWidth,
+              v: packed.y / packing.atlasHeight,
+            },
+            uvMax: {
+              u: (packed.x + packed.width) / packing.atlasWidth,
+              v: (packed.y + packed.height) / packing.atlasHeight,
+            },
+          })
+        }
+      }
+    }
+
+    // emissiveTexture の確認
+    const emissiveTexture = material.getEmissiveTexture()
+    if (emissiveTexture) {
+      const textureIndex = originalTextures.indexOf(emissiveTexture)
+      if (textureIndex !== -1) {
+        const packed = packing.packed.find(
+          (p: PackedTexture) => p.index === textureIndex,
+        )
+        if (packed) {
+          mappings.push({
+            primitiveIndex,
+            textureSlot: 'emissiveTexture',
+            originalTextureIndex: textureIndex,
+            uvMin: {
+              u: packed.x / packing.atlasWidth,
+              v: packed.y / packing.atlasHeight,
+            },
+            uvMax: {
+              u: (packed.x + packed.width) / packing.atlasWidth,
+              v: (packed.y + packed.height) / packing.atlasHeight,
+            },
+          })
+        }
+      }
+    }
+  })
+
+  return mappings
+}
+
+/**
+ * マテリアルのテクスチャ参照をアトラスに置き換える
+ */
+function _replaceMaterialTextures(
+  document: Document,
+  originalTextures: Texture[],
+  atlasTexture: Texture,
+  mappings: UVMapping[],
+): void {
+  const materials = document.getRoot().listMaterials()
+
+  materials.forEach((material) => {
+    // baseColorTexture を確認して置き換え
+    if (material.getBaseColorTexture()) {
+      const textureIndex = originalTextures.indexOf(
+        material.getBaseColorTexture()!,
+      )
+      if (textureIndex !== -1) {
+        material.setBaseColorTexture(atlasTexture)
+      }
+    }
+
+    // normalTexture を確認して置き換え
+    if (material.getNormalTexture()) {
+      const textureIndex = originalTextures.indexOf(material.getNormalTexture()!)
+      if (textureIndex !== -1) {
+        material.setNormalTexture(atlasTexture)
+      }
+    }
+
+    // metallicRoughnessTexture を確認して置き換え
+    if (material.getMetallicRoughnessTexture()) {
+      const textureIndex = originalTextures.indexOf(
+        material.getMetallicRoughnessTexture()!,
+      )
+      if (textureIndex !== -1) {
+        material.setMetallicRoughnessTexture(atlasTexture)
+      }
+    }
+
+    // occlusionTexture を確認して置き換え
+    if (material.getOcclusionTexture()) {
+      const textureIndex = originalTextures.indexOf(
+        material.getOcclusionTexture()!,
+      )
+      if (textureIndex !== -1) {
+        material.setOcclusionTexture(atlasTexture)
+      }
+    }
+
+    // emissiveTexture を確認して置き換え
+    if (material.getEmissiveTexture()) {
+      const textureIndex = originalTextures.indexOf(
+        material.getEmissiveTexture()!,
+      )
+      if (textureIndex !== -1) {
+        material.setEmissiveTexture(atlasTexture)
+      }
+    }
+  })
+
+  // 不要なテクスチャを削除（アトラス化に含まれたもの）
+  originalTextures.forEach((texture) => {
+    // テクスチャがどのマテリアルにも使用されていないかを確認
+    const isUsed = materials.some(
+      (material) =>
+        material.getBaseColorTexture() === texture ||
+        material.getNormalTexture() === texture ||
+        material.getMetallicRoughnessTexture() === texture ||
+        material.getOcclusionTexture() === texture ||
+        material.getEmissiveTexture() === texture,
+    )
+
+    if (!isUsed) {
+      // テクスチャを削除
+      texture.dispose()
+    }
+  })
+}
+
+/**
  * パッキング効率を計算
  */
-function _calculatePackingEfficiency(_packing: any): number {
-  // TODO: 実装
-  return 0.8
+function _calculatePackingEfficiency(packing: any): number {
+  const atlasArea = packing.atlasWidth * packing.atlasHeight
+  const usedArea = packing.packed.reduce(
+    (sum: number, p: PackedTexture) => sum + p.width * p.height,
+    0,
+  )
+  return usedArea / atlasArea
 }

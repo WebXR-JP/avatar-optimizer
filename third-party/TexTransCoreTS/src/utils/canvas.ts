@@ -66,3 +66,24 @@ export async function canvasToBlob(
     )
   })
 }
+
+/**
+ * Canvas を PNG バッファ（Uint8Array）に変換
+ * ブラウザ環境では Blob → ArrayBuffer に変換
+ * Node.js 環境では canvas.toBuffer() を使用
+ */
+export async function canvasToBuffer(
+  canvas: Canvas,
+  type: string = 'image/png',
+): Promise<Uint8Array> {
+  // Node.js 環境（canvas ライブラリがある場合）
+  if ('toBuffer' in canvas) {
+    const buffer = (canvas as any).toBuffer(type)
+    return new Uint8Array(buffer)
+  }
+
+  // ブラウザ環境
+  const blob = await canvasToBlob(canvas, type)
+  const arrayBuffer = await blob.arrayBuffer()
+  return new Uint8Array(arrayBuffer)
+}
