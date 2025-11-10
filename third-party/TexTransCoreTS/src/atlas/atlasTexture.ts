@@ -6,14 +6,14 @@
  */
 
 import { ResultAsync } from 'neverthrow'
-import type { Document } from '@gltf-transform/core'
+import type { Document, Texture } from '@gltf-transform/core'
 import type {
   AtlasOptions,
   AtlasResult,
   AtlasError,
 } from '../types'
 import { createCanvas, getCanvasContext, canvasToDataURL } from '../utils/canvas'
-import { packTextures } from './packer'
+import { packTexturesNFDH } from './nfdh-packer'
 
 /**
  * glTF-Transform ドキュメント内のテクスチャをアトラス化
@@ -27,10 +27,9 @@ export function atlasTexturesInDocument(
   options: AtlasOptions = {},
 ): ResultAsync<AtlasResult, AtlasError> {
   const maxSize = options.maxSize ?? 2048
-  const padding = options.padding ?? 4
 
   return ResultAsync.fromPromise(
-    _atlasTexturesImpl(document, maxSize, padding),
+    _atlasTexturesImpl(document, maxSize),
     (error) => ({
       type: 'UNKNOWN_ERROR' as const,
       message: `Atlas failed: ${String(error)}`,
@@ -44,7 +43,6 @@ export function atlasTexturesInDocument(
 async function _atlasTexturesImpl(
   document: Document,
   maxSize: number,
-  padding: number,
 ): Promise<AtlasResult> {
   // 1. ドキュメント内のテクスチャを収集
   const textures = document.getRoot().listTextures()
@@ -63,7 +61,7 @@ async function _atlasTexturesImpl(
     height: img.height,
   }))
 
-  const packing = await packTextures(sizes, maxSize, maxSize, padding)
+  const packing = await packTexturesNFDH(sizes, maxSize, maxSize)
 
   // 4. アトラスキャンバスを生成
   const atlasCanvas = createCanvas(packing.atlasWidth, packing.atlasHeight)
@@ -110,14 +108,27 @@ async function _atlasTexturesImpl(
 /**
  * テクスチャから画像データを抽出
  */
-async function _extractTextureImage(_texture: any): Promise<{
+async function _extractTextureImage(texture: Texture): Promise<{
   width: number
   height: number
   data: Uint8ClampedArray
 }> {
-  // TODO: @gltf-transform/core の API を使用して実装
-  // 画像バッファを取得し、ImageData に変換
-  throw new Error('Not implemented')
+  const size = texture.getSize();
+  if (!size) {
+    throw new Error(`Texture ${texture.getName()} has no size information.`);
+  }
+  const [width, height] = size;
+
+  const data = texture.getImage(); // This is a Uint8Array
+  if (!data) {
+    throw new Error(`Texture ${texture.getName()} image data is null.`);
+  }
+
+  return {
+    width,
+    height,
+    data: new Uint8ClampedArray(data.buffer), // Convert to Uint8ClampedArray
+  };
 }
 
 /**
