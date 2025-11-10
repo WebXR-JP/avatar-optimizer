@@ -4,64 +4,83 @@
 
 ## プロジェクト概要
 
-**TexTransCore** は VRM モデルのテクスチャ処理に特化した .NET ライブラリです。現在は `net8.0` DLL としてビルドされており、将来的には WASM 化により JavaScript から直接呼び出せるようになります。
+**TexTransCore** は VRM モデルのテクスチャ処理に特化した .NET ライブラリです。**Phase 1 (NativeAOT-LLVM 化)** が完了し、現在は `net10.0` で WASM ビルド対応になっています。将来的には componentize-dotnet を使用して JavaScript から直接呼び出せるようになります。
 
 ## プロジェクト構成
 
 ### スタック
 
-- **.NET**: 8.0+
-- **C#**: 12.0+
+- **.NET**: 10.0 RC2 (Preview) + NativeAOT-LLVM
+- **C#**: 12.0
 - **MSBuild**: プロジェクトビルドシステム
+- **NuGet**: 実験的パッケージソース (dotnet-experimental)
 
 ### ディレクトリ構成
 
 ```
 third-party/TexTransCore/
-  ├── TexTransCore.csproj    # プロジェクトファイル
-  ├── TexTransCore.sln       # ソリューションファイル
-  ├── src/                   # ソースコード
-  │   ├── *.cs              # C# 実装ファイル
-  │   └── [サブディレクトリ] # 機能別モジュール
-  ├── bin/                   # ビルド出力ディレクトリ (git追跡外)
-  ├── obj/                   # ビルド中間ファイル (git追跡外)
-  ├── LICENSE.md             # ライセンス
-  └── README.md              # プロジェクト説明
+  ├── TexTransCore.csproj         # プロジェクトファイル (NativeAOT-LLVM 対応)
+  ├── TexTransCore.sln            # ソリューションファイル
+  ├── textrans.wit                # WIT インターフェース定義 (WASM コンポーネント)
+  ├── nuget.config                # NuGet 設定 (実験的パッケージソース)
+  ├── src/                        # ソースコード
+  │   ├── *.cs                   # C# 実装ファイル
+  │   └── [サブディレクトリ]      # 機能別モジュール
+  ├── bin/Release/net10.0/wasi-wasm/  # WASM ビルド出力 (git追跡外)
+  │   └── publish/               # Publish 出力 (DLL + deps.json)
+  ├── obj/                        # ビルド中間ファイル (git追跡外)
+  ├── LICENSE.md                  # ライセンス
+  └── README.md                   # プロジェクト説明
 ```
 
 ## 開発コマンド
 
 ```bash
-# NETワークロードのセットアップ（初回のみ）
-dotnet workload restore
+# .NET 10 RC2 への PATH 設定（初回のみ）
+export PATH="$HOME/.dotnet:$HOME/.wasmtime/bin:$PATH"
 
-# プロジェクトのビルド
+# プロジェクトのビルド (.NET 10 で自動的に wasi-wasm ターゲット)
 dotnet build
 
-# リリースビルド
+# リリースビルド (WASM ターゲット)
 dotnet build -c Release
 
-# クリーンビルド
-dotnet clean && dotnet build
+# WASM Publish (DLL + 依存関係)
+dotnet publish -c Release -r wasi-wasm
 
-# スペシフィックなフレームワークをターゲットに指定
-dotnet build -f net8.0
+# クリーンビルド
+dotnet clean && dotnet build -c Release
+
+# 標準 .NET ライブラリとしてのビルド
+dotnet build -p:RuntimeIdentifier=""
 ```
 
 ## WASM 化ロードマップ
 
-### 現状
+### 現状 (Phase 1: NativeAOT-LLVM 化 完了)
 
-TexTransCore は現在 .NET 8.0 DLL として動作しており、JavaScript/TypeScript との統合は保留中です。
+TexTransCore は **Phase 1** で以下の更新が完了しました:
 
-### 課題
+- ✅ **.NET 10 RC2 (Preview)** への更新
+- ✅ **NativeAOT-LLVM ターゲット** (wasi-wasm) への対応
+- ✅ **WIT インターフェース定義** (`textrans.wit`) の作成
+- ✅ **nuget.config** による実験的パッケージソースの設定
+- ✅ **WASM ビルド・Publish** の成功確認
+
+**現在の出力**:
+- `bin/Release/net10.0/wasi-wasm/TexTransCore.dll` (マネージド DLL)
+- `bin/Release/net10.0/wasi-wasm/publish/` (Publish 出力)
+
+**次フェーズ**: Phase 2 では componentize-dotnet を統合し、JavaScript/WebGPU との連携実装を開始予定
+
+### Phase 2 以降の課題
 
 1. **WASM 互換性の低さ**: Unity 向けに設計されており、WASM ランタイムが提供しない機能に依存している可能性あり
 2. **ファイル I/O**: OS ファイルシステムへの直接アクセスが必要な場合、WASM では制限される
 3. **メモリ管理**: WASM の線形メモリ（4GB 制限）に対応する必要がある
 4. **パフォーマンス**: WASM での実行速度が要件を満たすか検証が必要
 
-### 推奨実装アプローチ (優先度順)
+### 実装状況と推奨アプローチ (Phase 2 以降)
 
 #### 1. **Mono AOT + Emscripten による WASM コンパイル** (最も完全)
 
@@ -163,19 +182,32 @@ WASM 化を実装する際は、以下のチェックリストを参照：
   - [ ] WASM ビルドステップの追加
   - [ ] ブラウザテストの自動化
 
-### 次のステップ
+### Phase 2 実装計画
 
-1. **アプローチの選定**: チーム内で実装方式を決定 (Mono AOT vs componentize-dotnet)
-2. **依存関係調査**: TexTransCore の外部依存を詳細に分析
-3. **プロトタイプ**: 小規模な機能で WASM コンパイルをテスト
-4. **パフォーマンス測定**: ブラウザ/Node.js 環境での性能検証
+**Phase 1 完了後の次ステップ:**
+
+1. **componentize-dotnet の統合** (2-3 週間)
+   - [ ] componentize-dotnet NuGet パッケージの導入
+   - [ ] WIT インターフェースの実装 (textrans.wit)
+   - [ ] C# バインディング生成
+
+2. **WebGPU 連携の実装** (2-4 週間)
+   - [ ] JavaScript 側 WebGPU ドライバの実装
+   - [ ] HLSL → WGSL シェーダー変換
+   - [ ] Compute Shader 実行インターフェース
+
+3. **vrm-optimizer への統合** (1-2 週間)
+   - [ ] WASM モジュールの npm パッケージ化
+   - [ ] TypeScript 型定義の自動生成
+   - [ ] E2E テスト (ブラウザ環境)
 
 ## 依存関係とバージョン管理
 
-### ターゲットフレームワーク
+### ターゲットフレームワーク (Phase 1)
 
-- **.NET**: 8.0+
-- **C#**: 12.0+
+- **.NET**: 10.0 RC2 (Preview) + NativeAOT-LLVM
+- **C#**: 12.0
+- **WASM Runtime**: wasi-wasm (WebAssembly System Interface)
 
 ### 外部依存関係
 
@@ -193,20 +225,28 @@ WASM 化を実装する際は、以下のチェックリストを参照：
 
 ## ビルド出力
 
+### Phase 1 (現在: NativeAOT-LLVM 化完了)
+
 ```bash
-# リリースビルド
+# WASM ターゲットのリリースビルド
 dotnet build -c Release
 
-# 出力ファイル
-# bin/Release/net8.0/TexTransCore.dll
-# bin/Release/net8.0/TexTransCore.pdb (デバッグシンボル)
+# 出力ファイル (WASM ターゲット)
+bin/Release/net10.0/wasi-wasm/TexTransCore.dll         # マネージド DLL
+bin/Release/net10.0/wasi-wasm/TexTransCore.deps.json  # 依存関係情報
+
+# Publish 出力
+dotnet publish -c Release -r wasi-wasm
+bin/Release/net10.0/wasi-wasm/publish/TexTransCore.dll
+bin/Release/net10.0/wasi-wasm/publish/TexTransCore.deps.json
 ```
 
-### WASM 化後の期待される出力
+### Phase 2 (予定: componentize-dotnet 統合後)
 
 ```bash
 # WASM バイナリ
-# dist/textrans-core.wasm
-# dist/textrans-core.d.ts (型定義)
-# dist/textrans-core.js (ローダースクリプト)
+dist/textrans-core.wasm           # IL コンパイル済み WASM モジュール
+dist/textrans-core.js             # JavaScript ローダー
+dist/textrans-core.d.ts           # TypeScript 型定義
+dist/textrans-core.wit            # WebAssembly Interface Types
 ```

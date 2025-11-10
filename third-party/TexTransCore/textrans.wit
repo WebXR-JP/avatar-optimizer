@@ -1,0 +1,61 @@
+package textrans:core@0.1.0;
+
+/// TexTransCore WASM component interface definition
+/// This interface provides basic texture processing capabilities as a WebAssembly component
+
+interface core {
+  /// Render texture resource handle (opaque integer)
+  type render-texture-id = u32;
+
+  /// Texture channel format (0: RGBA, 1: RGB, 2: RG, 3: R)
+  type texture-channel = u8;
+
+  /// Texture creation result with error handling
+  resource texture-resource {
+    /// Get texture width
+    width: func() -> u32;
+    /// Get texture height
+    height: func() -> u32;
+    /// Get texture memory size in bytes
+    memory-size: func() -> u32;
+  }
+
+  /// Get library version (e.g., "1.0.0")
+  get-version: func() -> string;
+
+  /// Get library name
+  get-name: func() -> string;
+
+  /// Create a render texture resource (basic initialization)
+  /// @param width - Texture width in pixels
+  /// @param height - Texture height in pixels
+  /// @param channel - Texture channel format (0-3)
+  /// @return texture resource handle or error message
+  create-render-texture: func(width: u32, height: u32, channel: texture-channel) -> result<render-texture-id, string>;
+
+  /// Dispose render texture resource
+  /// @param id - Texture resource handle to release
+  dispose-render-texture: func(id: render-texture-id);
+
+  /// Check if a texture resource is valid
+  /// @param id - Texture resource handle
+  /// @return true if resource exists and is valid
+  is-texture-valid: func(id: render-texture-id) -> bool;
+
+  /// Get texture information
+  /// @param id - Texture resource handle
+  /// @return (width, height, channel, memory_size) or error message
+  get-texture-info: func(id: render-texture-id) -> result<tuple<u32, u32, u8, u32>, string>;
+}
+
+/// Placeholder for phase 2: Compute shader execution interface
+/// Will be implemented in Phase 2 after JavaScript/WebGPU integration is ready
+interface compute-shaders {
+  /// Future compute shader execution interface
+  /// TODO: Define after WebGPU integration
+}
+
+world textrans-component {
+  export core;
+  // export compute-shaders; // TODO: Phase 2 implementation
+}
