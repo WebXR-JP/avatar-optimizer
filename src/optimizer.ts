@@ -59,10 +59,16 @@ export function optimizeVRM(
   }))
     .andThen((arrayBuffer) => _loadDocument(arrayBuffer))
     .andThen((document) => {
+      // ドキュメント内の最大テクスチャサイズを検出してスケール係数を自動計算
+      const maxTextureSize = _getMaxTextureSize(document)
+      const textureScale = maxTextureSize
+        ? _calculateTextureScale(maxTextureSize, options.maxTextureSize)
+        : 1.0
+
       // Call atlasTexturesInDocument
       return atlasTexturesInDocument(document, {
         maxSize: options.maxTextureSize,
-        textureScale: options.textureScale,
+        textureScale: textureScale,
       }, createCanvasFactory).mapErr((atlasError: AtlasError) => { // Explicitly type atlasError
         // Map AtlasError types to OptimizationError
         let mappedError: Types.OptimizationError;
@@ -129,6 +135,53 @@ function _loadDocument(
       message: `Failed to parse VRM document: ${String(error)}`,
     })
   )
+}
+
+/**
+ * ドキュメント内の全テクスチャの最大サイズを取得します（内部用）
+ * @param document glTF-Transform ドキュメント
+ * @returns 最大幅と高さ（ピクセル）。テクスチャがない場合は undefined
+ */
+function _getMaxTextureSize(document: Document): { width: number; height: number } | undefined {
+  const textures = document.getRoot().listTextures()
+  if (textures.length === 0) {
+    return undefined
+  }
+
+  let maxWidth = 0
+  let maxHeight = 0
+
+  for (const texture of textures) {
+    const image = texture.getImage()
+    if (image) {
+      // glTF-Transform では texture.getSize() で [width, height] の配列を取得
+      const size = texture.getSize()
+      if (size) {
+        const [width, height] = size
+        if (width) maxWidth = Math.max(maxWidth, width)
+        if (height) maxHeight = Math.max(maxHeight, height)
+      }
+    }
+  }
+
+  return maxWidth > 0 && maxHeight > 0 ? { width: maxWidth, height: maxHeight } : undefined
+}
+
+/**
+ * 現在の最大テクスチャサイズから目標サイズに収まるスケール係数を計算します（内部用）
+ * @param currentSize 現在の最大テクスチャサイズ
+ * @param targetMaxSize 目標となる最大テクスチャサイズ
+ * @returns スケール係数（0.1～1.0）
+ */
+function _calculateTextureScale(currentSize: { width: number; height: number }, targetMaxSize: number): number {
+  const currentMax = Math.max(currentSize.width, currentSize.height)
+  if (currentMax <= targetMaxSize) {
+    return 1.0 // 既に目標サイズ以下なのでスケーリング不要
+  }
+
+  const scale = targetMaxSize / currentMax
+  // 0.1 ～ 1.0 の範囲に制限
+  return Math.max(0.1, Math.min(1.0, scale))
 }
 
 
