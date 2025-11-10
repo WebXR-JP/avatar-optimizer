@@ -237,10 +237,150 @@ const result = await atlasTextures(textures, {
 })
 ```
 
+## アーキテクチャ設計：テクスチャ処理と UV 座標再マッピング
+
+### CPU vs GPU 処理の分割設計
+
+TexTransCoreTS では以下のように処理を分割します：
+
+| タスク | 処理環境 | 実装方法 | 理由 |
+| --- | --- | --- | --- |
+| **テクスチャアトラス化**（複数画像の結合） | **CPU** | Canvas API | I/O バウンド、メモリ効率重視 |
+| **UV 座標再マッピング**（大量の頂点計算） | **GPU** | TypeGPU | 計算集約的、並列化効果大 |
+
+### TypeGPU を使用しない理由（画像操作）
+
+テクスチャアトラス化を GPU で実装すべきでない理由：
+
+1. **一度きりのオフライン処理**
+   - VRM ファイルの最適化は通常、アップロード時の 1 回限り
+   - リアルタイム性は不要
+   - GPU の初期化オーバーヘッドが無駄
+
+2. **環境互換性**
+   - Canvas API は Node.js・ブラウザ両対応
+   - TypeGPU は WebGPU 環境が必須（Safari や古いブラウザ未対応）
+   - サーバーサイド処理では WebGPU 未サポート
+
+3. **メモリ転送効率**
+   - GPU 画像処理：テクスチャ → GPU メモリアップロード → GPU 処理 → ダウンロード
+   - CPU 画像処理（Canvas）：メモリ内で完結、転送コストなし
+
+4. **パフォーマンス**
+   - 小～中規模モデル（テクスチャ数 < 10）では CPU が高速
+   - GPU のメリットは 1000+ テクスチャ同時処理など大規模処理時のみ
+
+### TypeGPU が活躍する場面
+
+以下の場合は GPU 処理が有効：
+
+```typescript
+/**
+ * GPU が有効なケース：リアルタイム・大規模処理
+ */
+
+// ケース 1: リアルタイムブラウザアプリ内での処理
+if (isRealtimeProcessing) {
+  // TypeGPU で UV マッピング + 複数モデルの同時処理
+  const uvMappingResult = await remapUVsWithTypeGPU(documents, atlasInfo)
+}
+
+// ケース 2: 数千のテクスチャを一度に処理
+if (textureCount > 1000) {
+  // GPU 画像合成のメリットが出始める
+  const gpuAtlasResult = await atlasTexturesOnGPU(textures)
+}
+
+// ケース 3: 複雑な画像フィルタリングが必要
+if (needsAdvancedFiltering) {
+  // GPU コンピュートシェーダーで色補正・リサイズなどを実行
+  const filteredTextures = await processTexturesOnGPU(textures)
+}
+```
+
+### 推奨される実装フロー
+
+```typescript
+/**
+ * 現在の設計（推奨）
+ * - Canvas: テクスチャアトラス生成（CPU）✅
+ * - TypeGPU: UV 座標再マッピング（GPU）✅
+ * - 分離により、各レイヤーの責務が明確で保守性向上
+ */
+
+async function optimizeVRMModel(document: Document, options: OptimizeOptions) {
+  // 1️⃣  CPU でテクスチャアトラスを生成（Canvas API）
+  const atlasResult = await atlasTexturesInDocument(document, {
+    maxSize: options.maxTextureSize,
+    padding: 4,
+  })
+
+  if (atlasResult.isErr()) {
+    return atlasResult
+  }
+
+  const { document: atlasedDoc, mapping: atlasMapping } = atlasResult.value
+
+  // 2️⃣  GPU で UV 座標を再計算（TypeGPU）
+  const uvRemapResult = await remapUVsWithTypeGPU(
+    atlasedDoc,
+    atlasMapping,
+    options,
+  )
+
+  return uvRemapResult
+}
+```
+
+### 将来的な最適化
+
+リアルタイム処理が必須になった場合は、TypeGPU での GPU 画像処理への移行を検討：
+
+```typescript
+/**
+ * 将来の完全 GPU パイプライン（オプション）
+ * - 要件：リアルタイムテクスチャ処理が必要
+ * - トレードオフ：環境互換性が低下、複雑度が増加
+ */
+
+// GPU バッファにテクスチャデータをアップロード
+const gpuTextures = await uploadTexturesToGPU(textureImages)
+
+// TypeGPU で画像合成 + UV 再マッピングを統合実行
+const result = await processAllOnGPU(gpuTextures, {
+  atlasWidth: 2048,
+  atlasHeight: 2048,
+  // ... 他のオプション
+})
+```
+
+## CPU ベース実装計画
+
+TexTransCoreTS のテクスチャアトラス化実装計画は、以下のドキュメントで詳細に説明されています：
+
+**📄 [`docs/CPU_IMPLEMENTATION_PLAN.md`](docs/CPU_IMPLEMENTATION_PLAN.md)**
+
+このドキュメントには以下が含まれます：
+
+- **実装アーキテクチャ概要**: 3段階パイプラインの詳細説明
+- **IslandRegion 設計**: TexTransCore パターンの応用
+- **実装フェーズ**: Phase 1-4 の具体的なコード例
+- **デザイン根拠**: Canvas API を使用する理由
+- **将来的な GPU 移行**: リアルタイム処理が必須になった場合の検討
+
+### 簡単まとめ
+
+- **テクスチャアトラス化**: Canvas API（CPU）で実装
+- **環境互換性**: ブラウザ・Node.js 両対応
+- **同期メカニズム**: IslandRegion で「テクスチャ移動 ≡ UV 移動」を保証
+- **パフォーマンス**: 小～中規模モデルではCPUで十分
+
+詳細は [`docs/CPU_IMPLEMENTATION_PLAN.md`](docs/CPU_IMPLEMENTATION_PLAN.md) を参照してください。
+
 ## 今後の検討事項
 
 将来的な最適化の可能性：
 
 - WASM による高速化（C# オリジナルとの性能比較）
-- GPU 処理（WebGL/WebGPU）対応
+- **GPU 画像処理への移行**（リアルタイム処理が必須になった場合）
 - より高度な Bin packing アルゴリズム（Guillotine など）
