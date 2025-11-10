@@ -6,12 +6,13 @@ export default defineConfig([
     name: 'library',
     entry: ['src/index.ts'],
     format: ['esm', 'cjs'],
-    dts: true,
+    dts: true, // Re-enable DTS generation
     splitting: false,
     sourcemap: true,
     clean: true,
     minify: false,
     treeshake: true,
+    external: ['canvas'],
   },
   // CLI build
   {
@@ -26,5 +27,6 @@ export default defineConfig([
     treeshake: true,
     outDir: 'dist',
     outExtension: () => ({ js: '.cjs' }),
+    external: ['canvas'],
   },
 ])
