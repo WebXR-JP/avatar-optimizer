@@ -16,7 +16,7 @@ import type {
   PackedTexture,
   PackingResult,
 } from '../types'
-import { packTexturesNFDH } from './nfdh-packer'
+import { packTextures } from './packing'
 import { remapAllPrimitiveUVs } from './uv-remapping'
 import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image'
 
@@ -48,7 +48,7 @@ export async function packAndCreateAtlas(
   }
 
   // 1. パッキング計算
-  const packing = await packTexturesNFDH(imageSizes, maxSize, maxSize)
+  const packing = await packTextures(imageSizes, maxSize, maxSize)
 
   // 2. 画像をアトラスに合成（Uint8ClampedArray を返す）
   const atlasImageData = await drawImagesToAtlas(packing, images)

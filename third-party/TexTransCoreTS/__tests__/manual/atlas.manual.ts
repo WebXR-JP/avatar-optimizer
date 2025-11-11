@@ -44,13 +44,6 @@ function extractImageData(canvasImage: any): {
   }
 }
 
-/**
- * Canvas ファクトリ for node-canvas (type cast wrapper)
- */
-function createCanvasFactory(width: number, height: number): any {
-  return createCanvas(width, height)
-}
-
 async function main() {
   // Ensure output directory exists
   await fs.mkdir(OUTPUT_DIR, { recursive: true })
@@ -84,7 +77,6 @@ async function main() {
         sizes,
         images,
         atlasSize, // maxSize
-        createCanvasFactory, // Canvas factory
       )
 
       // 3. Log packing results
