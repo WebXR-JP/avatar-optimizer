@@ -3,29 +3,15 @@
  *
  * Tests the complete atlas workflow:
  * 1. Document with multiple textures
- * 2. Canvas creation and atlas generation
+ * 2. Canvas/Jimp creation and atlas generation
  * 3. Texture registration and material updates
+ *
+ * Note: Canvas factory injection is no longer needed as draw-image
+ * automatically detects the environment and uses Jimp (Node.js) or Canvas (browser)
  */
 
 import { Document } from '@gltf-transform/core'
-import { atlasTexturesInDocument } from '../src/atlas/atlasTexture'
-import { createCanvas } from 'canvas'
-
-// Canvas インスタンスの型互換性を確保するカスタムファクトリ
-function createTestCanvas(width: number, height: number) {
-  const canvas = createCanvas(width, height) as any
-
-  // toBlob をモックとして追加（node-canvas には toBlob がないため）
-  if (!canvas.toBlob) {
-    canvas.toBlob = function(callback: any) {
-      const buffer = this.toBuffer('image/png')
-      const blob = new Blob([buffer], { type: 'image/png' })
-      callback(blob)
-    }
-  }
-
-  return canvas
-}
+import { atlasTexturesInDocument } from '../src/atlas/process-gltf-atlas'
 
 describe('atlasTexturesInDocument', () => {
   let document: Document
@@ -44,7 +30,6 @@ describe('atlasTexturesInDocument', () => {
     const result = await atlasTexturesInDocument(
       document,
       { maxSize: 1024 },
-      createTestCanvas,
     )
 
     // Should error since no textures to atlas
@@ -95,9 +80,11 @@ describe('atlasTexturesInDocument', () => {
     const result = await atlasTexturesInDocument(
       document,
       { maxSize: 1024 },
-      createTestCanvas,
     )
 
+    if (result.isErr()) {
+      console.error('Atlas error:', result.error)
+    }
     expect(result.isOk()).toBe(true)
     if (result.isOk()) {
       const { document: atlasedDoc, mapping, atlasMetadata } = result.value
@@ -170,9 +157,11 @@ describe('atlasTexturesInDocument', () => {
     const result = await atlasTexturesInDocument(
       document,
       { maxSize: 512 },
-      createTestCanvas,
     )
 
+    if (result.isErr()) {
+      console.error('Atlas error:', result.error)
+    }
     expect(result.isOk()).toBe(true)
     if (result.isOk()) {
       const { atlasMetadata } = result.value
