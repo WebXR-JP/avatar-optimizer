@@ -14,7 +14,7 @@
     }
   },
   "bin": {
-    "xrift-optimize": "./dist/cli.cjs"
+    "xrift-optimize": "./dist/cli.mjs"
   },
   "files": [
     "dist"

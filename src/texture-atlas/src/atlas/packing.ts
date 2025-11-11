@@ -9,7 +9,7 @@
  */
 
 import { Packer, MaxRectsBssf } from 'rectpack-ts'
-import { SORT_AREA } from 'rectpack-ts/dist/src/sorting'
+import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
 import type { PackingResult, PackedTexture } from '../types'
 
 /**

@@ -166,7 +166,7 @@ npm run build
 npm run dev
 
 # CLI のローカルテスト
-node dist/cli.cjs input.vrm -o output.vrm
+node dist/cli.mjs input.vrm -o output.vrm
 
 # または npm link を使用して
 npm link

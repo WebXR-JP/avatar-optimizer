@@ -4,8 +4,6 @@ import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { Command } from 'commander'
 import { optimizeVRM, validateVRMFile, type OptimizationOptions } from './index'
-import type { CreateCanvasFactory } from './TexTransCoreTS/src'
-import { createCanvas as nodeCreateCanvas } from 'canvas'
 
 const program = new Command()
 
@@ -136,14 +134,9 @@ program
           : undefined,
       }
 
-      // Node.js 環境用の createCanvasFactory を定義
-      const createCanvasFactory: CreateCanvasFactory = (width, height) => {
-        return nodeCreateCanvas(width, height) as any // 型アサーションで Canvas 型に合わせる
-      }
-
       // Run optimization
       console.log('⚙️  Optimizing VRM...')
-      const result = await optimizeVRM(file, optimizationOptions, createCanvasFactory)
+      const result = await optimizeVRM(file, optimizationOptions)
 
       if (result.isErr()) {
         const error = result.error
