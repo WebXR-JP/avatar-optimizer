@@ -15,34 +15,9 @@ import type {
   PackedTexture,
   PackingResult,
 } from '../types'
-import { canvasToBuffer } from '../utils/canvas'
 import { packTexturesNFDH } from './nfdh-packer'
 import { remapAllPrimitiveUVs } from './uv-remapping'
-import { drawImagesToAtlas } from './draw-image'
-
-/**
- * Canvas インスタンスを動的に取得（内部ヘルパー）
- */
-function _createCanvas(width: number, height: number): any {
-  // ブラウザ環境
-  if (typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    return canvas
-  }
-
-  // Node.js 環境
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
-    const { Canvas } = require('canvas')
-    return new Canvas(width, height)
-  } catch (_error) {
-    throw new Error(
-      'Canvas is not available. Please install the "canvas" package for Node.js environments.',
-    )
-  }
-}
+import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image' // Canvas操作は draw-image に完全に閉じ込め
 
 /**
  * 複数の画像データからアトラスを生成
@@ -77,18 +52,8 @@ export async function packAndCreateAtlas(
   // 2. 画像をアトラスに合成（Uint8ClampedArray を返す）
   const atlasImageData = drawImagesToAtlas(packing, images)
 
-  // 3. アトラス画像データを PNG バッファに変換
-  // Canvas は内部で生成されるため、PNG化のための一時的な Canvas を用意
-  const atlasCanvas = _createCanvas(packing.atlasWidth, packing.atlasHeight)
-  const atlasCtx = atlasCanvas.getContext('2d')
-  if (!atlasCtx) {
-    throw new Error('Failed to get canvas 2D context')
-  }
-  const imgData = atlasCtx.createImageData(packing.atlasWidth, packing.atlasHeight)
-  imgData.data.set(atlasImageData)
-  atlasCtx.putImageData(imgData, 0, 0)
-
-  const atlasBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
+  // 3. アトラス画像データを PNG バッファに変換（Canvas操作は draw-image で完結）
+  const atlasBuffer = await drawImagesToAtlasBuffer(packing, images)
 
   return {
     atlasImageData,

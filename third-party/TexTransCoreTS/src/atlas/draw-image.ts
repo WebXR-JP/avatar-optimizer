@@ -104,6 +104,92 @@ export function drawImagesToAtlas(
 }
 
 /**
+ * 複数の画像データをアトラス画像に合成して PNG バッファに変換
+ *
+ * PackingResult と各画像データを受け取り、
+ * 統合されたアトラス画像を PNG 形式で返します。
+ *
+ * @param packing - パッキング情報（atlasWidth, atlasHeight, packed[]）
+ * @param images - 各画像の Uint8ClampedArray データ（RGBA）
+ * @returns PNG 形式の Uint8Array バッファ
+ */
+export async function drawImagesToAtlasBuffer(
+  packing: PackingResult,
+  images: Uint8ClampedArray[],
+): Promise<Uint8Array> {
+  // アトラス画像データを取得
+  const atlasImageData = drawImagesToAtlas(packing, images)
+
+  // PNG バッファに変換するための Canvas を用意
+  const atlasCanvas = _createTempCanvas(packing.atlasWidth, packing.atlasHeight)
+  const atlasCtx = atlasCanvas.getContext('2d')
+  if (!atlasCtx) {
+    throw new Error('Failed to get canvas 2D context')
+  }
+  const imgData = atlasCtx.createImageData(packing.atlasWidth, packing.atlasHeight)
+  imgData.data.set(atlasImageData)
+  atlasCtx.putImageData(imgData, 0, 0)
+
+  // Canvas を PNG に変換
+  return await _canvasToBuffer(atlasCanvas, 'image/png')
+}
+
+/**
+ * Canvas インスタンスを動的に取得（内部ヘルパー）
+ * PNG化用の一時的な Canvas を生成
+ */
+function _createTempCanvas(width: number, height: number): any {
+  // ブラウザ環境
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    return canvas
+  }
+
+  // Node.js 環境
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    const { Canvas } = require('canvas')
+    return new Canvas(width, height)
+  } catch (_error) {
+    throw new Error(
+      'Canvas is not available. Please install the "canvas" package for Node.js environments.',
+    )
+  }
+}
+
+/**
+ * Canvas を PNG バッファに変換（内部ヘルパー）
+ */
+async function _canvasToBuffer(canvas: any, mimeType: string): Promise<Uint8Array> {
+  // ブラウザ環境
+  if (typeof canvas.toBlob === 'function') {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob: Blob | null) => {
+          if (!blob) {
+            reject(new Error('Failed to convert canvas to blob'))
+            return
+          }
+          blob.arrayBuffer().then((buffer) => {
+            resolve(new Uint8Array(buffer))
+          })
+        },
+        mimeType,
+      )
+    })
+  }
+
+  // Node.js 環境（node-canvas）
+  if (typeof canvas.toBuffer === 'function') {
+    return new Uint8Array(canvas.toBuffer(mimeType))
+  }
+
+  throw new Error('Unsupported canvas implementation')
+}
+
+/**
  * ImageData を Canvas に描画（環境別対応）
  *
  * ブラウザと node-canvas 環境の両方に対応します。
