@@ -20,8 +20,7 @@ import type {
  * @returns 最適化されたファイルの Result
  */
 
-import { atlasTexturesInDocument, type AtlasError } from './TexTransCoreTS/src'
-import type { CreateCanvasFactory } from './TexTransCoreTS/src/types'
+import { atlasTexturesInDocument, type AtlasError } from '@xrift/avatar-optimizer-texture-atlas'
 import * as Types from './types'
 
 /**
@@ -32,14 +31,11 @@ import * as Types from './types'
  *
  * @param file VRM ファイル
  * @param options 最適化オプション
- * @param createCanvasFactory Canvas インスタンスを作成するためのファクトリ関数
- * @param createImageDataFactory ImageData インスタンスを作成するためのファクトリ関数
  * @returns 最適化されたファイルの Result
  */
 export function optimizeVRM(
   file: File,
   options: Types.OptimizationOptions,
-  createCanvasFactory: CreateCanvasFactory,
 ): ResultAsync<File, Types.OptimizationError> {
   // ファイル型の検証（同期）
   if (!file || typeof file.arrayBuffer !== 'function') {
@@ -72,7 +68,7 @@ export function optimizeVRM(
       return atlasTexturesInDocument(document, {
         maxSize: options.maxTextureSize,
         textureScale: textureScale,
-      }, createCanvasFactory).map((atlasResult) => {
+      }).map((atlasResult) => {
         // Restore original extensions to the optimized document
         const optimizedRoot = atlasResult.document.getRoot()
 

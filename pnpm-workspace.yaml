@@ -1,2 +1,2 @@
 packages:
-  - 'third-party/TexTransCoreTS'
+  - 'src/texture-atlas'

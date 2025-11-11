@@ -121,68 +121,7 @@ export type AtlasError =
   | { type: 'UV_MAPPING_FAILED'; message: string }
   | { type: 'UNKNOWN_ERROR'; message: string }
 
-/**
- * キャンバス型（ブラウザとNode.js互換）
- */
-export interface Canvas {
-  width: number
-  height: number
-  getContext(contextId: '2d', options?: any): CanvasRenderingContext2D | null
-  toDataURL(type?: string, quality?: number): string
-  toBlob(
-    callback: (blob: Blob | null) => void,
-    type?: string,
-    quality?: number,
-  ): void
-}
 
-/**
- * Canvas コンテキスト型（ブラウザとNode.js互換）
- */
-export interface CanvasContext {
-  drawImage(
-    image: Canvas | HTMLImageElement,
-    dx: number,
-    dy: number,
-  ): void
-  drawImage(
-    image: Canvas | HTMLImageElement,
-    dx: number,
-    dy: number,
-    dw: number,
-    dh: number,
-  ): void
-  drawImage(
-    image: Canvas | HTMLImageElement,
-    sx: number,
-    sy: number,
-    sw: number,
-    sh: number,
-    dx: number,
-    dy: number,
-    dw: number,
-    dh: number,
-  ): void
-  fillStyle: string | CanvasGradient | CanvasPattern
-  fillRect(x: number, y: number, w: number, h: number): void
-  getImageData(sx: number, sy: number, sw: number, sh: number): ImageData
-  putImageData(imagedata: ImageData, dx: number, dy: number): void
-  clearRect(x: number, y: number, w: number, h: number): void
-}
 
-/**
- * Canvas インスタンスを作成するためのファクトリ関数
- * 外部から注入されることを想定
- */
-export type CreateCanvasFactory = (width: number, height: number) => Canvas;
 
-/**
- * ImageData インスタンスを作成するためのファクトリ関数
- * 外部から注入されることを想定
- */
-export type CreateImageDataFactory = (
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-) => ImageData;
 
