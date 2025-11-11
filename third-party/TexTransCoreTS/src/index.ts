@@ -6,7 +6,7 @@
  */
 
 // Public API のみをエクスポート
-export { atlasTexturesInDocument, packAndCreateAtlas } from './atlas/atlasTexture'
+export { atlasTexturesInDocument, packAndCreateAtlas } from './atlas/process-gltf-atlas'
 export type {
   AtlasOptions,
   AtlasResult,

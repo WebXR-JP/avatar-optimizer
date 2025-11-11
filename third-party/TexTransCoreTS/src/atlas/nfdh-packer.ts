@@ -132,7 +132,7 @@ function tryNFDHPlasFC(
     uvWidthBoxes.push(newWithBox)
 
     if (!newWithBox.trySetBox(islandTf)) {
-      return false // Should not happen on the first try
+      return false
     }
   }
 

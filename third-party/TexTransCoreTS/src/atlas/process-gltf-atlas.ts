@@ -6,6 +6,7 @@
  */
 
 import { ResultAsync } from 'neverthrow'
+import { Jimp } from 'jimp'
 import type { Document, Texture } from '@gltf-transform/core'
 import type {
   AtlasOptions,
@@ -17,7 +18,7 @@ import type {
 } from '../types'
 import { packTexturesNFDH } from './nfdh-packer'
 import { remapAllPrimitiveUVs } from './uv-remapping'
-import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image' // Canvas操作は draw-image に完全に閉じ込め
+import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image'
 
 /**
  * 複数の画像データからアトラスを生成
@@ -50,7 +51,7 @@ export async function packAndCreateAtlas(
   const packing = await packTexturesNFDH(imageSizes, maxSize, maxSize)
 
   // 2. 画像をアトラスに合成（Uint8ClampedArray を返す）
-  const atlasImageData = drawImagesToAtlas(packing, images)
+  const atlasImageData = await drawImagesToAtlas(packing, images)
 
   // 3. アトラス画像データを PNG バッファに変換（Canvas操作は draw-image で完結）
   const atlasBuffer = await drawImagesToAtlasBuffer(packing, images)
@@ -442,7 +443,7 @@ function _replaceMaterialTextures(
 
 /**
  * テクスチャ画像をダウンスケーリング
- * Canvas を使用して画像をスケーリング
+ * Jimp を使用して高品質なスケーリングを実行
  */
 function _scaleTextureImage(
   textureImage: {
@@ -458,33 +459,30 @@ function _scaleTextureImage(
 } {
   if (scale === 1) return textureImage
 
-  const newWidth = Math.ceil(textureImage.width * scale)
-  const newHeight = Math.ceil(textureImage.height * scale)
+  const sourceImage = new Jimp({
+    width: textureImage.width,
+    height: textureImage.height,
+  })
 
-  // 注：ここで Canvas API を使用していないため、単純な間隔抽出法を使用
-  // 実際には Canvas の drawImage で高品質なスケーリングが可能
-  // ただし非同期処理が必要になるため、ここでは同期的に実装
-  const scaledData = new Uint8ClampedArray(newWidth * newHeight * 4)
-
-  for (let y = 0; y < newHeight; y++) {
-    for (let x = 0; x < newWidth; x++) {
-      // ニアレストネイバー法で色をサンプリング
-      const srcX = Math.floor(x / scale)
-      const srcY = Math.floor(y / scale)
-      const srcIndex = (srcY * textureImage.width + srcX) * 4
-      const dstIndex = (y * newWidth + x) * 4
-
-      scaledData[dstIndex] = textureImage.data[srcIndex]
-      scaledData[dstIndex + 1] = textureImage.data[srcIndex + 1]
-      scaledData[dstIndex + 2] = textureImage.data[srcIndex + 2]
-      scaledData[dstIndex + 3] = textureImage.data[srcIndex + 3]
-    }
+  // bitmap.data に RGBA データをコピー
+  const bitmapData = Buffer.from(textureImage.data)
+  for (let i = 0; i < bitmapData.length; i++) {
+    sourceImage.bitmap.data[i] = bitmapData[i]
   }
 
+  // スケーリング実行
+  const newWidth = Math.ceil(textureImage.width * scale)
+  const newHeight = Math.ceil(textureImage.height * scale)
+  sourceImage.resize({
+    w: newWidth,
+    h: newHeight,
+  })
+
+  // Uint8ClampedArray に変換して返す
   return {
     width: newWidth,
     height: newHeight,
-    data: scaledData,
+    data: new Uint8ClampedArray(sourceImage.bitmap.data),
   }
 }
 
