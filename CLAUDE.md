@@ -31,11 +31,10 @@ __tests__/
   └── manual/           # 手動実行確認スクリプト (git追跡)
        └── cli.manual.ts # CLI 手動テストスクリプト
 
-dist/                   # ビルド出力 (ESM/CJS/型定義 + CLI)
+dist/                   # ビルド出力 (ESM/型定義 + CLI)
   ├── index.js          # ライブラリ ESM
-  ├── index.cjs         # ライブラリ CJS
   ├── index.d.ts        # 型定義
-  └── cli.cjs           # CLI バイナリ (実行可能)
+  └── cli.mjs           # CLI バイナリ (実行可能)
 ```
 
 ### 主要な API
@@ -72,7 +71,7 @@ pnpm run dev
 pnpm run prepublishOnly
 
 # CLI のローカルテスト
-node dist/cli.cjs input.vrm -o output.vrm
+node dist/cli.mjs input.vrm -o output.vrm
 
 # CLI を グローバルコマンドとしてインストール（開発時）
 pnpm link
@@ -116,14 +115,14 @@ pnpm -F textranscore-ts add <package-name>
 3. **モジュール形式**: 名前付きエクスポートを使用 (ESM/CJS の両形式をサポート)
 4. **依存関係最小化**: ピア依存関係は @gltf-transform のみ
 5. **テスト**: `__tests__/` ディレクトリ内で純粋関数のテストを記述
-6. **CLI ビルド**: `src/cli.ts` は CommonJS (`.cjs`) として独立ビルド。ブラウザとの互換性は不要
+6. **CLI ビルド**: `src/cli.ts` は ES Module (`.mjs`) として独立ビルド。ブラウザとの互換性は不要
 
 ## CLI 開発ガイドライン
 
 ### CLI アーキテクチャ
 
 - **エントリーポイント**: `src/cli.ts`
-- **ビルド出力**: `dist/cli.cjs` (Node.js 実行可能、shebang 付き)
+- **ビルド出力**: `dist/cli.mjs` (Node.js 実行可能、shebang 付き)
 - **パーサー**: Commander.js
 - **ファイル I/O**: `fs/promises` (Node.js 専用)
 
@@ -194,8 +193,8 @@ program
 {
   name: 'cli',
   entry: ['src/cli.ts'],
-  format: ['cjs'],           // Node.js 用 CommonJS
-  outExtension: () => ({ js: '.cjs' }),  // .cjs 拡張子
+  format: ['esm'],           // Node.js 用 ES Module
+  outExtension: () => ({ js: '.mjs' }),  // .mjs 拡張子
   dts: false,                // CLI は型定義不要
   sourcemap: false,          // パフォーマンス最適化
 }
@@ -206,7 +205,7 @@ program
 ```json
 {
   "bin": {
-    "xrift-optimize": "./dist/cli.cjs"
+    "xrift-optimize": "./dist/cli.mjs"
   }
 }
 ```
@@ -224,7 +223,7 @@ program
 pnpm exec tsx __tests__/manual/cli.manual.ts
 
 # ローカル CLI テスト
-node dist/cli.cjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
+node dist/cli.mjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
 
 # グローバルコマンドでテスト（pnpm link 後）
 xrift-optimize __tests__/fixtures/sample.glb -o __tests__/output/result.glb

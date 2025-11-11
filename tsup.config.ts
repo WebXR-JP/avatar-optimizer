@@ -19,7 +19,7 @@ export default defineConfig([
   {
     name: 'cli',
     entry: ['src/cli.ts'],
-    format: ['cjs'],
+    format: ['esm'],
     dts: false,
     splitting: false,
     sourcemap: false,
@@ -27,7 +27,7 @@ export default defineConfig([
     minify: false,
     treeshake: true,
     outDir: 'dist',
-    outExtension: () => ({ js: '.cjs' }),
+    outExtension: () => ({ js: '.mjs' }),
     external: ['canvas'],
   },
 ])
