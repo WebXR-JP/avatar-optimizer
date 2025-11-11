@@ -379,5 +379,105 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
     })
   })
 
+  describe('アイランド分散性 - 極度に小さく詰め込まれていないか', () => {
+    it('should not pack all islands into a small area of the atlas', async () => {
+      // Check that packed islands don't concentrate in a small region
+      // The bounding box of all packed islands should use a reasonable
+      // percentage of the atlas
+      const sizes = [
+        { width: 512, height: 512 },
+        { width: 2048, height: 2048 },
+        { width: 1024, height: 1024 },
+      ]
+      const result = await packTexturesNFDH(sizes, 1024, 1024)
+
+      // Calculate bounding box of all packed islands
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+
+      result.packed.forEach((rect) => {
+        minX = Math.min(minX, rect.x)
+        minY = Math.min(minY, rect.y)
+        maxX = Math.max(maxX, rect.x + rect.width)
+        maxY = Math.max(maxY, rect.y + rect.height)
+      })
+
+      const boundingWidth = maxX - minX
+      const boundingHeight = maxY - minY
+      const boundingArea = boundingWidth * boundingHeight
+      const atlasArea = result.atlasWidth * result.atlasHeight
+      const boundingAreaRatio = boundingArea / atlasArea
+
+      console.log('Packed islands:')
+      result.packed.forEach((rect, idx) => {
+        const original = sizes[rect.index]
+        const scaleX = (rect.width / original.width * 100).toFixed(0)
+        const scaleY = (rect.height / original.height * 100).toFixed(0)
+        console.log(
+          `  [${idx}] Original: ${original.width}x${original.height}, ` +
+          `Packed: ${rect.width}x${rect.height} (${scaleX}% x ${scaleY}%), ` +
+          `Position: (${rect.x}, ${rect.y})`
+        )
+      })
+      console.log(
+        `Bounding box: ${boundingWidth}x${boundingHeight} of ${result.atlasWidth}x${result.atlasHeight} ` +
+          `(${(boundingAreaRatio * 100).toFixed(1)}%)`
+      )
+
+      // Bounding box should use at least 25% of atlas
+      // (allows some padding but prevents islands from being too concentrated)
+      expect(boundingAreaRatio).toBeGreaterThan(0.25)
+    })
+
+    it('should distribute islands across atlas for various input combinations', async () => {
+      // Test with the actual manual test data
+      const sizes = [
+        { width: 512, height: 512 },
+        { width: 2048, height: 2048 },
+        { width: 1024, height: 1024 },
+      ]
+
+      // Test multiple atlas sizes
+      const atlasSizes = [
+        { width: 4096, height: 4096 },
+        { width: 2048, height: 2048 },
+        { width: 1024, height: 1024 },
+      ]
+
+      for (const atlasSize of atlasSizes) {
+        const result = await packTexturesNFDH(sizes, atlasSize.width, atlasSize.height)
+
+        // Calculate bounding box
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+
+        result.packed.forEach((rect) => {
+          minX = Math.min(minX, rect.x)
+          minY = Math.min(minY, rect.y)
+          maxX = Math.max(maxX, rect.x + rect.width)
+          maxY = Math.max(maxY, rect.y + rect.height)
+        })
+
+        const boundingWidth = maxX - minX
+        const boundingHeight = maxY - minY
+        const boundingArea = boundingWidth * boundingHeight
+        const atlasArea = atlasSize.width * atlasSize.height
+        const boundingAreaRatio = boundingArea / atlasArea
+
+        // Verify distribution - at least 25%
+        expect(boundingAreaRatio).toBeGreaterThan(0.25)
+
+        console.log(
+          `✅ Atlas ${atlasSize.width}x${atlasSize.height}: ` +
+            `Bounding box ${(boundingAreaRatio * 100).toFixed(1)}% ` +
+            `(${boundingWidth}x${boundingHeight})`
+        )
+      }
+    })
+  })
 
 })
