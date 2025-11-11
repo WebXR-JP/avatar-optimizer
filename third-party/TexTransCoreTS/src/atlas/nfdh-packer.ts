@@ -187,6 +187,8 @@ export async function packTexturesNFDH(
     currentAtlasWidth: number,
     currentAtlasHeight: number,
     scaleMultiplier: number = 1.0,
+    maxAtlasWidth: number = atlasWidth * 8, // Maximum atlas size (prevent infinite loops)
+    maxAtlasHeight: number = atlasHeight * 8,
   ): Promise<PackingResult> {
     const islands: IslandTransform[] = textureSizes.map((size, i) => ({
       position: { x: 0, y: 0 },
@@ -218,8 +220,9 @@ export async function packTexturesNFDH(
       }
     }
 
-    // パッキングに失敗した場合、テクスチャサイズを半分にしてリトライ
-    const nextScaleMultiplier = scaleMultiplier * 0.5
+    // パッキングに失敗した場合、テクスチャサイズを90%にしてリトライ
+    // （段階的にスケール、急激な縮小を避ける）
+    const nextScaleMultiplier = scaleMultiplier * 0.9
 
     // 最小サイズ（1x1）を下回らないようにチェック
     const minScaledWidth = Math.max(
@@ -249,8 +252,10 @@ export async function packTexturesNFDH(
       currentAtlasWidth,
       currentAtlasHeight,
       nextScaleMultiplier,
+      maxAtlasWidth,
+      maxAtlasHeight,
     )
   }
 
-  return tryPackWithScaling(sizes, atlasWidth, atlasHeight, 1.0)
+  return tryPackWithScaling(sizes, atlasWidth, atlasHeight, 1.0, atlasWidth * 8, atlasHeight * 8)
 }
