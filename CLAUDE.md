@@ -55,29 +55,59 @@ xrift-optimize <input> -o <output> [options]
 
 ## 開発コマンド
 
-```bash
-# 依存関係インストール
-npm install
+このプロジェクトは **pnpm** をパッケージマネージャーとして使用し、TexTransCoreTS は **pnpm workspace** で管理されています。
 
-# ビルド (ライブラリ + CLI)
-npm run build
+```bash
+# ルートディレクトリでの操作（全ワークスペース）
+# 依存関係インストール（全ワークスペース）
+pnpm install
+
+# ビルド (ライブラリ + CLI + TexTransCoreTS)
+pnpm run build
 
 # ウォッチモード (開発時)
-npm run dev
+pnpm run dev
 
 # 公開前ビルド
-npm run prepublishOnly
+pnpm run prepublishOnly
 
 # CLI のローカルテスト
 node dist/cli.cjs input.vrm -o output.vrm
 
 # CLI を グローバルコマンドとしてインストール（開発時）
-npm link
+pnpm link
 xrift-optimize input.vrm -o output.vrm
 
 # 手動テストスクリプトの実行
-npx tsx __tests__/manual/cli.manual.ts
+pnpm exec tsx __tests__/manual/cli.manual.ts
+
+# ========================================
+# TexTransCoreTS ワークスペース操作
+# ========================================
+
+# TexTransCoreTS のみをビルド
+pnpm -F textranscore-ts run build
+
+# TexTransCoreTS のテストを実行
+pnpm -F textranscore-ts run test
+
+# TexTransCoreTS の開発モード（ウォッチ）
+pnpm -F textranscore-ts run dev
+
+# TexTransCoreTS の依存関係を更新
+pnpm -F textranscore-ts add <package-name>
 ```
+
+**pnpm コマンドの基本**:
+
+| コマンド | 説明 |
+| --- | --- |
+| `pnpm install` | 全ワークスペースの依存関係をインストール |
+| `pnpm run <script>` | ルートプロジェクトのスクリプトを実行 |
+| `pnpm -F <workspace> run <script>` | 特定のワークスペースのスクリプトを実行 |
+| `pnpm -r run <script>` | すべてのワークスペースでスクリプトを実行 |
+| `pnpm link` | ルートプロジェクトをグローバルにリンク |
+| `pnpm exec <command>` | ローカル node_modules の実行可能ファイルを実行 |
 
 ## 重要な開発ルール
 
@@ -191,12 +221,12 @@ program
 
 ```bash
 # 手動テスト実行
-npx tsx __tests__/manual/cli.manual.ts
+pnpm exec tsx __tests__/manual/cli.manual.ts
 
 # ローカル CLI テスト
 node dist/cli.cjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
 
-# グローバルコマンドでテスト（npm link 後）
+# グローバルコマンドでテスト（pnpm link 後）
 xrift-optimize __tests__/fixtures/sample.glb -o __tests__/output/result.glb
 ```
 
@@ -626,17 +656,25 @@ cat third-party/TexTransCore/CLAUDE.md
 
 詳細は `third-party/TexTransCoreTS/CLAUDE.md` を参照：
 
+TexTransCoreTS は **pnpm workspace** として管理されているため、ルートディレクトリから操作できます：
+
 ```bash
-# TexTransCoreTS のインストール・ビルド
-cd third-party/TexTransCoreTS
-npm install
-npm run build
+# TexTransCoreTS のビルド
+pnpm -F textranscore-ts run build
 
 # テスト実行
-npm test
+pnpm -F textranscore-ts run test
 
 # 開発モード（ウォッチ）
-npm run dev
+pnpm -F textranscore-ts run dev
+
+# 型チェック
+pnpm -F textranscore-ts run type-check
+
+# 特定のワークスペースディレクトリで作業する場合
+cd third-party/TexTransCoreTS
+pnpm run build  # ローカルスクリプトを実行
+pnpm test       # 短縮形
 ```
 
 ### API 概要

@@ -1,5 +1,5 @@
 /**
- * NFDH Bin Packing アルゴリズムの単体テスト
+ * テクスチャパッキング (MaxRects アルゴリズム) の単体テスト
  *
  * テストの焦点:
  * 1. テクスチャがアトラスの境界内に収まらない場合のオーバーラップの検出
@@ -8,7 +8,7 @@
  * 4. エッジケースと境界条件
  */
 
-import { packTexturesNFDH } from '../src/atlas/nfdh-packer'
+import { packTextures } from '../src/atlas/packing'
 import type { PackingResult, PackedTexture } from '../src/types'
 
 /**
@@ -57,11 +57,11 @@ function verifyNoOverlaps(result: PackingResult): {
 
 
 
-describe('NFDH パッカー - packTexturesNFDH', () => {
+describe('MaxRects パッカー - packTextures', () => {
   describe('基本的なパッキング', () => {
     it('単一のテクスチャをパックする', async () => {
       const sizes = [{ width: 256, height: 256 }]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(1)
       expect(result.packed[0]).toEqual({
@@ -81,7 +81,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 256, height: 256 },
         { width: 256, height: 256 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(3)
       const noOverlapCheck = verifyNoOverlaps(result)
@@ -94,7 +94,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 256, height: 256 },
         { width: 128, height: 128 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(3)
       const noOverlapCheck = verifyNoOverlaps(result)
@@ -111,7 +111,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         width: 400,
         height: 400,
       }))
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // All should be packed
       expect(result.packed).toHaveLength(6)
@@ -151,7 +151,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 1024, height: 1024 },
         { width: 1024, height: 1024 },
       ]
-      const result = await packTexturesNFDH(sizes, 2048, 2048)
+      const result = await packTextures(sizes, 2048, 2048)
 
       // All textures should be packed
       expect(result.packed).toHaveLength(3)
@@ -180,7 +180,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 600, height: 600 },
         { width: 600, height: 600 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // All should be packed
       expect(result.packed).toHaveLength(4)
@@ -207,7 +207,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 400, height: 400 },
         { width: 300, height: 300 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // All textures should be packed
       expect(result.packed.length).toBe(4)
@@ -234,7 +234,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 800, height: 800 },
         { width: 600, height: 600 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // All should be packed with scaling
       expect(result.packed).toHaveLength(4)
@@ -272,7 +272,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
   describe('エッジケース - スケーリングとパッキング', () => {
     it('アトラスと全く同じサイズの単一テクスチャを処理する', async () => {
       const sizes = [{ width: 1024, height: 1024 }]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(1)
       expect(result.packed[0].x).toBe(0)
@@ -285,7 +285,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 1024, height: 1024 },
         { width: 1024, height: 1024 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // Both should be packed
       expect(result.packed).toHaveLength(2)
@@ -307,7 +307,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
     it('アトラスの幅を超える幅広のテクスチャを処理する', async () => {
       // Single texture wider than atlas
       const sizes = [{ width: 2048, height: 512 }]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(1)
       console.log('幅広のテクスチャ - パックされたもの:', result.packed[0])
@@ -316,7 +316,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
     it('アトラスの高さを超える縦長のテクスチャを処理する', async () => {
       // Single tall texture
       const sizes = [{ width: 512, height: 2048 }]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       expect(result.packed).toHaveLength(1)
       console.log('縦長のテクスチャ - パックされたもの:', result.packed[0])
@@ -329,7 +329,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         width: 400,
         height: 400,
       }))
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // All should be packed
       expect(result.packed).toHaveLength(8)
@@ -357,7 +357,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 128, height: 128 },
         { width: 512, height: 512 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       const indices = result.packed.map((p) => p.index)
       expect(indices.sort()).toEqual([0, 1, 2])
@@ -369,7 +369,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 128, height: 128 },
         { width: 512, height: 512 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       for (const packed of result.packed) {
         const original = sizes[packed.index]
@@ -389,7 +389,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
         { width: 2048, height: 2048 },
         { width: 1024, height: 1024 },
       ]
-      const result = await packTexturesNFDH(sizes, 1024, 1024)
+      const result = await packTextures(sizes, 1024, 1024)
 
       // Calculate bounding box of all packed islands
       let minX = Infinity
@@ -447,7 +447,7 @@ describe('NFDH パッカー - packTexturesNFDH', () => {
       ]
 
       for (const atlasSize of atlasSizes) {
-        const result = await packTexturesNFDH(sizes, atlasSize.width, atlasSize.height)
+        const result = await packTextures(sizes, atlasSize.width, atlasSize.height)
 
         // Calculate bounding box
         let minX = Infinity
