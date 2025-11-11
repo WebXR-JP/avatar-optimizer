@@ -8,7 +8,7 @@
  * 4. エラーハンドリング（入力チェック）
  */
 
-import { drawImagesToAtlas, drawImagesToAtlasBuffer } from '../src/atlas/draw-image'
+import { drawImagesToAtlas, drawImagesToAtlasBuffer } from '../src/atlas/draw-image-jimp'
 import type { PackingResult, PackedTexture } from '../src/types'
 
 /**
