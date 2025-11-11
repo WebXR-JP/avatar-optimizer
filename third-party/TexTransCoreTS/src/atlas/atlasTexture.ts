@@ -22,6 +22,90 @@ import { packTexturesNFDH } from './nfdh-packer'
 import { remapAllPrimitiveUVs } from './uv-remapping'
 
 /**
+ * 複数の画像データからアトラスを生成
+ *
+ * 与えられた複数の画像データをパッキングし、単一のアトラス Canvas を生成します。
+ * glTF ドキュメント統合なしで、純粋な画像生成機能を提供します。
+ *
+ * @param imageSizes - 画像サイズ配列 { width, height }
+ * @param images - 画像データ配列（Uint8ClampedArray）
+ * @param maxSize - アトラスの最大サイズ
+ * @param padding - テクスチャ間のパディング
+ * @param createCanvasFactory - Canvas インスタンスを作成するためのファクトリ関数
+ * @param createImageDataFactory - ImageData インスタンスを作成するためのファクトリ関数
+ * @returns { atlasCanvas, packing, atlasBuffer } - アトラス Canvas、パッキング情報、PNG バッファ
+ */
+export async function packAndCreateAtlas(
+  imageSizes: Array<{ width: number; height: number }>,
+  images: Uint8ClampedArray[],
+  maxSize: number = 2048,
+  padding: number = 4,
+  createCanvasFactory: CreateCanvasFactory,
+  createImageDataFactory?: CreateImageDataFactory,
+): Promise<{
+  atlasCanvas: any
+  packing: PackingResult
+  atlasBuffer: Uint8Array
+}> {
+  if (imageSizes.length === 0) {
+    throw new Error('No images provided')
+  }
+  if (imageSizes.length !== images.length) {
+    throw new Error('Image sizes and images length mismatch')
+  }
+
+  // 1. パッキング計算
+  const packing = await packTexturesNFDH(imageSizes, maxSize, maxSize, padding)
+
+  // 2. アトラスキャンバスを生成
+  const atlasCanvas = createCanvasFactory(packing.atlasWidth, packing.atlasHeight)
+  const atlasCtx = getCanvasContext(atlasCanvas)
+
+  // 背景をクリア（透明）
+  atlasCtx.clearRect(0, 0, packing.atlasWidth, packing.atlasHeight)
+
+  // 3. 各テクスチャをアトラスに描画
+  for (let i = 0; i < packing.packed.length; i++) {
+    const packedInfo = packing.packed[i]
+    const imageData = images[packedInfo.index]
+
+    // テンポラリキャンバスを作成して ImageData を描画
+    const tempCanvas = createCanvasFactory(imageSizes[packedInfo.index].width, imageSizes[packedInfo.index].height)
+    const tempCtx = getCanvasContext(tempCanvas)
+
+    // ImageData を作成（オプション）
+    if (createImageDataFactory) {
+      const imgData = createImageDataFactory(
+        imageData,
+        imageSizes[packedInfo.index].width,
+        imageSizes[packedInfo.index].height,
+      )
+      tempCtx.putImageData(imgData, 0, 0)
+    } else {
+      // node-canvas では putImageData が使用不可能な場合がある
+      _drawImageDataToCanvas(
+        tempCtx,
+        imageData,
+        imageSizes[packedInfo.index].width,
+        imageSizes[packedInfo.index].height,
+      )
+    }
+
+    // テンポラリキャンバスをメインキャンバスに描画
+    atlasCtx.drawImage(tempCanvas, packedInfo.x, packedInfo.y)
+  }
+
+  // 4. アトラス画像を PNG バッファに変換
+  const atlasBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
+
+  return {
+    atlasCanvas,
+    packing,
+    atlasBuffer,
+  }
+}
+
+/**
  * glTF-Transform ドキュメント内のテクスチャをアトラス化
  *
  * @param document - glTF-Transform ドキュメント
@@ -75,54 +159,26 @@ async function _atlasTexturesImpl(
     scaledImages = textureImages.map((img) => _scaleTextureImage(img, textureScale))
   }
 
-  // 4. パッキング計算（maxSize のアトラスに自動的にスケーリングしながらパック）
-  const sizes = scaledImages.map((img) => ({
+  // 4. パッキング計算とアトラス生成
+  const imageSizes = scaledImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
+  const imageDataArrays = scaledImages.map((img) => img.data)
 
-  const finalPacking = await packTexturesNFDH(sizes, maxSize, maxSize, padding)
+  const { packing: finalPacking, atlasBuffer } = await packAndCreateAtlas(
+    imageSizes,
+    imageDataArrays,
+    maxSize,
+    padding,
+    createCanvasFactory,
+    createImageDataFactory,
+  )
 
-  // 5. アトラスキャンバスを生成
-  const atlasCanvas = createCanvasFactory(finalPacking.atlasWidth, finalPacking.atlasHeight)
-  const atlasCtx = getCanvasContext(atlasCanvas)
-
-  // 背景をクリア（透明）
-  atlasCtx.clearRect(0, 0, finalPacking.atlasWidth, finalPacking.atlasHeight)
-
-  // 各テクスチャをアトラスに描画
-  for (let i = 0; i < finalPacking.packed.length; i++) {
-    const packedInfo = finalPacking.packed[i]
-    const img = scaledImages[packedInfo.index]
-
-    // テンポラリキャンバスを作成してImageDataを描画
-    // node-canvas では putImageData が不完全なため、別のキャンバスに描画してから合成
-    const tempCanvas = createCanvasFactory(img.width, img.height)
-    const tempCtx = getCanvasContext(tempCanvas)
-
-    // ImageData を作成（オプション）
-    if (createImageDataFactory) {
-      const imageData = createImageDataFactory(
-        new Uint8ClampedArray(img.data),
-        img.width,
-        img.height,
-      )
-      tempCtx.putImageData(imageData, 0, 0)
-    } else {
-      // node-canvas では putImageData が使用不可能な場合がある
-      // 代替方法：Canvas の内部バッファに直接アクセス（node-canvas 固有）
-      _drawImageDataToCanvas(tempCtx, img.data, img.width, img.height)
-    }
-
-    // テンポラリキャンバスをメインキャンバスに描画
-    atlasCtx.drawImage(tempCanvas, packedInfo.x, packedInfo.y)
-  }
-
-  // 6. アトラス画像をテクスチャとして登録
-  const atlasBuffer = await canvasToBuffer(atlasCanvas, 'image/png')
+  // 5. アトラス画像をテクスチャとして登録
   const atlasTexture = _registerAtlasTexture(document, atlasBuffer, finalPacking)
 
-  // 7. UV 座標マッピング情報を生成
+  // 6. UV 座標マッピング情報を生成
   const mappings = _generateUVMappings(
     document,
     finalPacking,

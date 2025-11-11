@@ -6,7 +6,7 @@
  */
 
 // Public API のみをエクスポート
-export { atlasTexturesInDocument } from './atlas/atlasTexture'
+export { atlasTexturesInDocument, packAndCreateAtlas } from './atlas/atlasTexture'
 export type {
   AtlasOptions,
   AtlasResult,
@@ -18,4 +18,5 @@ export type {
   IslandTransform,
   PackedTexture,
   CreateCanvasFactory, // 追加
+  CreateImageDataFactory,
 } from './types'
