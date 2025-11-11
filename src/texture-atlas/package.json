@@ -48,7 +48,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "jimp": "^1.6.0",
     "neverthrow": "^8.2.0",
     "rectpack-ts": "^0.0.2"
   }
