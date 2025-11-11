@@ -30,8 +30,6 @@ export interface IslandTransform {
 export interface AtlasOptions {
   /** アトラスの最大サイズ（ピクセル）デフォルト: 2048 */
   maxSize?: number
-  /** テクスチャ間のパディング（ピクセル）デフォルト: 4 */
-  padding?: number
   /** テクスチャのダウンスケール係数 (0.1-1.0)。デフォルト: 1.0（縮小なし） */
   textureScale?: number
 }

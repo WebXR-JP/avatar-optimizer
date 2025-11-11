@@ -30,7 +30,6 @@ import { remapAllPrimitiveUVs } from './uv-remapping'
  * @param imageSizes - 画像サイズ配列 { width, height }
  * @param images - 画像データ配列（Uint8ClampedArray）
  * @param maxSize - アトラスの最大サイズ
- * @param padding - テクスチャ間のパディング
  * @param createCanvasFactory - Canvas インスタンスを作成するためのファクトリ関数
  * @param createImageDataFactory - ImageData インスタンスを作成するためのファクトリ関数
  * @returns { atlasCanvas, packing, atlasBuffer } - アトラス Canvas、パッキング情報、PNG バッファ
@@ -39,7 +38,6 @@ export async function packAndCreateAtlas(
   imageSizes: Array<{ width: number; height: number }>,
   images: Uint8ClampedArray[],
   maxSize: number = 2048,
-  padding: number = 4,
   createCanvasFactory: CreateCanvasFactory,
   createImageDataFactory?: CreateImageDataFactory,
 ): Promise<{
@@ -55,7 +53,7 @@ export async function packAndCreateAtlas(
   }
 
   // 1. パッキング計算
-  const packing = await packTexturesNFDH(imageSizes, maxSize, maxSize, padding)
+  const packing = await packTexturesNFDH(imageSizes, maxSize, maxSize)
 
   // 2. アトラスキャンバスを生成
   const atlasCanvas = createCanvasFactory(packing.atlasWidth, packing.atlasHeight)
@@ -139,7 +137,6 @@ async function _atlasTexturesImpl(
   createImageDataFactory?: CreateImageDataFactory,
 ): Promise<AtlasResult> {
   const maxSize = options.maxSize ?? 2048
-  const padding = options.padding ?? 4
   const textureScale = options.textureScale ?? 1.0
 
   // 1. ドキュメント内のテクスチャを収集
@@ -170,7 +167,6 @@ async function _atlasTexturesImpl(
     imageSizes,
     imageDataArrays,
     maxSize,
-    padding,
     createCanvasFactory,
     createImageDataFactory,
   )

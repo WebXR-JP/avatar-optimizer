@@ -43,7 +43,7 @@ describe('atlasTexturesInDocument', () => {
     // Document without textures should not fail
     const result = await atlasTexturesInDocument(
       document,
-      { maxSize: 1024, padding: 4 },
+      { maxSize: 1024 },
       createTestCanvas,
     )
 
@@ -94,7 +94,7 @@ describe('atlasTexturesInDocument', () => {
     // Run atlas
     const result = await atlasTexturesInDocument(
       document,
-      { maxSize: 1024, padding: 4 },
+      { maxSize: 1024 },
       createTestCanvas,
     )
 
@@ -169,7 +169,7 @@ describe('atlasTexturesInDocument', () => {
 
     const result = await atlasTexturesInDocument(
       document,
-      { maxSize: 512, padding: 4 },
+      { maxSize: 512 },
       createTestCanvas,
     )
 
