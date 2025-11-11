@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { Command } from 'commander'
 import { optimizeVRM, validateVRMFile, type OptimizationOptions } from './index'
-import type { CreateCanvasFactory } from '@xrift/textranscore-ts'
+import type { CreateCanvasFactory } from './TexTransCoreTS/src'
 import { createCanvas as nodeCreateCanvas } from 'canvas'
 
 const program = new Command()

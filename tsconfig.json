@@ -16,7 +16,7 @@
     "outDir": "./dist",
     "rootDir": ".",
     "paths": {
-      "@xrift/textranscore-ts": ["./third-party/TexTransCoreTS/src"]
+      "@xrift/textranscore-ts": ["src/TexTransCoreTS/src"]
     }
   },
   "include": ["src/**/*"],

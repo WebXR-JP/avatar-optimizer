@@ -1,4 +1,4 @@
-import type { AtlasError } from '@xrift/textranscore-ts'
+import type { AtlasError } from './TexTransCoreTS/src'
 
 export interface OptimizationOptions {
   compressTextures: boolean
