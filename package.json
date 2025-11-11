@@ -49,6 +49,7 @@
     "@types/node": "^24.10.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.39.0",
+    "canvas": "^3.2.0",
     "eslint": "^9.32.0",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
@@ -59,12 +60,11 @@
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.38.0",
-    "canvas": "^3.2.0",
     "vrm-validator": "^2.0.0-dev.3.10"
   },
   "dependencies": {
+    "@xrift/avatar-optimizer-texture-atlas": "workspace:*",
     "commander": "^14.0.2",
-    "neverthrow": "^8.2.0",
-    "@xrift/avatar-optimizer-texture-atlas": "workspace:*"
+    "neverthrow": "^8.2.0"
   }
 }

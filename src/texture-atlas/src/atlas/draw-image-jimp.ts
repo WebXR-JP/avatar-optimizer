@@ -45,11 +45,13 @@ async function _createAtlasImage(
     const sourceImageData = images[packedInfo.index]
 
     // Jimp の composite メソッドを使用して合成
+    // sourceWidth/Height: 入力時の元のサイズ（画像データのサイズ）
+    // width/height: パッキング結果のサイズ（アトラスに配置するサイズ）
     await _compositeImageToAtlas(
       atlasImage,
       sourceImageData,
-      packedInfo.originalWidth,
-      packedInfo.originalHeight,
+      packedInfo.sourceWidth,
+      packedInfo.sourceHeight,
       packedInfo.width,
       packedInfo.height,
       packedInfo.x,

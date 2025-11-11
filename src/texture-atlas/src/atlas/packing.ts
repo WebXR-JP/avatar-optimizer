@@ -36,10 +36,14 @@ export function packTexturesWithMaxRects(
   sizes: Array<{ width: number; height: number }>,
   atlasWidth: number,
   atlasHeight: number,
+  originalSizes?: Array<{ width: number; height: number }>,
 ): PackingResult {
   if (sizes.length === 0) {
     throw new Error('No textures to pack')
   }
+
+  // originalSizes が指定されていない場合は sizes を使用
+  const baseOriginalSizes = originalSizes || sizes
 
   // Packer インスタンスを作成
   // - packAlgo: MaxRectsBssf（最短辺フィット）
@@ -79,7 +83,8 @@ export function packTexturesWithMaxRects(
       throw new Error(`Invalid rectangle index: ${originalIndex}`)
     }
 
-    const originalSize = sizes[originalIndex]
+    const scaledSize = sizes[originalIndex]
+    const baseOriginalSize = baseOriginalSizes[originalIndex]
 
     return {
       index: originalIndex,
@@ -87,8 +92,10 @@ export function packTexturesWithMaxRects(
       y: rect.y,
       width: rect.width,
       height: rect.height,
-      originalWidth: originalSize.width,
-      originalHeight: originalSize.height,
+      sourceWidth: baseOriginalSize.width,
+      sourceHeight: baseOriginalSize.height,
+      scaledWidth: scaledSize.width,
+      scaledHeight: scaledSize.height,
     }
   })
 
@@ -137,14 +144,21 @@ export async function packTexturesWithAutoScaling(
  * 再帰的にパッキングを試行（内部関数）
  */
 async function _tryPackWithScaling(
-  sizes: Array<{ width: number; height: number }>,
+  originalSizes: Array<{ width: number; height: number }>,
   atlasWidth: number,
   atlasHeight: number,
   scaleMultiplier: number = 1.0,
 ): Promise<PackingResult> {
+  // スケーリングを適用したサイズ
+  const currentSizes = originalSizes.map((size) => ({
+    width: Math.max(1, Math.floor(size.width * scaleMultiplier)),
+    height: Math.max(1, Math.floor(size.height * scaleMultiplier)),
+  }))
+
   try {
     // MaxRects パッキングを試行
-    return packTexturesWithMaxRects(sizes, atlasWidth, atlasHeight)
+    // originalSizes を渡して、sourceWidth/Height に記録させる
+    return packTexturesWithMaxRects(currentSizes, atlasWidth, atlasHeight, originalSizes)
   } catch (error) {
     // パッキングに失敗した場合、テクスチャサイズを 90% に縮小して再試行
     const nextScaleMultiplier = scaleMultiplier * 0.9
@@ -152,11 +166,11 @@ async function _tryPackWithScaling(
     // 最小サイズ（1x1）を下回らないかチェック
     const minScaledWidth = Math.max(
       1,
-      Math.floor(Math.min(...sizes.map((s) => s.width)) * nextScaleMultiplier),
+      Math.floor(Math.min(...originalSizes.map((s) => s.width)) * nextScaleMultiplier),
     )
     const minScaledHeight = Math.max(
       1,
-      Math.floor(Math.min(...sizes.map((s) => s.height)) * nextScaleMultiplier),
+      Math.floor(Math.min(...originalSizes.map((s) => s.height)) * nextScaleMultiplier),
     )
 
     if (minScaledWidth < 1 || minScaledHeight < 1) {
@@ -165,15 +179,9 @@ async function _tryPackWithScaling(
       )
     }
 
-    // テクスチャサイズをスケーリング
-    const scaledSizes = sizes.map((size) => ({
-      width: Math.max(1, Math.floor(size.width * nextScaleMultiplier)),
-      height: Math.max(1, Math.floor(size.height * nextScaleMultiplier)),
-    }))
-
     // 再帰的に再試行
     return _tryPackWithScaling(
-      scaledSizes,
+      originalSizes,
       atlasWidth,
       atlasHeight,
       nextScaleMultiplier,

@@ -50,10 +50,14 @@ export interface Rectangle {
 export interface PackedTexture extends Rectangle {
   /** オリジナルテクスチャのインデックス */
   index: number
-  /** オリジナルテクスチャの幅 */
-  originalWidth: number
-  /** オリジナルテクスチャの高さ */
-  originalHeight: number
+  /** 入力時の元のテクスチャ幅（スケーリング前） */
+  sourceWidth: number
+  /** 入力時の元のテクスチャ高さ（スケーリング前） */
+  sourceHeight: number
+  /** パッキング時のスケーリング後の幅（width と同じ値） */
+  scaledWidth: number
+  /** パッキング時のスケーリング後の高さ（height と同じ値） */
+  scaledHeight: number
 }
 
 /**

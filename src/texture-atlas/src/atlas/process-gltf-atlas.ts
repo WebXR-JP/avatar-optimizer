@@ -6,7 +6,6 @@
  */
 
 import { ResultAsync } from 'neverthrow'
-import { Jimp } from 'jimp'
 import type { Document, Texture } from '@gltf-transform/core'
 import type {
   AtlasOptions,
@@ -18,7 +17,7 @@ import type {
 } from '../types'
 import { packTextures } from './packing'
 import { remapAllPrimitiveUVs } from './uv-remapping'
-import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image'
+import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image-jimp'
 
 /**
  * 複数の画像データからアトラスを生成
@@ -91,7 +90,6 @@ async function _atlasTexturesImpl(
   options: AtlasOptions,
 ): Promise<AtlasResult> {
   const maxSize = options.maxSize ?? 2048
-  const textureScale = options.textureScale ?? 1.0
 
   // 1. ドキュメント内のテクスチャを収集
   const textures = document.getRoot().listTextures()
@@ -104,18 +102,12 @@ async function _atlasTexturesImpl(
     textures.map((texture) => _extractTextureImage(texture)),
   )
 
-  // 3. テクスチャをダウンスケーリング（オプション）
-  let scaledImages = textureImages
-  if (textureScale < 1.0) {
-    scaledImages = textureImages.map((img) => _scaleTextureImage(img, textureScale))
-  }
-
-  // 4. パッキング計算とアトラス生成
-  const imageSizes = scaledImages.map((img) => ({
+  // 3. パッキング計算とアトラス生成
+  const imageSizes = textureImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
-  const imageDataArrays = scaledImages.map((img) => img.data)
+  const imageDataArrays = textureImages.map((img) => img.data)
 
   const { packing: finalPacking, atlasBuffer } = await packAndCreateAtlas(
     imageSizes,
@@ -137,7 +129,7 @@ async function _atlasTexturesImpl(
   _replaceMaterialTextures(document, textures, atlasTexture)
 
   // 8. プリミティブの UV 座標を再マッピング
-  const textureSizes = scaledImages.map((img) => ({
+  const textureSizes = textureImages.map((img) => ({
     width: img.width,
     height: img.height,
   }))
@@ -441,50 +433,6 @@ function _replaceMaterialTextures(
   })
 }
 
-/**
- * テクスチャ画像をダウンスケーリング
- * Jimp を使用して高品質なスケーリングを実行
- */
-function _scaleTextureImage(
-  textureImage: {
-    width: number
-    height: number
-    data: Uint8ClampedArray
-  },
-  scale: number,
-): {
-  width: number
-  height: number
-  data: Uint8ClampedArray
-} {
-  if (scale === 1) return textureImage
-
-  const sourceImage = new Jimp({
-    width: textureImage.width,
-    height: textureImage.height,
-  })
-
-  // bitmap.data に RGBA データをコピー
-  const bitmapData = Buffer.from(textureImage.data)
-  for (let i = 0; i < bitmapData.length; i++) {
-    sourceImage.bitmap.data[i] = bitmapData[i]
-  }
-
-  // スケーリング実行
-  const newWidth = Math.ceil(textureImage.width * scale)
-  const newHeight = Math.ceil(textureImage.height * scale)
-  sourceImage.resize({
-    w: newWidth,
-    h: newHeight,
-  })
-
-  // Uint8ClampedArray に変換して返す
-  return {
-    width: newWidth,
-    height: newHeight,
-    data: new Uint8ClampedArray(sourceImage.bitmap.data),
-  }
-}
 
 /**
  * パッキング効率を計算

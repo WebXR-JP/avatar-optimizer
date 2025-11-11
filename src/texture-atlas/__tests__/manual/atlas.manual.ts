@@ -84,7 +84,7 @@ async function main() {
       console.log(`   ✓ Packed textures: ${packing.packed.length}`)
       packing.packed.forEach((rect, idx) => {
         console.log(
-          `     [${idx}] Image #${rect.index} → (${rect.x}, ${rect.y}) ${rect.width}x${rect.height}`,
+          `     [${idx}] Image #${rect.index} → (${rect.x}, ${rect.y}) ${rect.width}x${rect.height} (source: ${rect.sourceWidth}x${rect.sourceHeight}, scaled: ${rect.scaledWidth}x${rect.scaledHeight})`,
         )
       })
 
