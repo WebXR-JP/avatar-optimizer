@@ -1,7 +1,7 @@
 {
-  "name": "@xrift/textranscore-ts",
+  "name": "@xrift/avatar-optimizer-texture-atlas",
   "version": "0.1.0",
-  "description": "TypeScript implementation of texture atlas functionality from TexTransCore",
+  "description": "A texture atlas library for both browser and Node.js environments.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

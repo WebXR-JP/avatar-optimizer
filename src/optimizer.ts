@@ -20,8 +20,8 @@ import type {
  * @returns 最適化されたファイルの Result
  */
 
-import { atlasTexturesInDocument, type AtlasError } from '@xrift/textranscore-ts'
-import type { CreateCanvasFactory } from '../third-party/TexTransCoreTS/src/types'
+import { atlasTexturesInDocument, type AtlasError } from './TexTransCoreTS/src'
+import type { CreateCanvasFactory } from './TexTransCoreTS/src/types'
 import * as Types from './types'
 
 /**
