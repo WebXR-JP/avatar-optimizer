@@ -8,9 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@xrift/textranscore-ts':
+      '@xrift/avatar-optimizer-texture-atlas':
         specifier: workspace:*
-        version: link:third-party/TexTransCoreTS
+        version: link:src/texture-atlas
       commander:
         specifier: ^14.0.2
         version: 14.0.2
@@ -76,7 +76,7 @@ importers:
         specifier: ^2.0.0-dev.3.10
         version: 2.0.0-dev.3.10
 
-  third-party/TexTransCoreTS:
+  src/texture-atlas:
     dependencies:
       jimp:
         specifier: ^1.6.0

@@ -76,25 +76,6 @@ pnpm run build  # ローカルスクリプトを実行
 pnpm test       # 短縮形
 ```
 
-## API 概要
-
-```typescript
-import { atlasTexturesInDocument } from '@xrift/textranscore-ts'
-import { createCanvas } from 'canvas' // Node.js 環境の場合
-
-// glTF-Transform ドキュメント内のテクスチャをアトラス化
-const result = await atlasTexturesInDocument(
-  document,
-  { maxSize: 2048, padding: 4, textureScale: 0.5 }, // textureScale オプションを追加
-  createCanvas // Canvas ファクトリ関数を注入
-)
-
-if (result.isErr()) {
-  console.error(`Error: ${result.error.message}`)
-}
-const { document: atlasedDoc, mapping } = result.value
-```
-
 ## 重要な開発ルール
 
 ### テスト駆動開発
@@ -108,17 +89,6 @@ describe('MaxRects Bin Packing', () => {
     // ... テスト実装 ...
   })
 })
-```
-
-### ブラウザ互換性
-
-Canvas API を使用して、ブラウザとノード環境の両方で動作するよう設計：
-
-```typescript
-// utils/canvas.ts
-export function createCanvas(width: number, height: number): HTMLCanvasElement | OffscreenCanvas {
-  // ... 実装 ...
-}
 ```
 
 ### エラーハンドリング（neverthrow）
@@ -143,7 +113,7 @@ export function atlasTexturesInDocument(
 
 ## 実装状態（2025-11-10 - 完全実装）
 
-TexTransCoreTS は、テクスチャアトラス化機能に関して完全に実装されています。
+texture-atlas は、テクスチャアトラス化機能に関して完全に実装されています。
 
 #### 完成済みの機能 ✅
 
@@ -198,11 +168,7 @@ TexTransCoreTS は、テクスチャアトラス化機能に関して完全に�
     ↓
 [テクスチャ抽出]（glTF 汎用）
     ↓
-[✅ テクスチャダウンスケーリング]（オプション）
-    ↓
 [Bin Packing 計算]（MaxRects アルゴリズム）
-    ↓
-[Canvas アトラス生成]（ブラウザ/Node.js 対応）
     ↓
 [✅ アトラス画像をドキュメントに登録]
     ↓
