@@ -84,7 +84,6 @@ async function main() {
         sizes,
         images,
         atlasSize, // maxSize
-        4, // padding
         createCanvasFactory, // Canvas factory
       )
 

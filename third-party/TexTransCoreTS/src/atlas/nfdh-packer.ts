@@ -2,21 +2,18 @@
 import type { IslandTransform, PackingResult, Vector2 } from '../types'
 
 const TARGET_WIDTH = 1
-const PADDING = 0.01
 
 class UVWidthBox {
   public readonly width: number
-  public readonly padding: number
   public readonly floor: number
   public readonly height: number
   private readonly upper: IslandTransform[] = []
   private readonly lower: IslandTransform[] = []
 
-  constructor(floor: number, height: number, padding: number, width: number) {
+  constructor(floor: number, height: number, width: number) {
     this.width = width
     this.height = height
     this.floor = floor
-    this.padding = padding
   }
 
   public get ceil(): number {
@@ -37,14 +34,10 @@ class UVWidthBox {
         Math.max(this.floor, Math.min(this.floor + islandTf.size.y, this.ceil)),
       )
       const emptyWidthSize = emptyXMax - emptyXMin
-      const islandWidth = isFirst
-        ? this.padding * 0.5 + islandTf.size.x + this.padding
-        : this.padding + islandTf.size.x + this.padding
+      const islandWidth = islandTf.size.x
 
-      if (emptyWidthSize > islandWidth) {
-        islandTf.position.x = isFirst
-          ? emptyXMin + this.padding
-          : emptyXMin + this.padding * 2
+      if (emptyWidthSize >= islandWidth) {
+        islandTf.position.x = emptyXMin
         islandTf.position.y = this.floor
         this.lower.push(islandTf)
         return true
@@ -61,14 +54,10 @@ class UVWidthBox {
         ? this.width
         : this.upper[this.upper.length - 1].position.x
       const emptyWidthSize = emptyXMax - emptyXMin
-      const islandWidth = isFirst
-        ? this.padding * 2 + islandTf.size.x + this.padding
-        : this.padding * 2 + islandTf.size.x + this.padding * 2
+      const islandWidth = islandTf.size.x
 
-      if (emptyWidthSize > islandWidth) {
-        islandTf.position.x = isFirst
-          ? emptyXMax - islandTf.size.x - this.padding
-          : emptyXMax - islandTf.size.x - this.padding * 2
+      if (emptyWidthSize >= islandWidth) {
+        islandTf.position.x = emptyXMax - islandTf.size.x
         islandTf.position.y = this.ceil - islandTf.size.y
         this.upper.push(islandTf)
         return true
@@ -87,7 +76,7 @@ class UVWidthBox {
     const targetF2Height = targetHeight - this.floor
 
     for (const island of this.lower) {
-      if (targetF2Height < island.size.y + this.padding * 2) {
+      if (targetF2Height < island.size.y) {
         xMin = Math.max(xMin, island.position.x + island.size.x)
       }
     }
@@ -103,7 +92,7 @@ class UVWidthBox {
     const targetC2Height = this.ceil - targetHeight
 
     for (const island of this.upper) {
-      if (targetC2Height < island.size.y + this.padding * 2) {
+      if (targetC2Height < island.size.y) {
         xMax = Math.min(xMax, island.position.x)
       }
     }
@@ -118,7 +107,6 @@ function swap(v: Vector2): Vector2 {
 function tryNFDHPlasFC(
   sortedIslands: IslandTransform[],
   targetHeight: number,
-  islandPadding: number,
 ): boolean {
   const uvWidthBoxes: UVWidthBox[] = []
 
@@ -139,15 +127,8 @@ function tryNFDHPlasFC(
     }
 
     const isFirstBox = uvWidthBoxes.length === 0
-    const floor = isFirstBox
-      ? islandPadding
-      : uvWidthBoxes[uvWidthBoxes.length - 1].ceil + islandPadding * 2
-    const newWithBox = new UVWidthBox(
-      floor,
-      islandTf.size.y,
-      islandPadding,
-      TARGET_WIDTH,
-    )
+    const floor = isFirstBox ? 0 : uvWidthBoxes[uvWidthBoxes.length - 1].ceil
+    const newWithBox = new UVWidthBox(floor, islandTf.size.y, TARGET_WIDTH)
     uvWidthBoxes.push(newWithBox)
 
     if (!newWithBox.trySetBox(islandTf)) {
@@ -157,13 +138,12 @@ function tryNFDHPlasFC(
 
   if (uvWidthBoxes.length === 0) return true
   const lastHeight = uvWidthBoxes[uvWidthBoxes.length - 1].ceil
-  return lastHeight + islandPadding <= targetHeight
+  return lastHeight <= targetHeight
 }
 
 export function nextFitDecreasingHeightPlusFloorCeiling(
   islands: IslandTransform[],
   targetHeight: number,
-  islandPadding: number = PADDING,
 ): boolean {
   if (islands.length === 0) {
     return false
@@ -182,7 +162,7 @@ export function nextFitDecreasingHeightPlusFloorCeiling(
   // Sort by height (decreasing)
   islands.sort((a, b) => b.size.y - a.size.y)
 
-  if (tryNFDHPlasFC(islands, targetHeight, islandPadding)) {
+  if (tryNFDHPlasFC(islands, targetHeight)) {
     // Post-rotation
     for (const tf of islands) {
       if (tf.rotation !== 0) {
@@ -200,7 +180,6 @@ export async function packTexturesNFDH(
   sizes: Array<{ width: number; height: number }>,
   atlasWidth: number,
   atlasHeight: number,
-  padding: number = PADDING,
 ): Promise<PackingResult> {
   // テクスチャサイズの自動スケーリングで再試行する内部関数
   async function tryPackWithScaling(
@@ -219,7 +198,6 @@ export async function packTexturesNFDH(
     const success = nextFitDecreasingHeightPlusFloorCeiling(
       islands,
       1.0, // Target height is normalized to 1.0
-      padding / currentAtlasWidth,
     )
 
     if (success) {
