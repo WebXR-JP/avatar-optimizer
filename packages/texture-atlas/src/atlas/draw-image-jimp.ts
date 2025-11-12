@@ -1,7 +1,7 @@
 /**
  * テクスチャアトラス画像生成
  *
- * PackingResult と画像データ配列を受け取って、
+ * 正規化パッキング結果と画像データ配列を受け取って、
  * 統合されたアトラス画像を生成します。
  *
  * Jimp を使用してブラウザとNode.js環境の両方をサポート
@@ -9,20 +9,20 @@
  */
 
 import { Jimp } from 'jimp'
-import type { PackingResult } from '../types'
+import type { NormalizedPackingResult, NormalizedPackedTexture } from '../types'
 
 /**
  * アトラス画像を作成して各テクスチャを合成
  *
- * PackingResult と各画像データを受け取り、
+ * 正規化済みパッキング情報と各画像データを受け取り、
  * 統合されたアトラス画像を生成します。
  *
- * @param packing - パッキング情報（atlasWidth, atlasHeight, packed[]）
+ * @param packing - 正規化パッキング情報（atlasWidth, atlasHeight, packed[]）
  * @param images - 各画像の Uint8ClampedArray データ（RGBA）
  * @returns 作成されたアトラス画像（Jimp オブジェクト）
  */
 async function _createAtlasImage(
-  packing: PackingResult,
+  packing: NormalizedPackingResult,
   images: Uint8ClampedArray[],
 ): Promise<any> {
   if (packing.packed.length === 0) {
@@ -44,6 +44,12 @@ async function _createAtlasImage(
     const packedInfo = packing.packed[i]
     const sourceImageData = images[packedInfo.index]
 
+    const targetRect = _normalizedRegionToPixels(
+      packedInfo,
+      packing.atlasWidth,
+      packing.atlasHeight,
+    )
+
     // Jimp の composite メソッドを使用して合成
     // sourceWidth/Height: 入力時の元のサイズ（画像データのサイズ）
     // width/height: パッキング結果のサイズ（アトラスに配置するサイズ）
@@ -52,14 +58,36 @@ async function _createAtlasImage(
       sourceImageData,
       packedInfo.sourceWidth,
       packedInfo.sourceHeight,
-      packedInfo.width,
-      packedInfo.height,
-      packedInfo.x,
-      packedInfo.y,
+      targetRect.width,
+      targetRect.height,
+      targetRect.x,
+      targetRect.y,
     )
   }
 
   return atlasImage
+}
+
+/**
+ * 正規化座標の矩形情報をピクセル座標へ変換
+ */
+function _normalizedRegionToPixels(
+  region: NormalizedPackedTexture,
+  atlasWidth: number,
+  atlasHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  const width = Math.max(
+    1,
+    Math.round((region.uvMax.u - region.uvMin.u) * atlasWidth),
+  )
+  const height = Math.max(
+    1,
+    Math.round((region.uvMax.v - region.uvMin.v) * atlasHeight),
+  )
+  const x = Math.round(region.uvMin.u * atlasWidth)
+  const y = Math.round(region.uvMin.v * atlasHeight)
+
+  return { x, y, width, height }
 }
 
 /**
@@ -99,17 +127,17 @@ async function _compositeImageToAtlas(
 /**
  * 複数の画像データをアトラス画像に合成
  *
- * PackingResult と各画像データを受け取り、
+ * 正規化パッキング情報と各画像データを受け取り、
  * 統合されたアトラス画像（Uint8ClampedArray）を生成します。
  *
  * Jimp の composite メソッドを使用してブラウザとNode.js環境の両方で動作します。
  *
- * @param packing - パッキング情報（atlasWidth, atlasHeight, packed[]）
+ * @param packing - 正規化パッキング情報（atlasWidth, atlasHeight, packed[]）
  * @param images - 各画像の Uint8ClampedArray データ（RGBA）
  * @returns アトラス画像データ（Uint8ClampedArray、RGBA形式）
  */
 export async function drawImagesToAtlas(
-  packing: PackingResult,
+  packing: NormalizedPackingResult,
   images: Uint8ClampedArray[],
 ): Promise<Uint8ClampedArray> {
   try {
@@ -127,17 +155,17 @@ export async function drawImagesToAtlas(
 /**
  * 複数の画像データをアトラス画像に合成して PNG バッファに変換
  *
- * PackingResult と各画像データを受け取り、
+ * 正規化パッキング情報と各画像データを受け取り、
  * 統合されたアトラス画像を PNG 形式で返します。
  *
  * Jimp の composite メソッドを使用してブラウザとNode.js環境の両方で動作します。
  *
- * @param packing - パッキング情報（atlasWidth, atlasHeight, packed[]）
+ * @param packing - 正規化パッキング情報（atlasWidth, atlasHeight, packed[]）
  * @param images - 各画像の Uint8ClampedArray データ（RGBA）
  * @returns PNG 形式の Uint8Array バッファ
  */
 export async function drawImagesToAtlasBuffer(
-  packing: PackingResult,
+  packing: NormalizedPackingResult,
   images: Uint8ClampedArray[],
 ): Promise<Uint8Array> {
   try {

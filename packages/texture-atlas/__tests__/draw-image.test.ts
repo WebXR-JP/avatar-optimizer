@@ -9,6 +9,7 @@
  */
 
 import { drawImagesToAtlas, drawImagesToAtlasBuffer } from '../src/atlas/draw-image-jimp'
+import { toNormalizedPackingResult } from '../src/atlas/packing-utils'
 import type { PackingResult, PackedTexture } from '../src/types'
 
 /**
@@ -38,6 +39,10 @@ function createTestImageData(
   return data
 }
 
+function normalizePacking(packing: PackingResult) {
+  return toNormalizedPackingResult(packing)
+}
+
 describe('drawImagesToAtlas', () => {
   it('should draw single image to atlas', async () => {
     const imageData = createTestImageData(256, 256, 0xff0000ff) // 赤
@@ -60,7 +65,7 @@ describe('drawImagesToAtlas', () => {
       ],
     }
 
-    const result = await drawImagesToAtlas(packing, [imageData])
+    const result = await drawImagesToAtlas(normalizePacking(packing), [imageData])
 
     // アトラス画像データが返される
     expect(result).toBeInstanceOf(Uint8ClampedArray)
@@ -113,7 +118,7 @@ describe('drawImagesToAtlas', () => {
       ],
     }
 
-    const result = await drawImagesToAtlas(packing, [image1, image2, image3])
+    const result = await drawImagesToAtlas(normalizePacking(packing), [image1, image2, image3])
 
     expect(result).toBeInstanceOf(Uint8ClampedArray)
     expect(result.length).toBe(512 * 512 * 4)
@@ -148,7 +153,7 @@ describe('drawImagesToAtlas', () => {
       ],
     }
 
-    const result = await drawImagesToAtlas(packing, [imageData])
+    const result = await drawImagesToAtlas(normalizePacking(packing), [imageData])
 
     expect(result).toBeInstanceOf(Uint8ClampedArray)
     expect(result.length).toBe(512 * 512 * 4)
@@ -161,7 +166,7 @@ describe('drawImagesToAtlas', () => {
       packed: [],
     }
 
-    await expect(drawImagesToAtlas(packing, [])).rejects.toThrow(
+    await expect(drawImagesToAtlas(normalizePacking(packing), [])).rejects.toThrow(
       'No packed textures provided',
     )
   })
@@ -199,7 +204,7 @@ describe('drawImagesToAtlas', () => {
     }
 
     // packed は2つだが images は1つ
-    await expect(drawImagesToAtlas(packing, [imageData])).rejects.toThrow(
+    await expect(drawImagesToAtlas(normalizePacking(packing), [imageData])).rejects.toThrow(
       'Packing result and images length mismatch',
     )
   })
@@ -227,7 +232,7 @@ describe('drawImagesToAtlasBuffer', () => {
       ],
     }
 
-    const result = await drawImagesToAtlasBuffer(packing, [imageData])
+    const result = await drawImagesToAtlasBuffer(normalizePacking(packing), [imageData])
 
     // PNG バッファが返される
     expect(result).toBeInstanceOf(Uint8Array)
@@ -273,7 +278,7 @@ describe('drawImagesToAtlasBuffer', () => {
       ],
     }
 
-    const result = await drawImagesToAtlasBuffer(packing, [image1, image2])
+    const result = await drawImagesToAtlasBuffer(normalizePacking(packing), [image1, image2])
 
     expect(result).toBeInstanceOf(Uint8Array)
     // PNG シグネチャチェック
@@ -290,7 +295,7 @@ describe('drawImagesToAtlasBuffer', () => {
       packed: [],
     }
 
-    await expect(drawImagesToAtlasBuffer(packing, [])).rejects.toThrow(
+    await expect(drawImagesToAtlasBuffer(normalizePacking(packing), [])).rejects.toThrow(
       'No packed textures provided',
     )
   })
@@ -327,7 +332,7 @@ describe('drawImagesToAtlasBuffer', () => {
       ],
     }
 
-    await expect(drawImagesToAtlasBuffer(packing, [imageData])).rejects.toThrow(
+    await expect(drawImagesToAtlasBuffer(normalizePacking(packing), [imageData])).rejects.toThrow(
       'Packing result and images length mismatch',
     )
   })

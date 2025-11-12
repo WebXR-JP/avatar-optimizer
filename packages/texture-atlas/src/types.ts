@@ -3,27 +3,6 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-import type { Primitive, Texture } from '@gltf-transform/core'
-
-/**
- * 2D ベクトル
- */
-export interface Vector2 {
-  x: number
-  y: number
-}
-
-/**
- * パッキング対象となるテクスチャアイランドの情報
- * C# の IslandTransform に相当
- */
-export interface IslandTransform {
-  position: Vector2
-  size: Vector2
-  rotation: number
-  originalIndex: number
-}
-
 /**
  * テクスチャアトラス化のオプション
  */
@@ -32,6 +11,47 @@ export interface AtlasOptions {
   maxSize?: number
   /** テクスチャのダウンスケール係数 (0.1-1.0)。デフォルト: 1.0（縮小なし） */
   textureScale?: number
+}
+
+/**
+ * アトラス化対象のテクスチャスロット種別
+ * 既知スロット + 拡張用 custom を許容
+ */
+export type TextureSlot =
+  | 'baseColor'
+  | 'metallicRoughness'
+  | 'normal'
+  | 'occlusion'
+  | 'emissive'
+  | `custom:${string}`
+
+/**
+ * アトラス化対象となる1枚のテクスチャ
+ */
+export interface AtlasTextureDescriptor {
+  /** シーン内で一意となるテクスチャ ID */
+  id: string
+  /** このテクスチャが属するスロット */
+  slot: TextureSlot
+  /** 画像の幅（ピクセル） */
+  width: number
+  /** 画像の高さ（ピクセル） */
+  height: number
+  /** RGBA ビットマップを返す非同期ローダー */
+  readImageData(): Promise<Uint8Array>
+}
+
+/**
+ * 1 つのマテリアルに紐づくテクスチャ集合
+ * primaryTextureIndex によって配置の基準テクスチャを決める
+ */
+export interface AtlasMaterialDescriptor {
+  /** マテリアルを一意に識別する ID */
+  id: string
+  /** このマテリアルでアトラス化したいテクスチャ群 */
+  textures: AtlasTextureDescriptor[]
+  /** textures 配列内で配置基準にする代表テクスチャのインデックス */
+  primaryTextureIndex: number
 }
 
 /**
@@ -73,12 +93,73 @@ export interface PackingResult {
 }
 
 /**
+ * 正規化座標で表現したパッキング結果
+ */
+export interface NormalizedPackedTexture {
+  /** オリジナルテクスチャのインデックス */
+  index: number
+  /** UV 空間での配置（最小値） */
+  uvMin: { u: number; v: number }
+  /** UV 空間での配置（最大値） */
+  uvMax: { u: number; v: number }
+  /** 入力時の元のテクスチャ幅（スケーリング前） */
+  sourceWidth: number
+  /** 入力時の元のテクスチャ高さ（スケーリング前） */
+  sourceHeight: number
+  /** パッキング時のスケーリング後の幅 */
+  scaledWidth: number
+  /** パッキング時のスケーリング後の高さ */
+  scaledHeight: number
+}
+
+export interface NormalizedPackingResult {
+  atlasWidth: number
+  atlasHeight: number
+  packed: NormalizedPackedTexture[]
+}
+
+/**
  * テクスチャ画像データ
  */
 export interface TextureImageData {
   width: number
   height: number
   data: Uint8ClampedArray
+}
+
+/**
+ * スロットごとに生成されたアトラス画像
+ */
+export interface SlotAtlasImage {
+  /** 対象となるテクスチャスロット */
+  slot: TextureSlot
+  /** アトラス PNG などのバイナリバッファ */
+  atlasImage: Uint8Array
+  /** アトラス幅 */
+  atlasWidth: number
+  /** アトラス高さ */
+  atlasHeight: number
+}
+
+/**
+ * マテリアル単位で適用する UV 変換行列
+ * 3x3 行列を一次元配列で保持 (列優先/行優先は利用側と合意)
+ */
+export interface MaterialPlacement {
+  /** UV を再計算する対象マテリアル ID */
+  materialId: string
+  /** 3x3 変換行列（9 要素） */
+  uvTransform: [number, number, number, number, number, number, number, number, number]
+}
+
+/**
+ * アトラス生成結果（ドキュメント非依存のメタデータのみ）
+ */
+export interface AtlasBuildResult {
+  /** スロットごとに生成されたアトラス画像 */
+  atlases: SlotAtlasImage[]
+  /** 各マテリアルに適用する UV 変換行列 */
+  placements: MaterialPlacement[]
 }
 
 /**
@@ -124,8 +205,3 @@ export type AtlasError =
   | { type: 'DOCUMENT_ERROR'; message: string }
   | { type: 'UV_MAPPING_FAILED'; message: string }
   | { type: 'UNKNOWN_ERROR'; message: string }
-
-
-
-
-
