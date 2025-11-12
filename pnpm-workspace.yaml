@@ -1,2 +1,3 @@
 packages:
-  - 'src/texture-atlas'
+  - 'packages/avatar-optimizer'
+  - 'packages/texture-atlas'
