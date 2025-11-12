@@ -1,0 +1,69 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/typescript-node
+{
+	"name": "XRift Avatar Optimizer",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".",
+		"args": {
+			"VARIANT": "1-22-bookworm"
+		}
+	},
+	"mounts": [
+		"source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+		"source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+		"source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
+		"source=gemini-cli-config-${devcontainerId},target=/home/node/.gemini,type=volume",
+		"source=opencode-config-${devcontainerId},target=/home/node/.opencode,type=volume",
+		"source=pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume"
+	],
+	"containerEnv": {
+		"NODE_OPTIONS": "--max-old-space-size=4096",
+		"CLAUDE_CONFIG_DIR": "/home/node/.claude",
+		"CODEX_CONFIG_DIR": "/home/node/.codex",
+		"GEMINI_CONFIG_DIR": "/home/node/.gemini",
+		"OPENCODE_CONFIG_DIR": "/home/node/.opencode",
+		"POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+	},
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {},
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "yarn install",
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"anthropic.claude-code",
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"eamodio.gitlens"
+			],
+			"settings": {
+				"editor.formatOnSave": true,
+				"editor.defaultFormatter": "esbenp.prettier-vscode",
+				"editor.codeActionsOnSave": {
+					"source.fixAll.eslint": "explicit"
+				},
+				"terminal.integrated.defaultProfile.linux": "zsh",
+				"terminal.integrated.profiles.linux": {
+					"bash": {
+						"path": "bash",
+						"icon": "terminal-bash"
+					},
+					"zsh": {
+						"path": "zsh"
+					}
+				}
+			}
+		}
+	},
+	"remoteEnv": {
+		"PNPM_HOME": "/home/node/.local/share/pnpm",
+		"PATH": "/home/node/.local/share/pnpm:${containerEnv:PATH}"
+	},
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}
