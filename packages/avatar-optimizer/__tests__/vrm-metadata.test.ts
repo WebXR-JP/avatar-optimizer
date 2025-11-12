@@ -1,7 +1,12 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'node:url'
 import { WebIO, type Node, Document } from '@gltf-transform/core'
+import { beforeAll, describe, expect, it } from 'vitest'
+
 import { optimizeVRM, type OptimizationOptions } from '../src/index'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * GLB バイナリから JSON チャンクを直接抽出

@@ -8,6 +8,8 @@
  * 4. エッジケースと境界条件
  */
 
+import { describe, expect, it } from 'vitest'
+
 import { packTextures } from '../src/atlas/packing'
 import type { PackingResult, PackedTexture } from '../src/types'
 

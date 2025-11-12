@@ -14,7 +14,7 @@
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "types": ["node", "jest"],
+    "types": ["node", "vitest/globals"],
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "__tests__"]

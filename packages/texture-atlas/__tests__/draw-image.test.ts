@@ -8,6 +8,8 @@
  * 4. エラーハンドリング（入力チェック）
  */
 
+import { describe, expect, it } from 'vitest'
+
 import { drawImagesToAtlas, drawImagesToAtlasBuffer } from '../src/atlas/draw-image-jimp'
 import { toNormalizedPackingResult } from '../src/atlas/packing-utils'
 import type { PackingResult, PackedTexture } from '../src/types'
