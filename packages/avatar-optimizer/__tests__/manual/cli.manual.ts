@@ -5,7 +5,7 @@
  * It can be run with:
  *
  * 1. Using tsx directly:
- *    npx tsx src/cli.ts __tests__/fixtures/sample.vrm -o __tests__/output/optimized.vrm
+ *    npx tsx src/cli/index.ts __tests__/fixtures/sample.vrm -o __tests__/output/optimized.vrm
  *
  * 2. Using the built CLI:
  *    npm run build
@@ -54,7 +54,7 @@ async function manualTestCLI() {
   // Test 2: Run CLI with default options
   console.log('\n📋 Test 2: Run CLI with default options')
   try {
-    const cliPath = path.join(__dirname, '../../src/cli.ts')
+    const cliPath = path.join(__dirname, '../../src/cli/index.ts')
     const command = `npx tsx "${cliPath}" "${fixtureFile}" -o "${outputFile}"`
     console.log(`   Command: ${command}`)
 
@@ -79,7 +79,7 @@ async function manualTestCLI() {
   console.log('\n📋 Test 3: Run CLI with custom options')
   try {
     const customOutputFile = path.join(__dirname, '../output/cli-test-custom.vrm')
-    const cliPath = path.join(__dirname, '../../src/cli.ts')
+    const cliPath = path.join(__dirname, '../../src/cli/index.ts')
     const command = `npx tsx "${cliPath}" "${fixtureFile}" -o "${customOutputFile}" --compress-textures --max-texture-size 1024`
     console.log(`   Command: ${command}`)
 

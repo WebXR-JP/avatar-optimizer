@@ -1,5 +1,7 @@
 // Optimization functions
-export { calculateVRMStatistics, optimizeVRM, validateVRMFile } from './optimizer'
+export { optimizeVRM } from './core/optimizer'
+export { calculateVRMStatistics } from './core/statistics'
+export { validateVRMFile } from './core/validation'
 
 // Type exports
 export type {

@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-> **注意:** このコンテンツは `.rulesync/rules/CLAUDE.md` を編集してから `rulesync generate --targets claudecode --features rules` を実行することで `CLAUDE.md` に反映されます。`CLAUDE.md` そのものを直接編集しないでください。
-
 このファイルは、@xrift/avatar-optimizer (3Dモデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
 
 ## プロジェクト概要
@@ -172,13 +170,13 @@ pnpm -F texture-atlas exec tsx __tests__/manual/atlas.manual.ts
 3. **モジュール形式**: 名前付きエクスポートを使用 (ESM/CJS の両形式をサポート)
 4. **依存関係最小化**: ピア依存関係は @gltf-transform のみ
 5. **テスト**: `__tests__/` ディレクトリ内で純粋関数のテストを記述
-6. **CLI ビルド**: `src/cli.ts` は ES Module (`.mjs`) として独立ビルド。ブラウザとの互換性は不要
+6. **CLI ビルド**: `src/cli/index.ts` は ES Module (`.mjs`) として独立ビルド。ブラウザとの互換性は不要
 
 ## CLI 開発ガイドライン
 
 ### CLI アーキテクチャ
 
-- **エントリーポイント**: `packages/avatar-optimizer/src/cli.ts`
+- **エントリーポイント**: `packages/avatar-optimizer/src/cli/index.ts`
 - **ビルド出力**: `packages/avatar-optimizer/dist/cli.mjs` (Node.js 実行可能、shebang 付き)
 - **パーサー**: Commander.js
 - **ファイル I/O**: `fs/promises` (Node.js 専用)
@@ -249,7 +247,7 @@ program
 ```typescript
 {
   name: 'cli',
-  entry: ['src/cli.ts'],
+  entry: ['src/cli/index.ts'],
   format: ['esm'],           // Node.js 用 ES Module
   outExtension: () => ({ js: '.mjs' }),  // .mjs 拡張子
   dts: false,                // CLI は型定義不要
