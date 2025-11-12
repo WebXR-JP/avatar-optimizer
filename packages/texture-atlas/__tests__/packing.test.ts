@@ -70,8 +70,10 @@ describe('MaxRects パッカー - packTextures', () => {
         y: 0,
         width: 256,
         height: 256,
-        originalWidth: 256,
-        originalHeight: 256,
+        sourceWidth: 256,
+        sourceHeight: 256,
+        scaledWidth: 256,
+        scaledHeight: 256,
       })
     })
 
@@ -373,8 +375,8 @@ describe('MaxRects パッカー - packTextures', () => {
 
       for (const packed of result.packed) {
         const original = sizes[packed.index]
-        expect(packed.originalWidth).toBe(original.width)
-        expect(packed.originalHeight).toBe(original.height)
+        expect(packed.sourceWidth).toBe(original.width)
+        expect(packed.sourceHeight).toBe(original.height)
       }
     })
   })
