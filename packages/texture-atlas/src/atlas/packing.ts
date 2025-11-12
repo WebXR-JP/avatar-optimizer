@@ -208,19 +208,3 @@ export async function packTextures(
 ): Promise<PackingResult> {
   return packTexturesWithAutoScaling(sizes, atlasWidth, atlasHeight)
 }
-
-/**
- * 旧 NFDH パッカーの互換性ラッパー
- *
- * 既存のコードとの互換性のため、packTexturesNFDH という名前で
- * packTextures を呼び出すラッパーを提供します。
- *
- * @deprecated packTextures を使用してください
- */
-export async function packTexturesNFDH(
-  sizes: Array<{ width: number; height: number }>,
-  atlasWidth: number,
-  atlasHeight: number,
-): Promise<PackingResult> {
-  return packTextures(sizes, atlasWidth, atlasHeight)
-}

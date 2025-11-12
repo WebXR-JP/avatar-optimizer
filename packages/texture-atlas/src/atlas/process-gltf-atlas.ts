@@ -16,6 +16,7 @@ import type {
   PackingResult,
 } from '../types'
 import { packTextures } from './packing'
+import { toNormalizedPackingResult } from './packing-utils'
 import { remapAllPrimitiveUVs } from './uv-remapping'
 import { drawImagesToAtlas, drawImagesToAtlasBuffer } from './draw-image-jimp'
 
@@ -49,11 +50,13 @@ export async function packAndCreateAtlas(
   // 1. パッキング計算
   const packing = await packTextures(imageSizes, maxSize, maxSize)
 
+  const normalizedPacking = toNormalizedPackingResult(packing)
+
   // 2. 画像をアトラスに合成（Uint8ClampedArray を返す）
-  const atlasImageData = await drawImagesToAtlas(packing, images)
+  const atlasImageData = await drawImagesToAtlas(normalizedPacking, images)
 
   // 3. アトラス画像データを PNG バッファに変換（Canvas操作は draw-image で完結）
-  const atlasBuffer = await drawImagesToAtlasBuffer(packing, images)
+  const atlasBuffer = await drawImagesToAtlasBuffer(normalizedPacking, images)
 
   return {
     atlasImageData,
