@@ -4,8 +4,10 @@
  * UV 座標の再計算ロジックが正確に動作することを検証
  */
 
-import { remapUVCoordinate, remapPrimitiveUVs } from '../src/atlas/uv-remapping'
 import { Document, Primitive } from '@gltf-transform/core'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { remapUVCoordinate, remapPrimitiveUVs } from '../src/atlas/uv-remapping'
 
 describe('UV Remapping', () => {
   describe('remapUVCoordinate', () => {
@@ -142,7 +144,9 @@ describe('UV Remapping', () => {
 
       // 更新された値を確認
       const remappedUVs = uvAttribute.getArray()
-      if (!remappedUVs) fail('UV array should exist')
+      if (!remappedUVs) {
+        throw new Error('UV array should exist')
+      }
 
       // 元の (0, 0) は (0, 0) のままであるべき
       expect(remappedUVs[0]).toBeCloseTo(0, 3)

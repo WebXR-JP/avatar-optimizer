@@ -1,6 +1,11 @@
-import { validateVRMFile } from '../src/index'
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+import { validateVRMFile } from '../src/index'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 describe('validateVRMFile', () => {
   // Use a fixture file if available, otherwise skip

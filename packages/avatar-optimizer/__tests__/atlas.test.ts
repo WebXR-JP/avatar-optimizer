@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest'
+
 // Helper function for UV remapping (copied from atlasTexture.ts for testing)
 interface IslandRegion {
   sourceTextureIndex: number

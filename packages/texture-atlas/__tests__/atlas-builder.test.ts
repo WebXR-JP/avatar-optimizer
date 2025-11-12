@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest'
+
 import { buildAtlases } from '../src/core/atlas-builder'
 import type { AtlasMaterialDescriptor, TextureSlot } from '../src/types'
 
