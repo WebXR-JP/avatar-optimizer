@@ -151,7 +151,7 @@ texture-atlas は、テクスチャアトラス化機能に関して完全に実
     *   _scaleTextureImage() 実装
     *   ニアレストネイバー法による高速処理
 
-**CLI 統合** (src/cli.ts)
+**CLI 統合** (src/cli/index.ts)
 1.  **完全な CLI サポート** ✅
     *   `--option-max-texture-size` オプション
     *   `--texture-scale` オプション

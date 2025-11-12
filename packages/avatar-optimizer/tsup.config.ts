@@ -18,7 +18,7 @@ export default defineConfig([
   // CLI build
   {
     name: 'cli',
-    entry: ['src/cli.ts'],
+    entry: ['src/cli/index.ts'],
     format: ['esm'],
     dts: false,
     splitting: false,
