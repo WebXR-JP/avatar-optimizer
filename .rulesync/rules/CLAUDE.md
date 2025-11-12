@@ -1,3 +1,11 @@
+---
+root: true
+targets:
+  - claudecode
+description: '@xrift/avatar-optimizer development guide for Claude Code'
+globs:
+  - '**/*'
+---
 # CLAUDE.md
 
 > **注意:** このコンテンツは `.rulesync/rules/CLAUDE.md` を編集してから `rulesync generate --targets claudecode --features rules` を実行することで `CLAUDE.md` に反映されます。`CLAUDE.md` そのものを直接編集しないでください。
