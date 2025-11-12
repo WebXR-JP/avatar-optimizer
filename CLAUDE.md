@@ -12,29 +12,55 @@
 - **TypeScript** (5.0+): 型安全なユーティリティ開発
 - **@gltf-transform/core** (4.0+): glTF/VRM モデル操作
 - **@gltf-transform/extensions** (4.0+): VRM 拡張機能サポート
+- **pnpm** (workspace): monorepo パッケージ管理
 - **tsup** (8.0+): ビルドツール (ESM/CJS 出力)
 
-### ディレクトリ構成
+### ディレクトリ構成（pnpm monorepo）
 
 ```
-src/
-  ├── index.ts          # メインエントリーポイント (ライブラリエクスポート管理)
-  ├── cli.ts            # CLI エントリーポイント (Commander ベース)
-  ├── optimizer.ts      # 最適化ロジック
-  └── types.ts          # 型定義集約
+packages/
+├── avatar-optimizer/              # メインライブラリ + CLI パッケージ
+│   ├── src/
+│   │   ├── index.ts              # ライブラリエクスポート管理
+│   │   ├── cli.ts                # CLI エントリーポイント (Commander ベース)
+│   │   ├── optimizer.ts          # 最適化ロジック
+│   │   └── types.ts              # 型定義集約
+│   ├── __tests__/
+│   │   ├── *.test.ts             # Jest 自動テスト
+│   │   ├── fixtures/             # テスト用サンプルファイル (git追跡)
+│   │   ├── input/                # 手動確認用入力ファイル (.gitignore)
+│   │   ├── output/               # 手動実行スクリプトの出力 (.gitignore)
+│   │   └── manual/               # 手動実行確認スクリプト
+│   ├── dist/                     # ビルド出力 (ESM/型定義 + CLI)
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── jest.config.js
+│   └── tsup.config.ts
+│
+└── texture-atlas/                 # テクスチャアトラスライブラリ
+    ├── src/
+    │   ├── index.ts              # メインエントリーポイント
+    │   ├── types.ts              # 型定義集約
+    │   ├── atlas/                # アトラス処理ロジック
+    │   │   ├── packing.ts        # Bin packing アルゴリズム
+    │   │   ├── draw-image-jimp.ts # Canvas 画像描画
+    │   │   ├── process-gltf-atlas.ts # glTF ドキュメント統合
+    │   │   └── uv-remapping.ts   # UV 座標再マッピング
+    │   └── utils/                # ユーティリティ
+    │       └── canvas.ts         # Canvas 操作
+    ├── __tests__/
+    │   ├── *.test.ts             # Jest テスト
+    │   ├── fixtures/             # テスト用画像
+    │   ├── manual/               # 手動確認スクリプト
+    │   └── output/               # 出力結果
+    ├── dist/                     # ビルド出力
+    ├── package.json
+    ├── tsconfig.json
+    ├── jest.config.js
+    └── tsup.config.ts
 
-__tests__/
-  ├── *.test.ts         # Jest 自動テスト
-  ├── fixtures/         # テスト用サンプルファイル (git追跡)
-  ├── input/            # 手動確認用入力ファイル (.gitignore)
-  ├── output/           # 手動実行スクリプトの出力 (.gitignore)
-  └── manual/           # 手動実行確認スクリプト (git追跡)
-       └── cli.manual.ts # CLI 手動テストスクリプト
-
-dist/                   # ビルド出力 (ESM/型定義 + CLI)
-  ├── index.js          # ライブラリ ESM
-  ├── index.d.ts        # 型定義
-  └── cli.mjs           # CLI バイナリ (実行可能)
+pnpm-workspace.yaml               # workspace 設定
+package.json                       # ルート package.json (scripts 集約)
 ```
 
 ### 主要な API
@@ -54,58 +80,87 @@ xrift-optimize <input> -o <output> [options]
 
 ## 開発コマンド
 
-このプロジェクトは **pnpm** をパッケージマネージャーとして使用し、TexTransCoreTS は **pnpm workspace** で管理されています。
+このプロジェクトは **pnpm monorepo** として構成されており、`packages/` ディレクトリ下に複数のパッケージが管理されています。
+
+### ルートディレクトリでの操作
 
 ```bash
-# ルートディレクトリでの操作（全ワークスペース）
 # 依存関係インストール（全ワークスペース）
 pnpm install
 
-# ビルド (ライブラリ + CLI + TexTransCoreTS)
-pnpm run build
+# ビルド（全パッケージ）
+pnpm build
 
-# ウォッチモード (開発時)
-pnpm run dev
+# ウォッチモード（全パッケージ、開発時）
+pnpm dev
+
+# テスト実行（全パッケージ）
+pnpm test
+
+# Lint チェック
+pnpm lint
+
+# コード フォーマット
+pnpm format
 
 # 公開前ビルド
-pnpm run prepublishOnly
-
-# CLI のローカルテスト
-node dist/cli.mjs input.vrm -o output.vrm
-
-# CLI を グローバルコマンドとしてインストール（開発時）
-pnpm link
-xrift-optimize input.vrm -o output.vrm
-
-# 手動テストスクリプトの実行
-pnpm exec tsx __tests__/manual/cli.manual.ts
-
-# ========================================
-# TexTransCoreTS ワークスペース操作
-# ========================================
-
-# TexTransCoreTS のみをビルド
-pnpm -F textranscore-ts run build
-
-# TexTransCoreTS のテストを実行
-pnpm -F textranscore-ts run test
-
-# TexTransCoreTS の開発モード（ウォッチ）
-pnpm -F textranscore-ts run dev
-
-# TexTransCoreTS の依存関係を更新
-pnpm -F textranscore-ts add <package-name>
+pnpm prepublishOnly
 ```
 
-**pnpm コマンドの基本**:
+### 特定のパッケージ操作
+
+```bash
+# avatar-optimizer のビルド
+pnpm -F avatar-optimizer run build
+
+# avatar-optimizer の開発モード
+pnpm -F avatar-optimizer run dev
+
+# avatar-optimizer のテスト
+pnpm -F avatar-optimizer run test
+
+# texture-atlas のビルド
+pnpm -F texture-atlas run build
+
+# texture-atlas のテスト
+pnpm -F texture-atlas run test
+
+# texture-atlas の手動テスト
+pnpm -F texture-atlas run manual-atlas
+```
+
+### CLI のテスト
+
+```bash
+# ローカル CLI テスト（avatar-optimizer パッケージから）
+cd packages/avatar-optimizer
+node dist/cli.mjs <input> -o <output>
+
+# または、グローバルコマンドでテスト（pnpm link 後）
+pnpm link --global
+xrift-optimize <input> -o <output>
+```
+
+### 手動テストスクリプト
+
+```bash
+# avatar-optimizer の手動テスト
+pnpm -F avatar-optimizer exec tsx __tests__/manual/cli.manual.ts
+
+# texture-atlas の手動テスト
+pnpm -F texture-atlas exec tsx __tests__/manual/atlas.manual.ts
+```
+
+**pnpm monorepo コマンドの基本**:
 
 | コマンド | 説明 |
 | --- | --- |
 | `pnpm install` | 全ワークスペースの依存関係をインストール |
-| `pnpm run <script>` | ルートプロジェクトのスクリプトを実行 |
-| `pnpm -F <workspace> run <script>` | 特定のワークスペースのスクリプトを実行 |
-| `pnpm -r run <script>` | すべてのワークスペースでスクリプトを実行 |
-| `pnpm link` | ルートプロジェクトをグローバルにリンク |
+| `pnpm build` | 全パッケージをビルド（ルートスクリプト） |
+| `pnpm -F <package> run <script>` | 特定のパッケージのスクリプトを実行 |
+| `pnpm -r run <script>` | すべてのパッケージでスクリプトを実行 |
+| `pnpm -F <package> add <dep>` | 特定のパッケージに依存関係を追加 |
+| `pnpm link --global` | パッケージをグローバルにリンク |
 | `pnpm exec <command>` | ローカル node_modules の実行可能ファイルを実行 |
 
 ## 重要な開発ルール
@@ -121,8 +176,8 @@ pnpm -F textranscore-ts add <package-name>
 
 ### CLI アーキテクチャ
 
-- **エントリーポイント**: `src/cli.ts`
-- **ビルド出力**: `dist/cli.mjs` (Node.js 実行可能、shebang 付き)
+- **エントリーポイント**: `packages/avatar-optimizer/src/cli.ts`
+- **ビルド出力**: `packages/avatar-optimizer/dist/cli.mjs` (Node.js 実行可能、shebang 付き)
 - **パーサー**: Commander.js
 - **ファイル I/O**: `fs/promises` (Node.js 専用)
 
@@ -212,17 +267,18 @@ program
 
 ### CLI テスト戦略
 
-- **機能テスト**: `__tests__/manual/cli.manual.ts` で実際のファイル処理を確認
+- **機能テスト**: `packages/avatar-optimizer/__tests__/manual/cli.manual.ts` で実際のファイル処理を確認
 - **テスト入力ファイル**:
-  - `__tests__/fixtures/`: git 追跡されるサンプル（CI/CD でも使用）
-  - `__tests__/input/`: 開発者が配置する実ファイル（.gitignore）
-- **出力確認**: `__tests__/output/` で結果を検証
+  - `packages/avatar-optimizer/__tests__/fixtures/`: git 追跡されるサンプル（CI/CD でも使用）
+  - `packages/avatar-optimizer/__tests__/input/`: 開発者が配置する実ファイル（.gitignore）
+- **出力確認**: `packages/avatar-optimizer/__tests__/output/` で結果を検証
 
 ```bash
 # 手動テスト実行
-pnpm exec tsx __tests__/manual/cli.manual.ts
+pnpm -F avatar-optimizer exec tsx __tests__/manual/cli.manual.ts
 
 # ローカル CLI テスト
+cd packages/avatar-optimizer
 node dist/cli.mjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
 
 # グローバルコマンドでテスト（pnpm link 後）
@@ -259,13 +315,13 @@ describe('calculateDistance', () => {
 
 **純粋関数 (ロジック検証用)**: 重要なビジネスロジックや複雑な計算は `__tests__/` ディレクトリ内の Jest テストでカバレッジを確保
 
-**手動確認が必要な機能**: テクスチャアトラス化、メッシュ処理、ジオメトリ最適化など視覚的な確認が重要な場合、`__tests__/` ディレクトリに**手動実行用スクリプト**を配置：
+**手動確認が必要な機能**: テクスチャアトラス化、メッシュ処理、ジオメトリ最適化など視覚的な確認が重要な場合、各パッケージの `__tests__/` ディレクトリに**手動実行用スクリプト**を配置：
 
 ```typescript
-// __tests__/manual/texture-atlas.manual.ts
-// 手動実行用スクリプト: npx tsx __tests__/manual/texture-atlas.manual.ts
+// packages/texture-atlas/__tests__/manual/atlas.manual.ts
+// 手動実行用スクリプト: pnpm -F texture-atlas exec tsx __tests__/manual/atlas.manual.ts
 
-import { createTextureAtlas } from '../../src/optimize'
+import { atlasTexturesInDocument } from '../../src/index'
 import fs from 'fs'
 import path from 'path'
 
@@ -275,7 +331,7 @@ import path from 'path'
  */
 async function manualCheckTextureAtlas() {
   // fixtures: git追跡されるテスト用サンプルファイル
-  const fixtureFile = path.join(__dirname, '../fixtures/sample-vrm.glb')
+  const fixtureFile = path.join(__dirname, '../fixtures/sample.glb')
 
   // input: 手動確認用の一時的な入力ファイル (開発者が配置, .gitignore)
   const inputFile = path.join(__dirname, '../input/my-avatar.vrm')
@@ -283,7 +339,7 @@ async function manualCheckTextureAtlas() {
   // 存在するファイルで処理
   const targetFile = fs.existsSync(inputFile) ? inputFile : fixtureFile
   const fileData = fs.readFileSync(targetFile)
-  const result = await createTextureAtlas(fileData)
+  const result = await atlasTexturesInDocument(fileData, { maxSize: 2048 })
 
   // output: スクリプト実行時の出力結果 (.gitignore)
   const outputDir = path.join(__dirname, '../output')
@@ -614,200 +670,29 @@ export type { OptimizationOptions, VRMStatistics }
 - ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
 - ❌ 外部向けの非同期関数（Promise + throw を使用）
 
-## TeX​TransCore ライブラリ
+## Texture-Atlas パッケージについて
 
-TexTransCore は C# で実装されたテクスチャ処理ライブラリで、`third-party/TexTransCore` に subtree として統合されています。
+**texture-atlas** (`packages/texture-atlas/`) は テクスチャアトラス化機能を提供する独立したパッケージです。
 
-詳細な開発ガイドは `third-party/TexTransCore/CLAUDE.md` を参照してください：
+詳細な開発ガイドは `packages/texture-atlas/CLAUDE.md` を参照してください：
 
-- **C# 開発ガイドライン**: 型設計、エラーハンドリング、ドキュメント作成
-- **WASM 化ロードマップ**: 実装アプローチ、チェックリスト、次のステップ
+- **Bin Packing アルゴリズム**: 効率的なテクスチャレイアウト計算
+- **テクスチャアトラス化**: 複数のテクスチャを1つのアトラスに統合
+- **UV 座標再マッピング**: glTF-Transform ドキュメント内のプリミティティブ UV を更新
 - **開発コマンド**: ビルド、テスト実行方法
 
 ### クイックリンク
 
 ```bash
-# TexTransCore のビルド
-cd third-party/TexTransCore
-dotnet build -c Release
+# texture-atlas のビルド
+pnpm -F texture-atlas run build
 
-# TexTransCore の開発ガイド
-cat third-party/TexTransCore/CLAUDE.md
+# texture-atlas のテスト
+pnpm -F texture-atlas run test
+
+# texture-atlas の手動テスト
+pnpm -F texture-atlas run manual-atlas
+
+# texture-atlas の開発ガイド
+cat packages/texture-atlas/CLAUDE.md
 ```
-
-## TexTransCoreTS TypeScript 実装
-
-**TexTransCoreTS** (`third-party/TexTransCoreTS/`) は TexTransCore のテクスチャアトラス化機能を TypeScript で再実装しています。
-
-### 目的
-
-- ブラウザとNode.js両環境で動作するテクスチャアトラス化
-- @xrift/vrm-optimizer に組み込むための軽量な実装
-- テクスチャアトラス化とそれに伴うモデル UV 再マッピングのみに特化
-
-### 主要機能
-
-- **Bin Packing** (`MaxRects` アルゴリズム): 効率的なテクスチャレイアウト計算
-- **テクスチャアトラス化**: 複数のテクスチャを1つのアトラスに統合
-- **UV 座標再マッピング**: glTF-Transform ドキュメント内のプリミティティブ UV を更新
-
-### 開発ガイド
-
-詳細は `third-party/TexTransCoreTS/CLAUDE.md` を参照：
-
-TexTransCoreTS は **pnpm workspace** として管理されているため、ルートディレクトリから操作できます：
-
-```bash
-# TexTransCoreTS のビルド
-pnpm -F textranscore-ts run build
-
-# テスト実行
-pnpm -F textranscore-ts run test
-
-# 開発モード（ウォッチ）
-pnpm -F textranscore-ts run dev
-
-# 型チェック
-pnpm -F textranscore-ts run type-check
-
-# 特定のワークスペースディレクトリで作業する場合
-cd third-party/TexTransCoreTS
-pnpm run build  # ローカルスクリプトを実行
-pnpm test       # 短縮形
-```
-
-### API 概要
-
-```typescript
-import { atlasTexturesInDocument } from '@xrift/textranscore-ts'
-import { createCanvas } from 'canvas' // Node.js 環境の場合
-
-// glTF-Transform ドキュメント内のテクスチャをアトラス化
-const result = await atlasTexturesInDocument(
-  document,
-  { maxSize: 2048, padding: 4 },
-  createCanvas // Canvas ファクトリ関数を注入
-)
-
-if (result.isErr()) {
-  console.error(`Error: ${result.error.message}`)
-}
-const { document: atlasedDoc, mapping } = result.value
-```
-
-### 実装状態（2025-11-10 - 完全実装）
-
-#### 完成済みの機能 ✅
-
-**Phase 1: 基盤実装**
-1. **NFDH Bin Packing アルゴリズム** (src/atlas/nfdh-packer.ts)
-   - 効率的なテクスチャレイアウト計算
-   - テスト: 5/5 pass ✓
-
-2. **Canvas 互換性の確保** (src/utils/canvas.ts)
-   - node-canvas の putImageData 非サポート問題を修正
-   - ブラウザと Node.js 環境の両方で動作
-   - Canvas ファクトリ関数による依存性注入
-
-**Phase 2: アトラス化と統合** (src/atlas/atlasTexture.ts)
-1. **アトラス画像の glTF-Transform へ登録** ✅
-   - Canvas → PNG バッファ変換
-   - glTF-Transform テクスチャとして登録
-   - マテリアルの参照更新
-   - 不要なテクスチャ削除（メモリ効率化）
-   - テスト: 3/3 pass ✓
-
-**Phase 3: UV 座標再マッピング** (src/atlas/uv-remapping.ts)
-1. **UV 座標変換アルゴリズム** ✅
-   - remapUVCoordinate() 実装
-   - ピクセル座標 → 正規化 UV 変換
-   - アスペクト比自動保証
-   - テスト: 6/6 pass ✓
-
-2. **プリミティブ UV 更新** ✅
-   - TEXCOORD_0 属性取得・更新
-   - Float32Array サポート
-   - 全プリミティブへの一括適用
-
-**Phase 4: テクスチャダウンスケーリング** (NEW)
-1. **テクスチャダウンスケーリング機能** ✅
-   - AtlasOptions.textureScale (0.1-1.0)
-   - _scaleTextureImage() 実装
-   - ニアレストネイバー法による高速処理
-
-**CLI 統合** (src/cli.ts)
-1. **完全な CLI サポート** ✅
-   - `--option-max-texture-size` オプション
-   - `--texture-scale` オプション
-   - エラーハンドリングと検証
-   - 進捗表示とファイルサイズレポート
-   - テスト実績：2 個のテスト VRM ファイルで検証済み
-
-#### 実装完了パイプライン
-
-```
-入力ファイル (.glb/.gltf/.vrm)
-    ↓
-[glTF-Transform ドキュメント解析]
-    ↓
-[テクスチャ抽出]（glTF 汎用）
-    ↓
-[✅ テクスチャダウンスケーリング]（オプション）
-    ↓
-[Bin Packing 計算]（NFDH アルゴリズム）
-    ↓
-[Canvas アトラス生成]（ブラウザ/Node.js 対応）
-    ↓
-[✅ アトラス画像をドキュメントに登録]
-    ↓
-[✅ UV マッピング情報生成]
-    ↓
-[✅ マテリアル参照更新]
-    ↓
-[✅ プリミティブ UV 座標再マッピング]
-    ↓
-出力ファイル（最適化済み）
-```
-
-### テスト結果（検証済み）
-
-| テスト | ファイル | 入力 | 出力 | 削減率 | スケール |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Seed-san.vrm | 10.41 MB | 5.29 MB | 49.19% | 0.5x |
-| 2 | fem_vroid.vrm | 11.48 MB | 10.45 MB | 9.03% | 1.0x |
-| 3 | fem_vroid.vrm | 11.48 MB | 8.89 MB | 22.59% | 0.75x |
-
-### 次のステップ（今後の改善）
-
-### テスト戦略
-
-#### ユニットテスト
-- NFDH packing アルゴリズム（既存）
-- UV マッピング計算（新規）
-
-#### 統合テスト
-- 複数テクスチャの Canvas 合成
-- glTF ドキュメントへの登録と読み込み確認
-
-#### 手動確認
-```bash
-# Phase 2 完成後
-npx tsx __tests__/manual/atlas-integration.manual.ts
-
-# 出力ファイルを Blender や VRM Viewer で視覚的確認
-```
-
-### 既知の制限
-
-1. **VRM メタデータ非依存**
-   - 現在の実装は純粋な glTF 処理のみ
-   - VRM 固有の機能（アーマチュア、形状キー）には対応していない
-   - `.vrm` ファイルでも `.glb` ファイルと同じように処理される
-
-2. **テクスチャ品質**
-   - PNG 形式での出力（可逆圧縮）
-   - WebP/AVIF への圧縮は別の処理として実装予定
-
-3. **メモリ効率**
-   - 大きなテクスチャ（2048x2048 以上）処理時のメモリ使用量に注意
-   - Node.js 環境での canvas バッファ管理に留意
