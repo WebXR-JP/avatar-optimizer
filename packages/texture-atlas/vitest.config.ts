@@ -13,6 +13,7 @@ export default defineConfig({
   test: {
     include: ['__tests__/**/*.test.ts'],
     environment: 'node',
+    pool: 'vmThreads',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

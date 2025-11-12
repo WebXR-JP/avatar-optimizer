@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
+    "test": "vitest run --pool=vmThreads",
     "manual-atlas": "pnpm exec tsx __tests__/manual/atlas.manual.ts"
   },
   "keywords": [
