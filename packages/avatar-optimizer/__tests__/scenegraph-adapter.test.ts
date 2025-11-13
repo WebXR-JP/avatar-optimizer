@@ -4,6 +4,8 @@ import type { GLTFWithBuffers } from '@loaders.gl/gltf'
 import type { AtlasBuildResult, TextureSlot } from '@xrift/avatar-optimizer-texture-atlas'
 
 import { ScenegraphAdapter } from '../src/vrm/scenegraph-adapter'
+import { writeVRMDocumentWithLoadersGL } from '../src/vrm/loaders-gl'
+import { parseGLBJson } from '../src/vrm/document'
 
 const ONE_BY_ONE_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAusB9YGTFe4AAAAASUVORK5CYII='
@@ -345,6 +347,58 @@ describe('ScenegraphAdapter', () => {
     const finalTextureCount = scenegraph.json.textures?.length ?? 0
     expect(finalTextureCount).toBeLessThan(beforeFlushTextureCount)
     expect(finalTextureCount).toBeGreaterThanOrEqual(originalTextureCount)
+  })
+
+  it('writes atlas-updated scenegraphs without BUFFER_VIEW_TOO_LONG conditions', async () => {
+    const adapterResult = ScenegraphAdapter.from(createTestGltf({ vrmVersion: '1.0' }))
+    if (adapterResult.isErr()) {
+      throw new Error(`Failed to create adapter: ${adapterResult.error.message}`)
+    }
+    const adapter = adapterResult.value
+    mockImageDecoding(adapter)
+    const descriptors = await adapter.createAtlasMaterialDescriptors()
+    const descriptorId = descriptors[0]?.id
+    if (!descriptorId) {
+      throw new Error('descriptor id is missing')
+    }
+
+    const atlasResult: AtlasBuildResult = {
+      atlases: [
+        {
+          slot: 'baseColor',
+          atlasImage: Uint8Array.from([0, 1, 2, 3]),
+          atlasWidth: 4,
+          atlasHeight: 4,
+        },
+      ],
+      placements: [
+        {
+          materialId: descriptorId,
+          uvTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+      ],
+    }
+
+    adapter.applyAtlasResult(atlasResult)
+    adapter.flush()
+
+    const scenegraph = adapter.unwrap()
+    const writeResult = await writeVRMDocumentWithLoadersGL({ gltf: scenegraph.gltf })
+    if (writeResult.isErr()) {
+      throw new Error(`Failed to write VRM: ${writeResult.error.message}`)
+    }
+
+    const gltfJson = parseGLBJson(writeResult.value)
+    const bufferLength = gltfJson.buffers?.[0]?.byteLength ?? 0
+    const maxSpan = Math.max(
+      0,
+      ...(gltfJson.bufferViews ?? []).map((view: { byteOffset?: number; byteLength?: number }) => {
+        return (view.byteOffset ?? 0) + (view.byteLength ?? 0)
+      }),
+    )
+
+    expect(bufferLength).toBeGreaterThan(0)
+    expect(maxSpan).toBeLessThanOrEqual(bufferLength)
   })
 
   it('updates VRM 0.x material properties when atlas assignments are flushed', async () => {

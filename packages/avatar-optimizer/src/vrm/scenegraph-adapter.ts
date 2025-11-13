@@ -288,6 +288,7 @@ export class ScenegraphAdapter {
 
   flush(): void {
     this.removeTexturesWithDependencyDiff()
+    this.scenegraph.createBinaryChunk()
     this.pendingPlacements = []
   }
 

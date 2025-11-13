@@ -104,7 +104,13 @@ export function loadJsonDocumentFromGLB(
 export function extractJsonFromGLB(
   binaryData: BinaryLike,
 ): ResultAsync<Record<string, any>, OptimizationError> {
-  return loadJsonDocumentFromGLB(binaryData).map((jsonDoc) => jsonDoc.json)
+  return ResultAsync.fromPromise(
+    (async () => parseGLBJson(binaryData))(),
+    (error) => ({
+      type: 'DOCUMENT_PARSE_FAILED' as const,
+      message: `Failed to extract glTF JSON: ${String(error)}`,
+    })
+  )
 }
 
 export async function jsonDocumentToGLB(jsonDoc: JSONDocument): Promise<ArrayBuffer> {
