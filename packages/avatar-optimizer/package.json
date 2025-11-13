@@ -68,9 +68,12 @@
   "dependencies": {
     "@loaders.gl/core": "^4.3.4",
     "@loaders.gl/gltf": "^4.3.4",
+    "@loaders.gl/images": "^4.3.4",
+    "@loaders.gl/polyfills": "^4.3.4",
     "@pixiv/three-vrm": "^3.4.4",
     "@xrift/avatar-optimizer-texture-atlas": "workspace:*",
     "commander": "^14.0.2",
+    "jimp": "^1.6.0",
     "neverthrow": "^8.2.0",
     "three": "^0.181.1"
   }
