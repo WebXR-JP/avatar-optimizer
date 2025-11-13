@@ -9,6 +9,8 @@ import { parseGLBJson } from '../src/vrm/document'
 
 const ONE_BY_ONE_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAusB9YGTFe4AAAAASUVORK5CYII='
+const ALT_ONE_BY_ONE_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/dr7Y5QAAAABJRU5ErkJggg=='
 const SHADE_SLOT: TextureSlot = 'custom:shadeMultiply'
 
 function createTestGltf(options?: {
@@ -347,6 +349,103 @@ describe('ScenegraphAdapter', () => {
     const finalTextureCount = scenegraph.json.textures?.length ?? 0
     expect(finalTextureCount).toBeLessThan(beforeFlushTextureCount)
     expect(finalTextureCount).toBeGreaterThanOrEqual(originalTextureCount)
+  })
+
+  it('removes original data-uri textures even when atlas adds extra slots', async () => {
+    const gltf = createTestGltf({ vrmVersion: '1.0' })
+    gltf.json.textures = gltf.json.textures ?? []
+    gltf.json.images = gltf.json.images ?? []
+    gltf.json.textures.push({ source: 1 })
+    gltf.json.images.push({ uri: ALT_ONE_BY_ONE_PNG, mimeType: 'image/png' })
+    const material = gltf.json.materials?.[0]
+    if (material) {
+      delete material.normalTexture
+      delete material.emissiveTexture
+      if (material.pbrMetallicRoughness?.metallicRoughnessTexture) {
+        delete material.pbrMetallicRoughness.metallicRoughnessTexture
+      }
+      delete material.occlusionTexture
+      const mtoonExtension = material.extensions?.VRMC_materials_mtoon
+      if (mtoonExtension) {
+        mtoonExtension.shadeMultiplyTexture = { index: 1 }
+        delete mtoonExtension.rimMultiplyTexture
+        delete mtoonExtension.outlineWidthMultiplyTexture
+        delete mtoonExtension.matcapTexture
+        delete mtoonExtension.uvAnimationMaskTexture
+      }
+    }
+
+    const adapterResult = ScenegraphAdapter.from(gltf)
+    if (adapterResult.isErr()) {
+      throw new Error(`Failed to create adapter: ${adapterResult.error.message}`)
+    }
+    const adapter = adapterResult.value
+    const scenegraph = adapter.unwrap()
+
+    const originalUriImages = (scenegraph.json.images ?? []).filter(
+      (image) => typeof image?.uri === 'string',
+    )
+    expect(originalUriImages.length).toBeGreaterThan(0)
+
+    mockImageDecoding(adapter)
+    const descriptors = await adapter.createAtlasMaterialDescriptors()
+    const descriptorId = descriptors[0]?.id
+    if (!descriptorId) {
+      throw new Error('descriptor id is missing')
+    }
+
+    const atlasResult: AtlasBuildResult = {
+      atlases: [
+        {
+          slot: 'baseColor',
+          atlasImage: Uint8Array.from([0, 1, 2, 3]),
+          atlasWidth: 4,
+          atlasHeight: 4,
+        },
+        {
+          slot: SHADE_SLOT,
+          atlasImage: Uint8Array.from([3, 2, 1, 0]),
+          atlasWidth: 4,
+          atlasHeight: 4,
+        },
+      ],
+      placements: [
+        {
+          materialId: descriptorId,
+          uvTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+      ],
+    }
+
+    adapter.applyAtlasResult(atlasResult)
+    adapter.flush()
+
+    const remainingUriImages = (scenegraph.json.images ?? []).filter(
+      (image) => typeof image?.uri === 'string',
+    )
+    expect(remainingUriImages).toHaveLength(0)
+
+    const updatedMaterial = scenegraph.json.materials?.[0]
+    const baseColorIndex = updatedMaterial?.pbrMetallicRoughness?.baseColorTexture?.index
+    const shadeIndex =
+      updatedMaterial?.extensions?.VRMC_materials_mtoon?.shadeMultiplyTexture?.index
+    expect(typeof baseColorIndex).toBe('number')
+    expect(typeof shadeIndex).toBe('number')
+
+    const textures = scenegraph.json.textures ?? []
+    const images = scenegraph.json.images ?? []
+    const referencedSources = [baseColorIndex, shadeIndex]
+      .map((textureIndex) =>
+        typeof textureIndex === 'number' ? textures[textureIndex]?.source : undefined,
+      )
+      .filter((source): source is number => typeof source === 'number')
+
+    expect(referencedSources.length).toBe(2)
+    for (const imageIndex of referencedSources) {
+      const image = images[imageIndex]
+      expect(image).toBeDefined()
+      expect(typeof image?.bufferView).toBe('number')
+    }
   })
 
   it('writes atlas-updated scenegraphs without BUFFER_VIEW_TOO_LONG conditions', async () => {
