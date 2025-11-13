@@ -5,7 +5,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "allowJs": false,
+    "allowJs": false, 
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

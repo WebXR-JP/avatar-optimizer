@@ -1,51 +1,13 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'node:url'
-import { WebIO, type Node, Document } from '@gltf-transform/core'
+import { WebIO, type Node, Document, Root } from '@gltf-transform/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { optimizeVRM, type OptimizationOptions } from '../src/index'
+import { extractJsonFromGLB } from '../src/vrm/document'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-/**
- * GLB バイナリから JSON チャンクを直接抽出
- * glTF-Transform の Document 変換を経由せず、JSON レベルで VRM データを検証
- */
-function extractGLBJson(data: ArrayBuffer | Buffer): Record<string, any> {
-  // Buffer を ArrayBuffer に変換
-  const arrayBuffer = data instanceof ArrayBuffer ? data : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-
-  const view = new DataView(arrayBuffer)
-  const magic = view.getUint32(0, true)
-
-  if (magic !== 0x46546c67) {
-    throw new Error('Invalid GLB file format')
-  }
-
-  let offset = 12
-  const chunks: Map<number, Uint8Array> = new Map()
-
-  while (offset < arrayBuffer.byteLength) {
-    const chunkLength = view.getUint32(offset, true)
-    const chunkType = view.getUint32(offset + 4, true)
-
-    offset += 8
-
-    const chunkData = new Uint8Array(arrayBuffer, offset, chunkLength)
-    chunks.set(chunkType, chunkData)
-
-    offset += chunkLength
-  }
-
-  const jsonChunk = chunks.get(0x4e4f534a)
-  if (!jsonChunk) {
-    throw new Error('No JSON chunk found in GLB')
-  }
-
-  const jsonText = new TextDecoder().decode(jsonChunk)
-  return JSON.parse(jsonText)
-}
 
 /**
  * VRM メタデータのスナップショット
@@ -73,6 +35,14 @@ interface VRMMetadataSnapshot {
     baseColorTexture: boolean
     normalTexture: boolean
   }>
+}
+
+async function readGltfJsonOrThrow(input: ArrayBuffer | ArrayBufferView): Promise<Record<string, any>> {
+  const jsonResult = await extractJsonFromGLB(input)
+  if (jsonResult.isErr()) {
+    throw new Error(jsonResult.error.message)
+  }
+  return jsonResult.value
 }
 
 /**
@@ -139,8 +109,8 @@ describe('VRM メタデータ保持テスト', () => {
     const hasFixture = fs.existsSync(vrmPath)
 
     describe(`${filename}`, () => {
-      let document: any
-      let originalRoot: any
+      let document: Document
+      let originalRoot: Root
 
       beforeAll(async () => {
         if (!hasFixture) {
@@ -176,39 +146,9 @@ describe('VRM メタデータ保持テスト', () => {
         )
 
         // 注記: glTF-Transform の listExtensionsUsed() は、VRM 拡張機能が存在する場合でも
-        // 空配列を返すことがあります。拡張機能はロードされていますが（getExtension('VRM')
-        // が機能することで証明）、listExtensionsUsed() はそれをレポートしないことがあります。
+        // 空配列を返すことがあります。VRM 拡張情報は JSON チャンクで直接確認します。
         // このテストはデバッグ用にこの動作を記録しています。
         expect(extensions).toEqual([])
-      })
-
-      it('VRM メタデータ（humanoid、meta など）を保持していること', () => {
-        if (!hasFixture) {
-          console.log(`ℹ️  スキップ: ${vrmPath} にフィクスチャがありません`)
-          return
-        }
-
-        // VRM 拡張機能をチェック
-        const vrmExtension = originalRoot.getExtension('VRM')
-        expect(vrmExtension).toBeDefined()
-
-        // 注記: listExtensionsUsed() が空配列を返しても、getExtension('VRM') は成功します。
-        // これは VRM メタデータがロード中に保持されていることを確認します。
-        // 問題は listExtensionsUsed() がロードされた拡張機能をレポートしないことです。
-
-        // VRM 拡張機能から meta、humanoid、materialProperties などにアクセス可能
-        if (vrmExtension) {
-          const meta = vrmExtension.getProperty('meta')
-          const humanoid = vrmExtension.getProperty('humanoid')
-
-          console.log('  VRM 拡張機能にアクセス可能で、以下のプロパティを含みます:')
-          if (meta) {
-            console.log('    - meta（VRM メタデータ）✓')
-          }
-          if (humanoid) {
-            console.log('    - humanoid（ボーン構造）✓')
-          }
-        }
       })
 
       it('マテリアル数が保持されること', () => {
@@ -347,44 +287,6 @@ describe('VRM メタデータ保持テスト', () => {
     })
   })
 
-  describe('VRM メタデータ損失検出', () => {
-    const testVrmPath = path.join(fixtureDir, 'fem_vroid.vrm')
-    const hasFixture = fs.existsSync(testVrmPath)
-
-    it('最適化サイクル中に VRM 拡張機能が失われないことを検出できること', async () => {
-      if (!hasFixture) {
-        console.log(`ℹ️  スキップ: ${testVrmPath} にフィクスチャがありません`)
-        return
-      }
-
-      const fileBuffer = fs.readFileSync(testVrmPath)
-      const io = new WebIO()
-
-      // 元のドキュメントをロード
-      const originalDoc = await io.readBinary(new Uint8Array(fileBuffer))
-      const originalVRMExt = originalDoc.getRoot().getExtension('VRM')
-      const originalExtensions = Array.from(originalDoc.getRoot().listExtensionsUsed())
-
-      // シリアライズ
-      const serialized = await io.writeBinary(originalDoc)
-
-      // 再度ロード
-      const reloadedDoc = await io.readBinary(new Uint8Array(serialized))
-      const reloadedVRMExt = reloadedDoc.getRoot().getExtension('VRM')
-      const reloadedExtensions = Array.from(reloadedDoc.getRoot().listExtensionsUsed())
-
-      console.log(`  元のドキュメント: VRM 拡張機能にアクセス可能 = ${!!originalVRMExt}`)
-      console.log(`  再ロード後: VRM 拡張機能にアクセス可能 = ${!!reloadedVRMExt}`)
-      console.log(`  元のドキュメント listExtensionsUsed: ${originalExtensions.length > 0 ? originalExtensions.join(', ') : '(空)'}`)
-      console.log(`  再ロード後 listExtensionsUsed: ${reloadedExtensions.length > 0 ? reloadedExtensions.join(', ') : '(空)'}`)
-
-      // 注記: 重要なテストは listExtensionsUsed() ではなく getExtension('VRM') が機能するかどうかです。
-      // listExtensionsUsed() が空であっても、VRM 拡張機能はアクセス可能である必要があります。
-      expect(reloadedVRMExt).toBeDefined()
-      expect(reloadedVRMExt).toBe(originalVRMExt)
-    })
-  })
-
   describe('optimizeVRM 実行後の VRM メタデータ保持テスト', () => {
     const testVrmPath = path.join(fixtureDir, 'fem_vroid.vrm')
     const hasFixture = fs.existsSync(testVrmPath)
@@ -408,7 +310,7 @@ describe('VRM メタデータ保持テスト', () => {
 
       // 元のドキュメントをロード
       const originalDoc = await io.readBinary(new Uint8Array(fileBuffer))
-      const originalGltfJson = extractGLBJson(fileBuffer as any)
+      const originalGltfJson = await readGltfJsonOrThrow(fileBuffer)
       const originalMetadata = extractVRMMetadata(originalDoc, originalGltfJson)
 
       console.log(`\n  元のメタデータ:`)
@@ -436,7 +338,7 @@ describe('VRM メタデータ保持テスト', () => {
       // 最適化されたファイルをロード
       const optimizedBuffer = await optimizedFile.arrayBuffer()
       const optimizedDoc = await io.readBinary(new Uint8Array(optimizedBuffer))
-      const optimizedGltfJson = extractGLBJson(optimizedBuffer as any)
+      const optimizedGltfJson = await readGltfJsonOrThrow(optimizedBuffer)
       const optimizedMetadata = extractVRMMetadata(optimizedDoc, optimizedGltfJson)
 
       console.log(`\n  最適化後のメタデータ:`)
