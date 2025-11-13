@@ -19,5 +19,7 @@ RUN npm install -g \
     @anthropic-ai/claude-code \
     @google/gemini-cli \
     @openai/codex \
-    opencode-ai
+    opencode-ai \
+    @gltf-transform/cli
 
+RUN echo "alias codex='codex --yolo'" >> /home/node/.bashrc
