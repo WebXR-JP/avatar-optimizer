@@ -101,25 +101,29 @@ npm link
 xrift-optimize input.vrm -o output.vrm
 ```
 
-### コマンドラインオプション
+### サブコマンド
 
 ```
-Usage: xrift-optimize [options] <input>
+Usage: xrift-optimize [options] [command]
 
-VRM model optimization CLI tool
-
-Arguments:
-  input                           Path to input VRM file
-
-Options:
-  -V, --version                   output the version number
-  -o, --output <path>             Path to output VRM file (default: "output.vrm")
-  --compress-textures             Enable texture compression (default: true)
-  --max-texture-size <size>       Maximum texture size in pixels (default: "2048")
-  --reduce-meshes                 Enable mesh reduction (default: false)
-  --target-polygon-count <count>  Target polygon count for mesh reduction
-  -h, --help                      display help for command
+Commands:
+  validate <input>               VRMファイルのバリデーションを実行
+  show-json <input>              VRM内部のGLTF JSON全体を表示（デフォルト整形出力・純JSON）
+  optimize <input>               VRM最適化を実行（従来の動作）
+  help [command]                 display help for command
 ```
+
+`optimize` コマンド共通オプション:
+
+- `-o, --output <path>`: 出力パス (デフォルト: `output.vrm`)
+- `--compress-textures`: テクスチャ圧縮を有効化 (デフォルト: `true`)
+- `--max-texture-size <size>`: 最大テクスチャサイズ (デフォルト: `2048`)
+- `--reduce-meshes`: メッシュ削減を有効化
+- `--target-polygon-count <count>`: メッシュ削減の目標ポリゴン数
+
+`show-json` コマンドオプション:
+
+- `--no-pretty`: GLTF JSON をコンパクト表示に切り替える（デフォルトは整形出力）
 
 ### 使用例
 
@@ -151,6 +155,14 @@ xrift-optimize --help
 
 ```bash
 xrift-optimize --version
+```
+
+#### GLTF JSON を確認
+
+```bash
+xrift-optimize show-json avatar.vrm                   # デフォルトで整形表示
+xrift-optimize show-json avatar.vrm --no-pretty       # コンパクト表示
+xrift-optimize show-json avatar.vrm > avatar.json     # 標準出力が純JSONなのでそのまま保存可
 ```
 
 ## 開発

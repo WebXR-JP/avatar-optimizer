@@ -6,5 +6,6 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     pool: 'vmThreads',
+    coverage: { enabled: true },
   },
 })

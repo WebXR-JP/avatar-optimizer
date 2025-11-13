@@ -3,7 +3,12 @@
 import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { Command } from 'commander'
-import { optimizeVRM, validateVRMFile, type OptimizationOptions } from '../index'
+import {
+  optimizeVRM,
+  readVRMDocumentWithLoadersGL,
+  validateVRMFile,
+  type OptimizationOptions,
+} from '../index'
 
 const program = new Command()
 
@@ -85,6 +90,40 @@ program
       }
 
       process.exit(validation.isValid ? 0 : 1)
+    } catch (error) {
+      console.error(`\n❌ Unexpected error: ${String(error)}`)
+      process.exit(1)
+    }
+  })
+
+// Show JSON command
+program
+  .command('show-json <input>')
+  .description('Display GLTF JSON section of the VRM file')
+  .option('--no-pretty', 'Disable pretty printed JSON output')
+  .action(async (input, options) => {
+    try {
+      const inputPath = path.resolve(input)
+
+      const fileBuffer = await readFile(inputPath)
+      const arrayBuffer = fileBuffer.buffer.slice(
+        fileBuffer.byteOffset,
+        fileBuffer.byteOffset + fileBuffer.byteLength,
+      )
+
+      const result = await readVRMDocumentWithLoadersGL(arrayBuffer)
+
+      if (result.isErr()) {
+        const error = result.error
+        console.error(`\n❌ Error (${error.type}): ${error.message}`)
+        process.exit(1)
+      }
+
+      const gltfJson = result.value.gltf.json ?? {}
+      const isPretty = options.pretty !== false
+      const json = isPretty ? JSON.stringify(gltfJson, null, 2) : JSON.stringify(gltfJson)
+
+      process.stdout.write(`${json}\n`)
     } catch (error) {
       console.error(`\n❌ Unexpected error: ${String(error)}`)
       process.exit(1)
