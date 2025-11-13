@@ -9,4 +9,7 @@ __tests__/output/*
 !__tests__/input/.gitkeep
 !__tests__/output/.gitkeep
 
+coverage/
+packages/avatar-optimizer/coverage/
+
 .pnpm-store
