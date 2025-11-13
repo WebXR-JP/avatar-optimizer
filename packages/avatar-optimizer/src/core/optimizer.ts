@@ -14,6 +14,7 @@ import {
   type LoadersGLVRMDocument,
 } from '../vrm/loaders-gl'
 import { ScenegraphAdapter } from '../vrm/scenegraph-adapter'
+import { remapPrimitiveUVs } from './uv-remap'
 
 interface OptimizationContext {
   document: LoadersGLVRMDocument
@@ -24,7 +25,7 @@ interface OptimizationContext {
 
 /**
  * VRM モデルを最適化します
- * 現段階では UV の再計算は未実装のため、アトラス化後の描画は崩れます。
+ * テクスチャアトラス化と UV 再計算を含む最小限のパイプライン。
  */
 export function optimizeVRM(
   file: File,
@@ -108,8 +109,10 @@ async function processAtlases(
   })
 
   context.adapter.applyAtlasResult(atlasResult, { mimeType: 'image/png' })
-  context.adapter.flush()
+  const placements = context.adapter.consumePendingPlacements()
   const scenegraph = context.adapter.unwrap()
+  remapPrimitiveUVs(scenegraph, placements)
+  context.adapter.flush()
   context.document = {
     gltf: scenegraph.gltf,
   }

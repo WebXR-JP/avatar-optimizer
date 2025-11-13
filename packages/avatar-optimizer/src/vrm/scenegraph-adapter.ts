@@ -65,6 +65,12 @@ export interface ScenegraphDigest {
   meshes: ScenegraphMeshInfo[]
 }
 
+export interface PendingMaterialPlacement {
+  materialIndex: number
+  texCoord: number
+  uvTransform: MaterialPlacement['uvTransform']
+}
+
 interface VRM0MaterialProperty {
   name?: string
   shader?: string
@@ -144,7 +150,7 @@ export class ScenegraphAdapter {
   private readonly texturesMarkedForRemoval = new Set<number>()
   private readonly vrm0MaterialPropertyMap = new Map<number, VRM0MaterialProperty>()
   private dependencyBaseline?: MaterialTextureDependencyGraph
-  private pendingPlacements: MaterialPlacement[] = []
+  private pendingPlacements: PendingMaterialPlacement[] = []
 
   private constructor(scenegraph: GLTFScenegraph, vrmVersion: VRMMajorVersion) {
     this.scenegraph = scenegraph
@@ -283,13 +289,22 @@ export class ScenegraphAdapter {
       }
     }
 
-    this.pendingPlacements = result.placements
+    this.pendingPlacements = this.buildPendingPlacements(result.placements)
   }
 
   flush(): void {
     this.removeTexturesWithDependencyDiff()
     this.scenegraph.createBinaryChunk()
     this.pendingPlacements = []
+  }
+
+  consumePendingPlacements(): PendingMaterialPlacement[] {
+    if (!this.pendingPlacements.length) {
+      return []
+    }
+    const placements = this.pendingPlacements
+    this.pendingPlacements = []
+    return placements
   }
 
   unwrap(): GLTFScenegraph {
@@ -525,6 +540,43 @@ export class ScenegraphAdapter {
       slotTextureIndexMap.set(atlas.slot, textureIndex)
     }
     return slotTextureIndexMap
+  }
+
+  private buildPendingPlacements(placements: MaterialPlacement[]): PendingMaterialPlacement[] {
+    const results: PendingMaterialPlacement[] = []
+    for (const placement of placements) {
+      const materialIndex = this.materialDescriptorMap.get(placement.materialId)
+      if (materialIndex === undefined) {
+        continue
+      }
+
+      const texCoord = this.getPrimaryTexCoordForDescriptor(placement.materialId)
+      results.push({
+        materialIndex,
+        texCoord,
+        uvTransform: placement.uvTransform,
+      })
+    }
+    return results
+  }
+
+  private getPrimaryTexCoordForDescriptor(descriptorId: string): number {
+    const descriptor = this.materialDescriptors.get(descriptorId)
+    if (!descriptor) {
+      return 0
+    }
+
+    const primaryTexture = descriptor.textures[descriptor.primaryTextureIndex]
+    if (!primaryTexture) {
+      return 0
+    }
+
+    const binding = this.textureDescriptorMap.get(primaryTexture.id)
+    if (!binding) {
+      return 0
+    }
+
+    return binding.texCoord ?? 0
   }
 
   private ensureDependencyBaseline(): void {
