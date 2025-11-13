@@ -77,16 +77,9 @@ type DecodedTextureImage = {
   data: Uint8ClampedArray
 }
 
-interface PendingAtlasTexture {
-  slot: TextureSlot
-  data: Uint8Array
-  mimeType: string
-}
-
-interface PendingMaterialAssignment {
-  materialId: number
-  slot: TextureSlot
-  texCoord?: number
+interface MaterialTextureDependencyGraph {
+  textures: Set<number>
+  images: Set<number>
 }
 
 const SHADE_SLOT: TextureSlot = 'custom:shadeMultiply'
@@ -148,10 +141,9 @@ export class ScenegraphAdapter {
     { textureIndex: number; texCoord?: number }
   >()
   private readonly materialDescriptors = new Map<string, AtlasMaterialDescriptor>()
-  private readonly pendingAtlasTextures = new Map<TextureSlot, PendingAtlasTexture>()
-  private readonly pendingAssignments: Map<string, PendingMaterialAssignment> = new Map()
   private readonly texturesMarkedForRemoval = new Set<number>()
   private readonly vrm0MaterialPropertyMap = new Map<number, VRM0MaterialProperty>()
+  private dependencyBaseline?: MaterialTextureDependencyGraph
   private pendingPlacements: MaterialPlacement[] = []
 
   private constructor(scenegraph: GLTFScenegraph, vrmVersion: VRMMajorVersion) {
@@ -255,42 +247,38 @@ export class ScenegraphAdapter {
       throw new Error('No material descriptors registered. Call createAtlasMaterialDescriptors() first.')
     }
 
+    this.ensureDependencyBaseline()
     const mimeType = options?.mimeType ?? 'image/png'
-    const slotsWithAtlases = new Set(result.atlases.map((atlas) => atlas.slot))
-
-    for (const atlas of result.atlases) {
-      this.pendingAtlasTextures.set(atlas.slot, {
-        slot: atlas.slot,
-        data: atlas.atlasImage,
-        mimeType,
-      })
-    }
+    const slotTextureIndexMap = this.addAtlasTextures(result.atlases, mimeType)
+    const materials = this.scenegraph.json.materials ?? []
 
     for (const [descriptorId, descriptor] of this.materialDescriptors) {
       const materialId = this.materialDescriptorMap.get(descriptorId)
       if (materialId === undefined) {
         continue
       }
+      const material = materials[materialId]
+      if (!material) {
+        continue
+      }
 
       for (const texture of descriptor.textures) {
-        if (!slotsWithAtlases.has(texture.slot)) {
+        const textureIndex = slotTextureIndexMap.get(texture.slot)
+        if (textureIndex === undefined) {
           continue
         }
-
         const binding = this.textureDescriptorMap.get(texture.id)
         if (!binding) {
           continue
         }
 
-        const assignmentKey = `${materialId}:${texture.slot}`
-        if (!this.pendingAssignments.has(assignmentKey)) {
-          this.pendingAssignments.set(assignmentKey, {
-            materialId,
-            slot: texture.slot,
-            texCoord: binding.texCoord,
-          })
-        }
-
+        this.updateMaterialTexture(
+          material,
+          materialId,
+          texture.slot,
+          textureIndex,
+          binding.texCoord,
+        )
         this.texturesMarkedForRemoval.add(binding.textureIndex)
       }
     }
@@ -299,9 +287,7 @@ export class ScenegraphAdapter {
   }
 
   flush(): void {
-    const slotTextureIndexMap = this.commitPendingAtlasTextures()
-    this.commitMaterialAssignments(slotTextureIndexMap)
-    this.removeMarkedTextures()
+    this.removeTexturesWithDependencyDiff()
     this.pendingPlacements = []
   }
 
@@ -527,78 +513,101 @@ export class ScenegraphAdapter {
     return null
   }
 
-  private commitPendingAtlasTextures(): Map<TextureSlot, number> {
+  private addAtlasTextures(
+    atlases: AtlasBuildResult['atlases'],
+    mimeType: string,
+  ): Map<TextureSlot, number> {
     const slotTextureIndexMap = new Map<TextureSlot, number>()
-    for (const pending of this.pendingAtlasTextures.values()) {
-      const imageIndex = this.scenegraph.addImage(pending.data, pending.mimeType)
+    for (const atlas of atlases) {
+      const imageIndex = this.scenegraph.addImage(atlas.atlasImage, mimeType)
       const textureIndex = this.scenegraph.addTexture({ imageIndex })
-      slotTextureIndexMap.set(pending.slot, textureIndex)
+      slotTextureIndexMap.set(atlas.slot, textureIndex)
     }
-    this.pendingAtlasTextures.clear()
     return slotTextureIndexMap
   }
 
-  private commitMaterialAssignments(slotTextureIndexMap: Map<TextureSlot, number>): void {
-    const materials = this.scenegraph.json.materials ?? []
-
-    for (const assignment of this.pendingAssignments.values()) {
-      const textureIndex = slotTextureIndexMap.get(assignment.slot)
-      if (textureIndex === undefined) {
-        continue
-      }
-
-      const material = materials[assignment.materialId]
-      if (!material) {
-        continue
-      }
-
-      this.updateMaterialTexture(material, assignment.materialId, assignment.slot, textureIndex, assignment.texCoord)
+  private ensureDependencyBaseline(): void {
+    if (!this.dependencyBaseline) {
+      this.dependencyBaseline = this.buildMaterialTextureDependencyGraph()
     }
-
-    this.pendingAssignments.clear()
   }
 
-  private removeMarkedTextures(): void {
+  private buildMaterialTextureDependencyGraph(): MaterialTextureDependencyGraph {
+    const textures = this.scenegraph.json.textures ?? []
+    const materials = this.scenegraph.json.materials ?? []
+    const graph: MaterialTextureDependencyGraph = {
+      textures: new Set<number>(),
+      images: new Set<number>(),
+    }
+
+    const registerTextureRef = (ref?: { index?: number }) => {
+      if (ref?.index === undefined) {
+        return
+      }
+      const textureIndex = ref.index
+      graph.textures.add(textureIndex)
+      const texture = textures[textureIndex]
+      if (texture && typeof texture.source === 'number') {
+        graph.images.add(texture.source)
+      }
+    }
+
+    for (const material of materials) {
+      registerTextureRef(material.pbrMetallicRoughness?.baseColorTexture)
+      registerTextureRef(material.pbrMetallicRoughness?.metallicRoughnessTexture)
+      registerTextureRef(material.normalTexture)
+      registerTextureRef(material.emissiveTexture)
+      registerTextureRef(material.occlusionTexture)
+
+      const mtoonExtension = material.extensions?.VRMC_materials_mtoon
+      if (mtoonExtension) {
+        for (const field of Object.values(VRM10_TEXTURE_FIELD_MAP)) {
+          registerTextureRef(mtoonExtension[field])
+        }
+      }
+    }
+
+    const vrmExtension = this.scenegraph.json.extensions?.VRM
+    const materialProperties: VRM0MaterialProperty[] = vrmExtension?.materialProperties ?? []
+    for (const property of materialProperties) {
+      const textureProperties = property?.textureProperties ?? {}
+      for (const value of Object.values(textureProperties)) {
+        if (typeof value === 'number') {
+          graph.textures.add(value)
+          const texture = textures[value]
+          if (texture && typeof texture.source === 'number') {
+            graph.images.add(texture.source)
+          }
+        }
+      }
+    }
+
+    return graph
+  }
+
+  private removeTexturesWithDependencyDiff(): void {
     if (!this.texturesMarkedForRemoval.size) {
+      this.dependencyBaseline = undefined
       return
     }
 
-    const usage = this.buildTextureUsageMap()
-    const targets = [...this.texturesMarkedForRemoval].sort((a, b) => b - a)
-    const textures = this.scenegraph.json.textures ?? []
+    const baseline =
+      this.dependencyBaseline ?? this.buildMaterialTextureDependencyGraph()
+    const current = this.buildMaterialTextureDependencyGraph()
+
+    const targets = [...this.texturesMarkedForRemoval]
+      .filter(
+        (textureIndex) =>
+          baseline.textures.has(textureIndex) && !current.textures.has(textureIndex),
+      )
+      .sort((a, b) => b - a)
 
     for (const textureIndex of targets) {
-      if (textureIndex < 0 || textureIndex >= textures.length) {
-        continue
-      }
-      const count = usage.get(textureIndex) ?? 0
-      if (count > 0) {
-        continue
-      }
       this.removeTextureAtIndex(textureIndex)
     }
 
     this.texturesMarkedForRemoval.clear()
-  }
-
-  private buildTextureUsageMap(): Map<number, number> {
-    const usage = new Map<number, number>()
-    const materials = this.scenegraph.json.materials ?? []
-
-    const tally = (ref?: { index?: number }) => {
-      if (ref?.index === undefined) return
-      usage.set(ref.index, (usage.get(ref.index) ?? 0) + 1)
-    }
-
-    for (const material of materials) {
-      tally(material.pbrMetallicRoughness?.baseColorTexture)
-      tally(material.pbrMetallicRoughness?.metallicRoughnessTexture)
-      tally(material.normalTexture)
-      tally(material.emissiveTexture)
-      tally(material.occlusionTexture)
-    }
-
-    return usage
+    this.dependencyBaseline = undefined
   }
 
   private removeTextureAtIndex(textureIndex: number): void {
