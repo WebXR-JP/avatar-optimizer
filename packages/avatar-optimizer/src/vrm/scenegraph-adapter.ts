@@ -6,6 +6,9 @@ import type {
   MaterialPlacement,
   TextureSlot,
 } from '@xrift/avatar-optimizer-texture-atlas'
+import { err, ok, type Result } from 'neverthrow'
+
+import type { OptimizationError } from '../types'
 
 interface MaterialTextureReference {
   textureIndex: number
@@ -13,11 +16,14 @@ interface MaterialTextureReference {
 }
 
 export interface MaterialTextureSlots {
-  baseColor?: MaterialTextureReference
-  metallicRoughness?: MaterialTextureReference
+  main?: MaterialTextureReference
+  shadeMultiply?: MaterialTextureReference
   normal?: MaterialTextureReference
-  occlusion?: MaterialTextureReference
-  emissive?: MaterialTextureReference
+  emission?: MaterialTextureReference
+  rimMultiply?: MaterialTextureReference
+  outlineWidth?: MaterialTextureReference
+  matcap?: MaterialTextureReference
+  uvAnimationMask?: MaterialTextureReference
 }
 
 export interface ScenegraphMaterialInfo {
@@ -59,6 +65,12 @@ export interface ScenegraphDigest {
   meshes: ScenegraphMeshInfo[]
 }
 
+interface VRM0MaterialProperty {
+  name?: string
+  shader?: string
+  textureProperties?: Record<string, number>
+}
+
 type DecodedTextureImage = {
   width: number
   height: number
@@ -77,27 +89,58 @@ interface PendingMaterialAssignment {
   texCoord?: number
 }
 
+const SHADE_SLOT: TextureSlot = 'custom:shadeMultiply'
+const RIM_SLOT: TextureSlot = 'custom:rimMultiply'
+const OUTLINE_SLOT: TextureSlot = 'custom:outlineWidth'
+const MATCAP_SLOT: TextureSlot = 'custom:matcap'
+const UV_MASK_SLOT: TextureSlot = 'custom:uvAnimationMask'
+const VRM0_TEXTURE_PROPERTY_MAP: Record<string, string> = {
+  baseColor: '_MainTex',
+  normal: '_BumpMap',
+  emissive: '_EmissionMap',
+  [SHADE_SLOT]: '_ShadeTexture',
+  [RIM_SLOT]: '_RimTexture',
+  [OUTLINE_SLOT]: '_OutlineWidthTexture',
+  [UV_MASK_SLOT]: '_UvAnimMaskTexture',
+}
+const VRM10_TEXTURE_FIELD_MAP: Record<string, string> = {
+  [SHADE_SLOT]: 'shadeMultiplyTexture',
+  [RIM_SLOT]: 'rimMultiplyTexture',
+  [OUTLINE_SLOT]: 'outlineWidthMultiplyTexture',
+  [MATCAP_SLOT]: 'matcapTexture',
+  [UV_MASK_SLOT]: 'uvAnimationMaskTexture',
+}
+
 const MATERIAL_TEXTURE_SLOTS: Array<{
   slot: TextureSlot
   pick: (slots: MaterialTextureSlots) => MaterialTextureReference | undefined
 }> = [
-  { slot: 'baseColor', pick: (slots) => slots.baseColor },
-  { slot: 'metallicRoughness', pick: (slots) => slots.metallicRoughness },
+  { slot: 'baseColor', pick: (slots) => slots.main },
   { slot: 'normal', pick: (slots) => slots.normal },
-  { slot: 'emissive', pick: (slots) => slots.emissive },
-  { slot: 'occlusion', pick: (slots) => slots.occlusion },
+  { slot: 'emissive', pick: (slots) => slots.emission },
+  { slot: SHADE_SLOT, pick: (slots) => slots.shadeMultiply },
+  { slot: RIM_SLOT, pick: (slots) => slots.rimMultiply },
+  { slot: OUTLINE_SLOT, pick: (slots) => slots.outlineWidth },
+  { slot: MATCAP_SLOT, pick: (slots) => slots.matcap },
+  { slot: UV_MASK_SLOT, pick: (slots) => slots.uvAnimationMask },
 ]
 
 const PRIMARY_SLOT_PRIORITY: TextureSlot[] = [
   'baseColor',
-  'metallicRoughness',
+  SHADE_SLOT,
   'normal',
   'emissive',
-  'occlusion',
+  RIM_SLOT,
+  OUTLINE_SLOT,
+  UV_MASK_SLOT,
+  MATCAP_SLOT,
 ]
+
+export type VRMMajorVersion = '0.x' | '1.0'
 
 export class ScenegraphAdapter {
   private readonly scenegraph: GLTFScenegraph
+  private readonly vrmVersion: VRMMajorVersion
   private digestCache?: ScenegraphDigest
   private readonly materialDescriptorMap = new Map<string, number>()
   private readonly textureDescriptorMap = new Map<
@@ -108,14 +151,35 @@ export class ScenegraphAdapter {
   private readonly pendingAtlasTextures = new Map<TextureSlot, PendingAtlasTexture>()
   private readonly pendingAssignments: Map<string, PendingMaterialAssignment> = new Map()
   private readonly texturesMarkedForRemoval = new Set<number>()
+  private readonly vrm0MaterialPropertyMap = new Map<number, VRM0MaterialProperty>()
   private pendingPlacements: MaterialPlacement[] = []
 
-  private constructor(scenegraph: GLTFScenegraph) {
+  private constructor(scenegraph: GLTFScenegraph, vrmVersion: VRMMajorVersion) {
     this.scenegraph = scenegraph
+    this.vrmVersion = vrmVersion
   }
 
-  static from(gltf: GLTFWithBuffers): ScenegraphAdapter {
-    return new ScenegraphAdapter(new GLTFScenegraph(gltf))
+  static from(gltf: GLTFWithBuffers): Result<ScenegraphAdapter, OptimizationError> {
+    const version = detectVRMMajorVersion(gltf)
+    if (!version) {
+      return err({
+        type: 'UNSUPPORTED_VRM_VERSION' as const,
+        message: 'Unsupported VRM document: expected VRM 0.x or VRM 1.0 extensions.',
+      })
+    }
+    return ok(new ScenegraphAdapter(new GLTFScenegraph(gltf), version))
+  }
+
+  getVRMMajorVersion(): VRMMajorVersion {
+    return this.vrmVersion
+  }
+
+  isVRM0(): boolean {
+    return this.vrmVersion === '0.x'
+  }
+
+  isVRM10(): boolean {
+    return this.vrmVersion === '1.0'
   }
 
   createDigest(): ScenegraphDigest {
@@ -246,20 +310,72 @@ export class ScenegraphAdapter {
   }
 
   private collectMaterials(): ScenegraphMaterialInfo[] {
+    if (this.vrmVersion === '0.x') {
+      return this.collectVRM0MToonMaterials()
+    }
+    return this.collectVRM10MToonMaterials()
+  }
+
+  private collectVRM10MToonMaterials(): ScenegraphMaterialInfo[] {
     const materials = this.scenegraph.json.materials ?? []
-    return materials.map((material, index) => ({
-      id: index,
-      name: material.name,
-      textures: {
-        baseColor: toTextureReference(material.pbrMetallicRoughness?.baseColorTexture),
-        metallicRoughness: toTextureReference(
-          material.pbrMetallicRoughness?.metallicRoughnessTexture,
-        ),
-        normal: toTextureReference(material.normalTexture),
-        occlusion: toTextureReference(material.occlusionTexture),
-        emissive: toTextureReference(material.emissiveTexture),
-      },
-    }))
+    const result: ScenegraphMaterialInfo[] = []
+
+    materials.forEach((material, index) => {
+      const mtoon = material.extensions?.VRMC_materials_mtoon
+      if (!mtoon) {
+        return
+      }
+
+      result.push({
+        id: index,
+        name: material.name,
+        textures: this.buildVRM10TextureSlots(material, mtoon),
+      })
+    })
+
+    return result
+  }
+
+  private collectVRM0MToonMaterials(): ScenegraphMaterialInfo[] {
+    const vrmExtension = this.scenegraph.json.extensions?.VRM
+    const materialProperties: VRM0MaterialProperty[] = vrmExtension?.materialProperties ?? []
+    if (!materialProperties.length) {
+      return []
+    }
+
+    this.vrm0MaterialPropertyMap.clear()
+
+    const materials = this.scenegraph.json.materials ?? []
+    const nameToIndex = new Map<string, number>()
+    materials.forEach((material, index) => {
+      if (material?.name) {
+        nameToIndex.set(material.name, index)
+      }
+    })
+
+    const result: ScenegraphMaterialInfo[] = []
+    materialProperties.forEach((property, propIndex) => {
+      if (!property || property.shader !== 'VRM/MToon') {
+        return
+      }
+
+      const materialIndex =
+        (property.name && nameToIndex.get(property.name)) ?? propIndex
+      const material = materials[materialIndex]
+      if (!material) {
+        return
+      }
+
+      this.vrm0MaterialPropertyMap.set(materialIndex, property)
+
+      result.push({
+        id: materialIndex,
+        name: material.name,
+        textures: this.buildVRM0TextureSlots(property),
+      })
+    })
+
+    return result
   }
 
   private collectTextures(): ScenegraphTextureInfo[] {
@@ -306,6 +422,39 @@ export class ScenegraphAdapter {
         primitives,
       }
     })
+  }
+
+  private buildVRM10TextureSlots(material: any, mtoonExtension: any): MaterialTextureSlots {
+    return {
+      main: toTextureReference(material.pbrMetallicRoughness?.baseColorTexture),
+      normal: toTextureReference(material.normalTexture),
+      emission: toTextureReference(material.emissiveTexture),
+      shadeMultiply: toTextureReference(mtoonExtension.shadeMultiplyTexture),
+      rimMultiply: toTextureReference(mtoonExtension.rimMultiplyTexture),
+      outlineWidth: toTextureReference(mtoonExtension.outlineWidthMultiplyTexture),
+      matcap: toTextureReference(mtoonExtension.matcapTexture),
+      uvAnimationMask: toTextureReference(mtoonExtension.uvAnimationMaskTexture),
+    }
+  }
+
+  private buildVRM0TextureSlots(property: VRM0MaterialProperty): MaterialTextureSlots {
+    const pick = (key: string): MaterialTextureReference | undefined => {
+      const index = property.textureProperties?.[key]
+      if (typeof index !== 'number' || index < 0) {
+        return undefined
+      }
+      return { textureIndex: index }
+    }
+
+    return {
+      main: pick('_MainTex'),
+      shadeMultiply: pick('_ShadeTexture'),
+      normal: pick('_BumpMap'),
+      emission: pick('_EmissionMap'),
+      rimMultiply: pick('_RimTexture'),
+      outlineWidth: pick('_OutlineWidthTexture'),
+      uvAnimationMask: pick('_UvAnimMaskTexture'),
+    }
   }
 
   private async buildTextureDescriptor(
@@ -403,7 +552,7 @@ export class ScenegraphAdapter {
         continue
       }
 
-      this.updateMaterialTexture(material, assignment.slot, textureIndex, assignment.texCoord)
+      this.updateMaterialTexture(material, assignment.materialId, assignment.slot, textureIndex, assignment.texCoord)
     }
 
     this.pendingAssignments.clear()
@@ -460,6 +609,7 @@ export class ScenegraphAdapter {
 
     const [removed] = textures.splice(textureIndex, 1)
     this.adjustMaterialTextureIndices(textureIndex)
+    this.adjustVRMTextureIndices(textureIndex)
 
     if (typeof removed?.source === 'number') {
       this.removeImageAtIndex(removed.source)
@@ -489,6 +639,60 @@ export class ScenegraphAdapter {
     }
   }
 
+  private adjustVRMTextureIndices(removedIndex: number): void {
+    if (removedIndex < 0) {
+      return
+    }
+    this.adjustVRM0TextureIndices(removedIndex)
+    this.adjustVRM10TextureIndices(removedIndex)
+  }
+
+  private adjustVRM0TextureIndices(removedIndex: number): void {
+    const vrmExtension = this.scenegraph.json.extensions?.VRM
+    const materialProperties: VRM0MaterialProperty[] = vrmExtension?.materialProperties ?? []
+    for (const property of materialProperties) {
+      const textures = property.textureProperties
+      if (!textures) {
+        continue
+      }
+
+      for (const key of Object.keys(textures)) {
+        const value = textures[key]
+        if (typeof value !== 'number') {
+          continue
+        }
+        if (value === removedIndex) {
+          delete textures[key]
+        } else if (value > removedIndex) {
+          textures[key] = value - 1
+        }
+      }
+    }
+  }
+
+  private adjustVRM10TextureIndices(removedIndex: number): void {
+    const materials = this.scenegraph.json.materials ?? []
+    for (const material of materials) {
+      const mtoonExtension = material.extensions?.VRMC_materials_mtoon
+      if (!mtoonExtension) {
+        continue
+      }
+
+      for (const field of Object.values(VRM10_TEXTURE_FIELD_MAP)) {
+        const textureInfo = mtoonExtension[field]
+        if (!textureInfo || typeof textureInfo.index !== 'number') {
+          continue
+        }
+
+        if (textureInfo.index === removedIndex) {
+          delete mtoonExtension[field]
+        } else if (textureInfo.index > removedIndex) {
+          textureInfo.index -= 1
+        }
+      }
+    }
+  }
+
   private removeImageAtIndex(imageIndex: number): void {
     const images = this.scenegraph.json.images
     if (!images || imageIndex < 0 || imageIndex >= images.length) {
@@ -512,6 +716,7 @@ export class ScenegraphAdapter {
 
   private updateMaterialTexture(
     material: any,
+    materialId: number,
     slot: TextureSlot,
     textureIndex: number,
     texCoord?: number,
@@ -525,16 +730,7 @@ export class ScenegraphAdapter {
           index: textureIndex,
           texCoord: texCoord ?? existing.texCoord,
         }
-        break
-      }
-      case 'metallicRoughness': {
-        material.pbrMetallicRoughness = material.pbrMetallicRoughness ?? {}
-        const existing = material.pbrMetallicRoughness.metallicRoughnessTexture ?? {}
-        material.pbrMetallicRoughness.metallicRoughnessTexture = {
-          ...existing,
-          index: textureIndex,
-          texCoord: texCoord ?? existing.texCoord,
-        }
+        this.updateVRM0SlotTexture(materialId, slot, textureIndex)
         break
       }
       case 'normal': {
@@ -544,6 +740,7 @@ export class ScenegraphAdapter {
           index: textureIndex,
           texCoord: texCoord ?? existing.texCoord,
         }
+        this.updateVRM0SlotTexture(materialId, slot, textureIndex)
         break
       }
       case 'emissive': {
@@ -553,20 +750,94 @@ export class ScenegraphAdapter {
           index: textureIndex,
           texCoord: texCoord ?? existing.texCoord,
         }
-        break
-      }
-      case 'occlusion': {
-        const existing = material.occlusionTexture ?? {}
-        material.occlusionTexture = {
-          ...existing,
-          index: textureIndex,
-          texCoord: texCoord ?? existing.texCoord,
-        }
+        this.updateVRM0SlotTexture(materialId, slot, textureIndex)
         break
       }
       default:
+        if (slot.startsWith('custom:')) {
+          this.updateMToonCustomTexture(material, materialId, slot, textureIndex, texCoord)
+        }
         break
     }
+  }
+
+  private updateMToonCustomTexture(
+    material: any,
+    materialId: number,
+    slot: TextureSlot,
+    textureIndex: number,
+    texCoord?: number,
+  ): void {
+    if (this.vrmVersion === '0.x') {
+      this.updateVRM0SlotTexture(materialId, slot, textureIndex)
+      return
+    }
+
+    const field = VRM10_TEXTURE_FIELD_MAP[slot]
+    if (!field) {
+      return
+    }
+
+    const mtoonExtension = material.extensions?.VRMC_materials_mtoon
+    if (!mtoonExtension) {
+      return
+    }
+
+    const existing = mtoonExtension[field] ?? {}
+    mtoonExtension[field] = {
+      ...existing,
+      index: textureIndex,
+      texCoord: texCoord ?? existing.texCoord,
+    }
+  }
+
+  private updateVRM0SlotTexture(materialId: number, slot: TextureSlot, textureIndex: number): void {
+    if (this.vrmVersion !== '0.x') {
+      return
+    }
+    const propertyKey = VRM0_TEXTURE_PROPERTY_MAP[slot]
+    if (!propertyKey) {
+      return
+    }
+    const property = this.findVRM0MaterialProperty(materialId)
+    if (!property) {
+      return
+    }
+    property.textureProperties = property.textureProperties ?? {}
+    property.textureProperties[propertyKey] = textureIndex
+  }
+
+  private findVRM0MaterialProperty(materialId: number): VRM0MaterialProperty | undefined {
+    if (this.vrmVersion !== '0.x') {
+      return undefined
+    }
+    const cached = this.vrm0MaterialPropertyMap.get(materialId)
+    if (cached) {
+      return cached
+    }
+
+    const vrmExtension = this.scenegraph.json.extensions?.VRM
+    const materialProperties: VRM0MaterialProperty[] = vrmExtension?.materialProperties ?? []
+    if (!materialProperties.length) {
+      return undefined
+    }
+
+    const materials = this.scenegraph.json.materials ?? []
+    const material = materials[materialId]
+    if (!material) {
+      return undefined
+    }
+
+    const matched =
+      (material.name &&
+        materialProperties.find((property) => property?.name === material.name)) ??
+      materialProperties[materialId]
+
+    if (matched) {
+      this.vrm0MaterialPropertyMap.set(materialId, matched)
+    }
+
+    return matched
   }
 }
 
@@ -661,4 +932,34 @@ async function loadJimpModule(): Promise<JimpConstructor> {
     })
   }
   return jimpModulePromise
+}
+
+function detectVRMMajorVersion(gltf: GLTFWithBuffers): VRMMajorVersion | null {
+  const extensions = gltf.json.extensions ?? {}
+  if (extensions && typeof extensions === 'object') {
+    if ('VRM' in extensions) {
+      return '0.x'
+    }
+    if ('VRMC_vrm' in extensions) {
+      return '1.0'
+    }
+  }
+
+  const extensionsUsed = gltf.json.extensionsUsed ?? []
+  if (extensionsUsed.includes('VRM')) {
+    return '0.x'
+  }
+  if (extensionsUsed.includes('VRMC_vrm')) {
+    return '1.0'
+  }
+
+  const extensionsRequired = gltf.json.extensionsRequired ?? []
+  if (extensionsRequired.includes('VRM')) {
+    return '0.x'
+  }
+  if (extensionsRequired.includes('VRMC_vrm')) {
+    return '1.0'
+  }
+
+  return null
 }

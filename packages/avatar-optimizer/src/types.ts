@@ -93,10 +93,11 @@ export type OptimizationError =
 
   | { type: 'UNKNOWN_ERROR'; message: string }
 
+  | { type: 'UNSUPPORTED_VRM_VERSION'; message: string }
+
   | ValidationError
 
   | ProcessingError
 
   | AtlasError
-
 

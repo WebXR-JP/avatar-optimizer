@@ -1,4 +1,4 @@
-import { ResultAsync } from 'neverthrow'
+import { errAsync, ResultAsync } from 'neverthrow'
 
 import {
   buildAtlases,
@@ -49,10 +49,15 @@ export function optimizeVRM(
         document,
       })),
     )
-    .andThen((state) =>
-      ResultAsync.fromPromise(
+    .andThen((state) => {
+      const adapterResult = ScenegraphAdapter.from(state.document.gltf)
+      if (adapterResult.isErr()) {
+        return errAsync(adapterResult.error)
+      }
+
+      const adapter = adapterResult.value
+      return ResultAsync.fromPromise(
         (async () => {
-          const adapter = ScenegraphAdapter.from(state.document.gltf)
           const descriptors = await adapter.createAtlasMaterialDescriptors()
           return {
             ...state,
@@ -64,8 +69,8 @@ export function optimizeVRM(
           type: 'PROCESSING_FAILED' as const,
           message: `Failed to enumerate textures: ${String(error)}`,
         }),
-      ),
-    )
+      )
+    })
     .andThen((state) =>
       ResultAsync.fromPromise(
         processAtlases(state, options),
