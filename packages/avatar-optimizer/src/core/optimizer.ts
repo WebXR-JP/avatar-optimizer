@@ -109,6 +109,10 @@ async function processAtlases(
 
   context.adapter.applyAtlasResult(atlasResult, { mimeType: 'image/png' })
   context.adapter.flush()
+  const scenegraph = context.adapter.unwrap()
+  context.document = {
+    gltf: scenegraph.gltf,
+  }
 
   return {
     ...context,
