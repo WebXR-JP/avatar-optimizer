@@ -13,12 +13,14 @@ export default defineConfig([
     minify: false,
     treeshake: true,
     outDir: 'dist',
-    external: ['canvas'],
+    external: ['canvas', 'jimp'],
   },
   // CLI build
   {
     name: 'cli',
-    entry: ['src/cli/index.ts'],
+    entry: {
+      cli: 'src/cli/index.ts',
+    },
     format: ['esm'],
     dts: false,
     splitting: false,
@@ -28,6 +30,6 @@ export default defineConfig([
     treeshake: true,
     outDir: 'dist',
     outExtension: () => ({ js: '.mjs' }),
-    external: ['canvas'],
+    external: ['canvas', 'jimp'],
   },
 ])

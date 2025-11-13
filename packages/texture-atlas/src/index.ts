@@ -7,14 +7,18 @@
 
 // Public API のみをエクスポート
 export { atlasTexturesInDocument, packAndCreateAtlas } from './atlas/process-gltf-atlas'
+export { buildAtlases } from './core/atlas-builder'
 export type {
   AtlasOptions,
   AtlasResult,
   AtlasError,
+  AtlasMaterialDescriptor,
+  AtlasTextureDescriptor,
   PackingResult,
   UVMapping,
   Rectangle,
-  Vector2,
-  IslandTransform,
   PackedTexture,
+  SlotAtlasImage,
+  MaterialPlacement,
+  AtlasBuildResult,
 } from './types'
