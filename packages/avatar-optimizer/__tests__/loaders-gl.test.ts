@@ -58,7 +58,7 @@ describe('loaders.gl VRM I/O', () => {
       throw new Error(writeResult.error.message)
     }
 
-    const gltfJson = parseGLBJson(writeResult.value)
+    const gltfJson = await parseGLBJson(writeResult.value)
     expect(gltfJson).toEqual(readResult.value.gltf.json)
 
     const writeSize = writeResult.value.byteLength
@@ -84,7 +84,7 @@ describe('loaders.gl VRM I/O', () => {
       throw new Error(writeResult.error.message)
     }
 
-    const gltfJson = parseGLBJson(writeResult.value)
+    const gltfJson = await parseGLBJson(writeResult.value)
     expect(gltfJson.asset?.generator).toBe('loaders-gl-test')
   })
 })
@@ -145,7 +145,7 @@ describe('collapseBuffersToSingleBuffer', () => {
       throw new Error(writeResult.error.message)
     }
 
-    const gltfJson = parseGLBJson(writeResult.value)
+    const gltfJson = await parseGLBJson(writeResult.value)
     expect(gltfJson.buffers).toHaveLength(1)
     const maxBufferIndex =
       Math.max(
