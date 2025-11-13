@@ -487,7 +487,7 @@ describe('ScenegraphAdapter', () => {
       throw new Error(`Failed to write VRM: ${writeResult.error.message}`)
     }
 
-    const gltfJson = parseGLBJson(writeResult.value)
+    const gltfJson = await parseGLBJson(writeResult.value)
     const bufferLength = gltfJson.buffers?.[0]?.byteLength ?? 0
     const maxSpan = Math.max(
       0,
