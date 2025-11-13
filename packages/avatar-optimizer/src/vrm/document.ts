@@ -3,9 +3,22 @@ import { ResultAsync } from 'neverthrow'
 
 import type { OptimizationError } from '../types'
 
+type BinaryLike = ArrayBuffer | ArrayBufferView
+
+function toArrayBuffer(data: BinaryLike): ArrayBuffer {
+  if (data instanceof ArrayBuffer) {
+    return data
+  }
+
+  const { buffer, byteOffset, byteLength } = data
+  return buffer.slice(byteOffset, byteOffset + byteLength)
+}
+
 export function loadDocument(
-  arrayBuffer: ArrayBuffer,
+  arrayBufferOrView: BinaryLike,
 ): ResultAsync<Document, OptimizationError> {
+  const arrayBuffer = toArrayBuffer(arrayBufferOrView)
+
   return ResultAsync.fromPromise(
     (async () => {
       const { WebIO } = await import('@gltf-transform/core')
@@ -24,11 +37,11 @@ export function loadDocument(
 }
 
 export function extractVRMExtensionFromBinary(
-  arrayBuffer: ArrayBuffer,
+  binaryData: BinaryLike,
 ): ResultAsync<Record<string, any> | null, OptimizationError> {
   return ResultAsync.fromPromise(
     (async () => {
-      const gltfJson = parseGLBJson(arrayBuffer)
+      const gltfJson = parseGLBJson(binaryData)
       return gltfJson.extensions?.VRM ?? null
     })(),
     (error) => ({
@@ -72,6 +85,26 @@ export async function documentToJSON(document: Document): Promise<JSONDocument> 
   const { WebIO } = await import('@gltf-transform/core')
   const io = new WebIO()
   return io.writeJSON(document)
+}
+
+export function loadJsonDocumentFromGLB(
+  binaryData: BinaryLike,
+): ResultAsync<JSONDocument, OptimizationError> {
+  return loadDocument(binaryData).andThen((document) =>
+    ResultAsync.fromPromise(
+      documentToJSON(document),
+      (error) => ({
+        type: 'DOCUMENT_PARSE_FAILED' as const,
+        message: `Failed to convert glTF document to JSON: ${String(error)}`,
+      })
+    )
+  )
+}
+
+export function extractJsonFromGLB(
+  binaryData: BinaryLike,
+): ResultAsync<Record<string, any>, OptimizationError> {
+  return loadJsonDocumentFromGLB(binaryData).map((jsonDoc) => jsonDoc.json)
 }
 
 export async function jsonDocumentToGLB(jsonDoc: JSONDocument): Promise<ArrayBuffer> {
@@ -129,7 +162,13 @@ export function calculateTextureScale(
   return Math.max(0.1, Math.min(1.0, scale))
 }
 
-function parseGLBJson(arrayBuffer: ArrayBuffer): Record<string, any> {
+/**
+ * GLB バイナリから JSON チャンクを抽出してパースする。
+ * ArrayBufferView（Buffer / Uint8Array など）にも対応。
+ */
+export function parseGLBJson(arrayBufferOrView: BinaryLike): Record<string, any> {
+  const arrayBuffer = toArrayBuffer(arrayBufferOrView)
+
   const view = new DataView(arrayBuffer)
   const magic = view.getUint32(0, true)
 
