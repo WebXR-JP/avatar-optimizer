@@ -1,76 +1,82 @@
-import { GLTFScenegraph } from '@loaders.gl/gltf'
+import type { BufferAttribute, BufferGeometry, Material, Mesh } from 'three'
 
+import type { ThreeVRMDocument } from '../types'
 import type { PendingMaterialPlacement } from '../vrm/scenegraph-adapter'
 
-const FLOAT_COMPONENT_TYPE = 5126
-const TEXCOORD_PREFIX = 'TEXCOORD_'
-
 /**
- * アトラス配置結果に応じて対象プリミティブの UV を再計算する
+ * three.js のオブジェクト階層に対してアトラス適用後の UV を再計算する
  */
 export function remapPrimitiveUVs(
-  scenegraph: GLTFScenegraph,
+  document: ThreeVRMDocument,
   placements: PendingMaterialPlacement[],
 ): void {
   if (!placements.length) {
     return
   }
 
-  const placementMap = new Map<number, PendingMaterialPlacement>()
-  for (const placement of placements) {
-    placementMap.set(placement.materialIndex, placement)
-  }
+  const placementMap = new Map<string, PendingMaterialPlacement>(
+    placements.map((placement) => [placement.materialUuid, placement]),
+  )
 
-  const processedAccessors = new Set<number>()
-  const meshes = scenegraph.json.meshes ?? []
-  meshes.forEach((mesh) => {
-    mesh?.primitives?.forEach((primitive) => {
-      if (!primitive || typeof primitive.material !== 'number') {
+  const processedAttributes = new Set<BufferAttribute>()
+  const scenes = document.gltf.scenes?.length
+    ? document.gltf.scenes
+    : document.gltf.scene
+      ? [document.gltf.scene]
+      : []
+
+  scenes.forEach((scene) => {
+    scene.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) {
         return
       }
 
-      const placement = placementMap.get(primitive.material)
-      if (!placement) {
-        return
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((material) => {
+          transformGeometry(mesh.geometry, material, placementMap, processedAttributes)
+        })
+      } else {
+        transformGeometry(mesh.geometry, mesh.material, placementMap, processedAttributes)
       }
-
-      const attributeName = buildTexCoordAttributeName(placement.texCoord)
-      const accessorIndex = primitive.attributes?.[attributeName]
-      if (typeof accessorIndex !== 'number') {
-        return
-      }
-
-      if (processedAccessors.has(accessorIndex)) {
-        return
-      }
-
-      applyUvTransform(scenegraph, accessorIndex, placement.uvTransform)
-      processedAccessors.add(accessorIndex)
     })
   })
 }
 
-function buildTexCoordAttributeName(texCoord: number): string {
-  return `${TEXCOORD_PREFIX}${Math.max(0, texCoord || 0)}`
+function transformGeometry(
+  geometry: BufferGeometry | undefined,
+  material: Material | undefined,
+  placements: Map<string, PendingMaterialPlacement>,
+  processed: Set<BufferAttribute>,
+): void {
+  if (!geometry || !material) {
+    return
+  }
+
+  const placement = placements.get(material.uuid)
+  if (!placement) {
+    return
+  }
+
+  const attribute = geometry.getAttribute('uv') as BufferAttribute | undefined
+  if (!attribute || processed.has(attribute)) {
+    return
+  }
+
+  applyUvTransform(attribute, placement.uvTransform)
+  processed.add(attribute)
 }
 
 function applyUvTransform(
-  scenegraph: GLTFScenegraph,
-  accessorIndex: number,
+  attribute: BufferAttribute,
   uvTransform: PendingMaterialPlacement['uvTransform'],
 ): void {
-  const accessor = scenegraph.getAccessor(accessorIndex)
-  if (!accessor || accessor.type !== 'VEC2' || accessor.componentType !== FLOAT_COMPONENT_TYPE) {
+  if (attribute.itemSize < 2) {
     return
   }
 
-  const componentCount = getAccessorComponentCount(accessor.type)
-  if (componentCount < 2) {
-    return
-  }
-
-  const data = scenegraph.getTypedArrayForAccessor(accessorIndex)
-  if (!(data instanceof Float32Array)) {
+  const array = attribute.array
+  if (!(array instanceof Float32Array)) {
     return
   }
 
@@ -79,32 +85,13 @@ function applyUvTransform(
   const scaleV = uvTransform[4]
   const translateV = uvTransform[5]
 
-  for (let i = 0; i < accessor.count; i++) {
-    const offset = i * componentCount
-    const u = data[offset]
-    const v = data[offset + 1]
-    data[offset] = u * scaleU + translateU
-    data[offset + 1] = v * scaleV + translateV
+  for (let i = 0; i < attribute.count; i++) {
+    const offset = i * attribute.itemSize
+    const u = array[offset]
+    const v = array[offset + 1]
+    array[offset] = u * scaleU + translateU
+    array[offset + 1] = v * scaleV + translateV
   }
-}
 
-function getAccessorComponentCount(type?: string): number {
-  switch (type) {
-    case 'SCALAR':
-      return 1
-    case 'VEC2':
-      return 2
-    case 'VEC3':
-      return 3
-    case 'VEC4':
-      return 4
-    case 'MAT2':
-      return 4
-    case 'MAT3':
-      return 9
-    case 'MAT4':
-      return 16
-    default:
-      return 0
-  }
+  attribute.needsUpdate = true
 }

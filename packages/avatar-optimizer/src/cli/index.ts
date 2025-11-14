@@ -4,6 +4,8 @@ import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { Command } from 'commander'
 import {
+  exportVRMDocumentToGLB,
+  importVRMWithThreeVRM,
   optimizeVRM,
   readVRMDocumentWithLoadersGL,
   validateVRMFile,
@@ -173,25 +175,38 @@ program
           : undefined,
       }
 
-      // Run optimization
-      console.log('⚙️  Optimizing VRM...')
-      const result = await optimizeVRM(file, optimizationOptions)
-
-      if (result.isErr()) {
-        const error = result.error
-        console.error(
-          `\n❌ Error (${error.type}): ${error.message}`,
-        )
+      console.log('📦 Loading VRM via three-vrm...')
+      const binary = fileBuffer.buffer.slice(
+        fileBuffer.byteOffset,
+        fileBuffer.byteOffset + fileBuffer.byteLength,
+      )
+      const loadResult = await importVRMWithThreeVRM(binary)
+      if (loadResult.isErr()) {
+        const error = loadResult.error
+        console.error(`\n❌ Error (${error.type}): ${error.message}`)
         process.exit(1)
       }
 
-      // Write output file
-      console.log('💾 Writing output file...')
-      const optimizedBuffer = await result.value.arrayBuffer()
-      await writeFile(outputPath, Buffer.from(optimizedBuffer))
+      console.log('⚙️  Optimizing VRM...')
+      const optimizeResult = await optimizeVRM(loadResult.value, optimizationOptions)
+      if (optimizeResult.isErr()) {
+        const error = optimizeResult.error
+        console.error(`\n❌ Error (${error.type}): ${error.message}`)
+        process.exit(1)
+      }
+
+      console.log('💾 Exporting optimized VRM...')
+      const exportResult = await exportVRMDocumentToGLB(optimizeResult.value)
+      if (exportResult.isErr()) {
+        const error = exportResult.error
+        console.error(`\n❌ Error (${error.type}): ${error.message}`)
+        process.exit(1)
+      }
+
+      await writeFile(outputPath, Buffer.from(exportResult.value))
 
       const originalSize = fileBuffer.byteLength / 1024 / 1024
-      const optimizedSize = optimizedBuffer.byteLength / 1024 / 1024
+      const optimizedSize = exportResult.value.byteLength / 1024 / 1024
       const reduction = ((1 - optimizedSize / originalSize) * 100).toFixed(2)
 
       console.log(`\n✅ Optimization complete!`)

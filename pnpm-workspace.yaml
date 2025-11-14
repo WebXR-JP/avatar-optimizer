@@ -1,3 +1,4 @@
 packages:
   - 'packages/avatar-optimizer'
   - 'packages/texture-atlas'
+  - 'packages/debug-viewer'

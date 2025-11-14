@@ -1,4 +1,4 @@
-import { errAsync, ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 
 import {
   buildAtlases,
@@ -7,17 +7,14 @@ import {
   type AtlasMaterialDescriptor,
 } from '@xrift/avatar-optimizer-texture-atlas'
 
-import type { OptimizationError, OptimizationOptions } from '../types'
-import {
-  readVRMDocumentWithLoadersGL,
-  writeVRMDocumentWithLoadersGL,
-  type LoadersGLVRMDocument,
-} from '../vrm/loaders-gl'
+import type { OptimizationError, OptimizationOptions, ThreeVRMDocument } from '../types'
+import { importVRMWithThreeVRM } from '../vrm/three-vrm-loader'
+import { exportVRMDocumentToGLB } from '../vrm/exporter'
 import { ScenegraphAdapter } from '../vrm/scenegraph-adapter'
 import { remapPrimitiveUVs } from './uv-remap'
 
 interface OptimizationContext {
-  document: LoadersGLVRMDocument
+  document: ThreeVRMDocument
   adapter: ScenegraphAdapter
   descriptors: AtlasMaterialDescriptor[]
   atlasResult?: AtlasBuildResult
@@ -28,12 +25,30 @@ interface OptimizationContext {
  * テクスチャアトラス化と UV 再計算を含む最小限のパイプライン。
  */
 export function optimizeVRM(
+  input: File,
+  options: OptimizationOptions,
+): ResultAsync<File, OptimizationError>
+export function optimizeVRM(
+  input: ThreeVRMDocument,
+  options: OptimizationOptions,
+): ResultAsync<ThreeVRMDocument, OptimizationError>
+export function optimizeVRM(
+  input: File | ThreeVRMDocument,
+  options: OptimizationOptions,
+): ResultAsync<File | ThreeVRMDocument, OptimizationError> {
+  if (isThreeVRMDocument(input)) {
+    return optimizeThreeDocument(input, options)
+  }
+  return optimizeFileInput(input, options)
+}
+
+function optimizeFileInput(
   file: File,
   options: OptimizationOptions,
 ): ResultAsync<File, OptimizationError> {
   if (!file || typeof file.arrayBuffer !== 'function') {
     return ResultAsync.fromPromise(
-      Promise.reject(new Error('Invalid file')),
+      Promise.reject(new Error('Invalid file input')),
       () => ({
         type: 'INVALID_FILE_TYPE' as const,
         message: 'Invalid file: expected a File object',
@@ -45,49 +60,42 @@ export function optimizeVRM(
     type: 'LOAD_FAILED' as const,
     message: `Failed to read file: ${String(error)}`,
   }))
-    .andThen((arrayBuffer) =>
-      readVRMDocumentWithLoadersGL(arrayBuffer).map((document) => ({
-        document,
-      })),
+    .andThen((arrayBuffer) => importVRMWithThreeVRM(arrayBuffer))
+    .andThen((document) => optimizeThreeDocument(document, options))
+    .andThen((optimizedDocument) =>
+      exportVRMDocumentToGLB(optimizedDocument).map((arrayBuffer) => {
+        const uint8 = new Uint8Array(arrayBuffer)
+        return new File([uint8], file.name, { type: file.type })
+      }),
     )
-    .andThen((state) => {
-      const adapterResult = ScenegraphAdapter.from(state.document.gltf)
+}
+
+function optimizeThreeDocument(
+  document: ThreeVRMDocument,
+  options: OptimizationOptions,
+): ResultAsync<ThreeVRMDocument, OptimizationError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const adapterResult = ScenegraphAdapter.from(document)
       if (adapterResult.isErr()) {
-        return errAsync(adapterResult.error)
+        throw adapterResult.error
       }
 
       const adapter = adapterResult.value
-      return ResultAsync.fromPromise(
-        (async () => {
-          const descriptors = await adapter.createAtlasMaterialDescriptors()
-          return {
-            ...state,
-            adapter,
-            descriptors,
-          }
-        })(),
-        (error) => ({
-          type: 'PROCESSING_FAILED' as const,
-          message: `Failed to enumerate textures: ${String(error)}`,
-        }),
+      const descriptors = await adapter.createAtlasMaterialDescriptors()
+      const context = await processAtlases(
+        {
+          document,
+          adapter,
+          descriptors,
+        },
+        options,
       )
-    })
-    .andThen((state) =>
-      ResultAsync.fromPromise(
-        processAtlases(state, options),
-        (error) => mapAtlasError(error),
-      ),
-    )
-    .andThen((state) =>
-      writeVRMDocumentWithLoadersGL(state.document).mapErr((error) => ({
-        type: 'PROCESSING_FAILED' as const,
-        message: `Failed to write optimized file: ${String(error)}`,
-      })),
-    )
-    .map((arrayBuffer) => {
-      const newUint8Array = new Uint8Array(arrayBuffer)
-      return new File([newUint8Array], file.name, { type: file.type })
-    })
+
+      return context.document
+    })(),
+    (error) => normalizeOptimizationError(error),
+  )
 }
 
 async function processAtlases(
@@ -103,19 +111,18 @@ async function processAtlases(
     options.maxTextureSize,
   )
 
-  const atlasResult = await buildAtlases(context.descriptors, {
-    maxSize: options.maxTextureSize,
-    textureScale,
-  })
-
-  context.adapter.applyAtlasResult(atlasResult, { mimeType: 'image/png' })
-  const placements = context.adapter.consumePendingPlacements()
-  const scenegraph = context.adapter.unwrap()
-  remapPrimitiveUVs(scenegraph, placements)
-  context.adapter.flush()
-  context.document = {
-    gltf: scenegraph.gltf,
+  let atlasResult: AtlasBuildResult
+  try {
+    atlasResult = await buildAtlases(context.descriptors, {
+      maxSize: options.maxTextureSize,
+      textureScale,
+    })
+  } catch (error) {
+    throw mapAtlasError(error)
   }
+
+  const placements = await context.adapter.applyAtlasResult(atlasResult)
+  remapPrimitiveUVs(context.document, placements)
 
   return {
     ...context,
@@ -173,4 +180,33 @@ function mapAtlasError(error: unknown): OptimizationError {
     type: 'PROCESSING_FAILED',
     message: `Texture atlasing failed: ${String(error)}`,
   }
+}
+
+function isThreeVRMDocument(input: unknown): input is ThreeVRMDocument {
+  return Boolean(
+    input &&
+      typeof input === 'object' &&
+      'gltf' in input &&
+      'vrm' in input,
+  )
+}
+
+function normalizeOptimizationError(error: unknown): OptimizationError {
+  if (isOptimizationError(error)) {
+    return error
+  }
+  return {
+    type: 'UNKNOWN_ERROR',
+    message: `Failed to optimize VRM: ${String(error)}`,
+  }
+}
+
+function isOptimizationError(error: unknown): error is OptimizationError {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'type' in error &&
+      typeof (error as { type?: unknown }).type === 'string' &&
+      'message' in error,
+  )
 }
