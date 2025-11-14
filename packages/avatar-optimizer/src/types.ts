@@ -1,13 +1,26 @@
 import type { AtlasError } from '@xrift/avatar-optimizer-texture-atlas'
+import type { VRM } from '@pixiv/three-vrm'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
-export interface OptimizationOptions {
+export interface OptimizationOptions
+{
   compressTextures: boolean
   maxTextureSize: number
   reduceMeshes: boolean
   targetPolygonCount?: number
 }
 
-export interface VRMStatistics {
+/**
+ * three-vrm / GLTFLoader で読み込んだ VRM ドキュメント
+ */
+export interface ThreeVRMDocument
+{
+  gltf: GLTF
+  vrm: VRM
+}
+
+export interface VRMStatistics
+{
   polygonCount: number
   textureCount: number
   materialCount: number
@@ -21,7 +34,8 @@ export interface VRMStatistics {
  * テクスチャスロットの情報
  * マテリアルごとにどのテクスチャがどのスロットで使用されているかを記録
  */
-export interface TextureSlotInfo {
+export interface TextureSlotInfo
+{
   slot: 'baseColor'
   /** 当該スロットで使用されているテクスチャのリスト */
   textures: Array<{
@@ -40,7 +54,8 @@ export interface TextureSlotInfo {
 /**
  * VRM バリデーション結果の詳細情報
  */
-export interface VRMValidationIssue {
+export interface VRMValidationIssue
+{
   code: string
   message: string
   severity: 'error' | 'warning' | 'info'
@@ -50,7 +65,8 @@ export interface VRMValidationIssue {
 /**
  * VRM バリデーション結果
  */
-export interface VRMValidationResult {
+export interface VRMValidationResult
+{
   isValid: boolean
   issues: VRMValidationIssue[]
   info?: {
@@ -100,4 +116,3 @@ export type OptimizationError =
   | ProcessingError
 
   | AtlasError
-

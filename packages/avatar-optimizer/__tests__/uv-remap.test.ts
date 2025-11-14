@@ -1,115 +1,78 @@
+import { BufferGeometry, Float32BufferAttribute, Mesh, MeshBasicMaterial, Scene } from 'three'
+import type { VRM } from '@pixiv/three-vrm'
 import { describe, expect, it } from 'vitest'
-import { GLTFScenegraph } from '@loaders.gl/gltf'
 
 import { remapPrimitiveUVs } from '../src/core/uv-remap'
 import type { PendingMaterialPlacement } from '../src/vrm/scenegraph-adapter'
+import type { ThreeVRMDocument } from '../src/types'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
-describe('remapPrimitiveUVs', () => {
-  it('applies atlas transform to TEXCOORD_0', () => {
-    const initialUVs = [0, 0, 1, 0, 1, 1, 0, 1]
-    const scenegraph = createScenegraph(initialUVs)
+describe('remapPrimitiveUVs (three.js)', () => {
+  it('applies atlas transform to uv attribute', () => {
+    const { document, material, attribute } = createDocumentWithUVs([0, 0, 1, 0, 1, 1, 0, 1])
 
     const placement: PendingMaterialPlacement = {
-      materialIndex: 0,
-      texCoord: 0,
+      materialUuid: material.uuid,
       uvTransform: [0.5, 0, 0.25, 0, 0.5, 0.25, 0, 0, 1],
     }
 
-    remapPrimitiveUVs(scenegraph, [placement])
+    remapPrimitiveUVs(document, [placement])
 
-    const updated = Array.from(scenegraph.getTypedArrayForAccessor(0) as Float32Array)
-    expect(updated).toEqual([0.25, 0.25, 0.75, 0.25, 0.75, 0.75, 0.25, 0.75])
+    expect(Array.from(attribute.array as Float32Array)).toEqual([
+      0.25, 0.25, 0.75, 0.25, 0.75, 0.75, 0.25, 0.75,
+    ])
   })
 
-  it('ignores primitives without matching attributes', () => {
-    const initialUVs = [0, 0, 1, 0]
-    const scenegraph = createScenegraph(initialUVs, { omitTexCoord0: true })
+  it('ignores materials without placements', () => {
+    const { document, attribute } = createDocumentWithUVs([0, 0, 1, 0])
 
-    const placement: PendingMaterialPlacement = {
-      materialIndex: 0,
-      texCoord: 0,
-      uvTransform: [1, 0, 0.5, 0, 1, 0.5, 0, 0, 1],
-    }
+    remapPrimitiveUVs(document, [])
 
-    remapPrimitiveUVs(scenegraph, [placement])
-
-    const updated = Array.from(scenegraph.getTypedArrayForAccessor(0) as Float32Array)
-    expect(updated).toEqual(initialUVs)
+    expect(Array.from(attribute.array as Float32Array)).toEqual([0, 0, 1, 0])
   })
 
-  it('applies transform only once per accessor even if shared by multiple primitives', () => {
-    const initialUVs = [0, 0, 1, 0]
-    const scenegraph = createScenegraph(initialUVs, { duplicatePrimitive: true })
+  it('applies transform only once per shared attribute', () => {
+    const { document, material, attribute, mesh } = createDocumentWithUVs([0, 0, 1, 0])
+    // Share geometry across another mesh/material reference
+    const clone = new Mesh(mesh.geometry, material)
+    document.gltf.scene?.add(clone)
 
     const placement: PendingMaterialPlacement = {
-      materialIndex: 0,
-      texCoord: 0,
+      materialUuid: material.uuid,
       uvTransform: [0.5, 0, 0.25, 0, 0.5, 0.25, 0, 0, 1],
     }
 
-    remapPrimitiveUVs(scenegraph, [placement])
+    remapPrimitiveUVs(document, [placement])
 
-    const updated = Array.from(scenegraph.getTypedArrayForAccessor(0) as Float32Array)
-    expect(updated).toEqual([0.25, 0.25, 0.75, 0.25])
+    expect(Array.from(attribute.array as Float32Array)).toEqual([0.25, 0.25, 0.75, 0.25])
   })
 })
 
-function createScenegraph(
-  uvs: number[],
-  options: { omitTexCoord0?: boolean; duplicatePrimitive?: boolean } = {},
-): GLTFScenegraph {
-  const floatData = new Float32Array(uvs)
-  const buffer = new ArrayBuffer(floatData.byteLength)
-  new Float32Array(buffer).set(floatData)
+function createDocumentWithUVs(uvs: number[]) {
+  const geometry = new BufferGeometry()
+  const attribute = new Float32BufferAttribute(new Float32Array(uvs), 2)
+  geometry.setAttribute('uv', attribute)
 
-  const json = {
-    asset: { version: '2.0' },
-    buffers: [{ byteLength: buffer.byteLength }],
-    bufferViews: [
-      {
-        buffer: 0,
-        byteOffset: 0,
-        byteLength: buffer.byteLength,
-      },
-    ],
-    accessors: [
-      {
-        bufferView: 0,
-        byteOffset: 0,
-        componentType: 5126,
-        count: uvs.length / 2,
-        type: 'VEC2',
-      },
-    ],
-    meshes: [
-      {
-        primitives: buildPrimitives(options),
-      },
-    ],
-    materials: [{}],
+  const material = new MeshBasicMaterial()
+  const mesh = new Mesh(geometry, material)
+
+  const scene = new Scene()
+  scene.add(mesh)
+
+  const gltf = {
+    scene,
+    scenes: [scene],
+    animations: [],
+  } as unknown as GLTF
+
+  const vrm = {
+    materials: [material],
+  } as unknown as VRM
+
+  const document: ThreeVRMDocument = {
+    gltf,
+    vrm,
   }
 
-  return new GLTFScenegraph({
-    json,
-    buffers: [
-      {
-        arrayBuffer: buffer,
-        byteOffset: 0,
-        byteLength: buffer.byteLength,
-      },
-    ],
-  })
-}
-
-function buildPrimitives(options: { omitTexCoord0?: boolean; duplicatePrimitive?: boolean }) {
-  const base = {
-    attributes: options.omitTexCoord0 ? {} : { TEXCOORD_0: 0 },
-    material: 0,
-  }
-
-  if (!options.duplicatePrimitive) {
-    return [base]
-  }
-
-  return [base, { ...base }]
+  return { document, material, attribute, mesh }
 }
