@@ -16,7 +16,8 @@
     "neverthrow": "^8.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "three": "^0.181.1"
+    "three": "^0.181.1",
+    "@xrift/avatar-optimizer": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
