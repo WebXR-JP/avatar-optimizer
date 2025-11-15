@@ -7,57 +7,33 @@ import type { OptimizationError, ThreeVRMDocument } from '../types'
 
 type BinaryLike = ArrayBuffer | ArrayBufferView | SharedArrayBuffer | Blob
 
-export interface ThreeVRMLoaderOptions {
-  /**
-   * 既存の GLTFLoader インスタンスを使い回したい場合に指定
-   * (VRMLoaderPlugin が登録済みであることが前提)
-   */
-  loader?: GLTFLoader
-  /** three.js の LoadingManager を差し込みたい場合に使用 */
-  manager?: LoadingManager
-  /** GLTFLoader.parseAsync の第二引数 (相対リソース解決用) */
-  resourcePath?: string
-  /** VRMLoaderPlugin に渡すオプション */
-  pluginOptions?: VRMLoaderPluginOptions
-}
-
 export type ThreeVRMLoadResult = ThreeVRMDocument
 
 /**
  * three.js + @pixiv/three-vrm で VRM バイナリをパースし VRM インスタンスを返却
  */
 export function importVRMWithThreeVRM(
-  binary: BinaryLike,
-  options: ThreeVRMLoaderOptions = {},
-): ResultAsync<ThreeVRMDocument, OptimizationError> {
+  binary: BinaryLike
+): ResultAsync<VRM, OptimizationError> {
   return ResultAsync.fromPromise(
     (async () => {
-      const loader = ensureGLTFLoader(options)
+      const loader = new GLTFLoader()
       const arrayBuffer = await toArrayBuffer(binary)
-      const gltf = await loader.parseAsync(arrayBuffer, options.resourcePath ?? '')
+      loader.register((parser) => new VRMLoaderPlugin(parser))
+      const gltf = await loader.parseAsync(arrayBuffer, '')
       const vrm = gltf.userData?.vrm as VRM | undefined
 
       if (!vrm) {
         throw new Error('three-vrm loader did not attach a VRM instance to gltf.userData')
       }
 
-      return { vrm, gltf }
+      return vrm
     })(),
     (error) => ({
       type: 'DOCUMENT_PARSE_FAILED' as const,
       message: `Failed to import VRM with three-vrm: ${String(error)}`,
     }),
   )
-}
-
-function ensureGLTFLoader(options: ThreeVRMLoaderOptions): GLTFLoader {
-  if (options.loader) {
-    return options.loader
-  }
-
-  const loader = new GLTFLoader(options.manager)
-  loader.register((parser) => new VRMLoaderPlugin(parser, options.pluginOptions))
-  return loader
 }
 
 async function toArrayBuffer(binary: BinaryLike): Promise<ArrayBuffer> {

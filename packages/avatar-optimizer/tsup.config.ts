@@ -5,31 +5,13 @@ export default defineConfig([
   {
     name: 'library',
     entry: ['src/index.ts'],
-    format: ['esm', 'cjs'],
-    dts: true, // Re-enable DTS generation
+    format: ['esm'],
+    dts: true,
     splitting: false,
     sourcemap: true,
     clean: true,
     minify: false,
     treeshake: true,
     outDir: 'dist',
-    external: ['canvas', 'jimp'],
-  },
-  // CLI build
-  {
-    name: 'cli',
-    entry: {
-      cli: 'src/cli/index.ts',
-    },
-    format: ['esm'],
-    dts: false,
-    splitting: false,
-    sourcemap: false,
-    clean: false,
-    minify: false,
-    treeshake: true,
-    outDir: 'dist',
-    outExtension: () => ({ js: '.mjs' }),
-    external: ['canvas', 'jimp'],
   },
 ])

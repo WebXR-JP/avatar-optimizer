@@ -17,72 +17,29 @@ import type {
   NormalizedPackingResult,
   PackedTexture,
   SlotAtlasImage,
-  TextureSlot,
 } from '../types'
-
-interface MaterialBuildContext {
-  material: AtlasMaterialDescriptor
-  materialIndex: number
-  primaryTexture: AtlasMaterialDescriptor['textures'][number]
-  texturesBySlot: Map<TextureSlot, AtlasMaterialDescriptor['textures'][number]>
-}
-
-const DEFAULT_MAX_SIZE = 2048
-const DEFAULT_TEXTURE_SCALE = 1
 
 export async function buildAtlases(
   materials: AtlasMaterialDescriptor[],
-  options: AtlasOptions = {},
-): Promise<AtlasBuildResult> {
-  if (!materials.length) {
-    return { atlases: [], placements: [] }
-  }
+  size: number = 2048,
+): Promise<AtlasBuildResult>
+{
+  const textures = materials.map(m => m.textures[0])
 
-  const maxSize = options.maxSize ?? DEFAULT_MAX_SIZE
-  const textureScale = options.textureScale ?? DEFAULT_TEXTURE_SCALE
-
-  const contexts = materials.map<MaterialBuildContext>((material, materialIndex) => {
-    if (!material.textures?.length) {
-      throw new Error(`Material ${material.id} does not contain any textures`)
-    }
-
-    const primaryTexture = material.textures[material.primaryTextureIndex]
-    if (!primaryTexture) {
-      throw new Error(
-        `Material ${material.id} does not have a primary texture at index ${material.primaryTextureIndex}`,
-      )
-    }
-
-    const texturesBySlot = new Map<TextureSlot, AtlasMaterialDescriptor['textures'][number]>()
-    material.textures.forEach((texture) => {
-      texturesBySlot.set(texture.slot, texture)
-    })
-
-    return {
-      material,
-      materialIndex,
-      primaryTexture,
-      texturesBySlot,
-    }
-  })
-
-  const scaledSizes = contexts.map((context) => ({
-    width: Math.max(1, Math.round(context.primaryTexture.width * textureScale)),
-    height: Math.max(1, Math.round(context.primaryTexture.height * textureScale)),
-  }))
-
-  const packing = await packTextures(scaledSizes, maxSize, maxSize)
+  const packing = await packTextures(textures, size, size)
   const normalizedPacking = toNormalizedPackingResult(packing)
 
   const pixelRectsByMaterialId = new Map<string, PackedTexture>()
-  packing.packed.forEach((packedRect) => {
+  packing.packed.forEach((packedRect) =>
+  {
     const context = contexts[packedRect.index]
     if (!context) return
     pixelRectsByMaterialId.set(context.material.id, packedRect)
   })
 
   const normalizedRectsByMaterialId = new Map<string, NormalizedPackedTexture>()
-  normalizedPacking.packed.forEach((normalizedRect) => {
+  normalizedPacking.packed.forEach((normalizedRect) =>
+  {
     const context = contexts[normalizedRect.index]
     if (!context) return
     normalizedRectsByMaterialId.set(context.material.id, normalizedRect)
@@ -105,10 +62,13 @@ export async function buildAtlases(
 function buildPlacements(
   contexts: MaterialBuildContext[],
   normalizedRectsByMaterialId: Map<string, NormalizedPackedTexture>,
-): MaterialPlacement[] {
-  return contexts.map((context) => {
+): MaterialPlacement[]
+{
+  return contexts.map((context) =>
+  {
     const normalized = normalizedRectsByMaterialId.get(context.material.id)
-    if (!normalized) {
+    if (!normalized)
+    {
       throw new Error(`Missing normalized packing data for material ${context.material.id}`)
     }
 
@@ -141,15 +101,18 @@ async function buildSlotAtlases(
   normalizedPacking: NormalizedPackingResult,
   normalizedRectsByMaterialId: Map<string, NormalizedPackedTexture>,
   pixelRectsByMaterialId: Map<string, PackedTexture>,
-): Promise<SlotAtlasImage[]> {
+): Promise<SlotAtlasImage[]>
+{
   const slots = collectSlots(contexts)
   const textureDataCache = new Map<string, Promise<Uint8ClampedArray>>()
 
   const atlases: SlotAtlasImage[] = []
 
-  for (const slot of slots) {
+  for (const slot of slots)
+  {
     const slotEntries = contexts
-      .map((context) => {
+      .map((context) =>
+      {
         const texture = context.texturesBySlot.get(slot)
         if (!texture) return null
 
@@ -166,7 +129,8 @@ async function buildSlotAtlases(
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
 
-    if (!slotEntries.length) {
+    if (!slotEntries.length)
+    {
       continue
     }
 
@@ -201,10 +165,13 @@ async function buildSlotAtlases(
   return atlases
 }
 
-function collectSlots(contexts: MaterialBuildContext[]): TextureSlot[] {
+function collectSlots(contexts: MaterialBuildContext[]): TextureSlot[]
+{
   const slotSet = new Set<TextureSlot>()
-  contexts.forEach((context) => {
-    context.material.textures.forEach((texture) => {
+  contexts.forEach((context) =>
+  {
+    context.material.textures.forEach((texture) =>
+    {
       slotSet.add(texture.slot)
     })
   })
@@ -214,13 +181,17 @@ function collectSlots(contexts: MaterialBuildContext[]): TextureSlot[] {
 async function loadTextureData(
   texture: AtlasMaterialDescriptor['textures'][number],
   cache: Map<string, Promise<Uint8ClampedArray>>,
-): Promise<Uint8ClampedArray> {
-  if (!cache.has(texture.id)) {
+): Promise<Uint8ClampedArray>
+{
+  if (!cache.has(texture.id))
+  {
     cache.set(
       texture.id,
-      (async () => {
+      (async () =>
+      {
         const data = await texture.readImageData()
-        if (data instanceof Uint8ClampedArray) {
+        if (data instanceof Uint8ClampedArray)
+        {
           return data
         }
         return new Uint8ClampedArray(data)

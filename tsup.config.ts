@@ -15,19 +15,4 @@ export default defineConfig([
     outDir: 'dist',
     external: ['canvas'],
   },
-  // CLI build
-  {
-    name: 'cli',
-    entry: ['src/cli/index.ts'],
-    format: ['esm'],
-    dts: false,
-    splitting: false,
-    sourcemap: false,
-    clean: false,
-    minify: false,
-    treeshake: true,
-    outDir: 'dist',
-    outExtension: () => ({ js: '.mjs' }),
-    external: ['canvas'],
-  },
 ])

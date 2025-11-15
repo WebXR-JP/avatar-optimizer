@@ -663,8 +663,6 @@ export type { OptimizationOptions, VRMStatistics }
 このプロジェクトのコアスタック：
 
 - **TypeScript**: 5.0+
-- **@gltf-transform/core**: 4.0+ (ピア依存関係)
-- **@gltf-transform/extensions**: 4.0+ (ピア依存関係)
 - **neverthrow**: 6.0+ (同期バリデーション・内部非同期処理の Result 型)
 - **tsup**: 8.0+ (ビルドツール)
 

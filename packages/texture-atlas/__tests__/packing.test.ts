@@ -104,6 +104,19 @@ describe('MaxRects パッカー - packTextures', () => {
       const noOverlapCheck = verifyNoOverlaps(result)
       expect(noOverlapCheck.isValid).toBe(true)
     })
+
+    it('二分探索で可能な限り大きいスケールを維持してパックする', async () => {
+      const sizes = [{ width: 1100, height: 800 }]
+      const result = await packTextures(sizes, 1024, 1024)
+
+      expect(result.packed).toHaveLength(1)
+      const packedTexture = result.packed[0]
+
+      // 幅方向は 1024 に非常に近い値で維持される（過剰に縮小しない）
+      expect(packedTexture.width).toBeGreaterThanOrEqual(1010)
+      expect(packedTexture.width).toBeLessThanOrEqual(1024)
+      expect(packedTexture.height).toBeGreaterThanOrEqual(730)
+    })
   })
 
   describe('オーバーフローとオーバーラップの検出', () => {

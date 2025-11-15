@@ -47,6 +47,7 @@
     "@gltf-transform/core": "^4.0.0",
     "@gltf-transform/extensions": "^4.0.0",
     "@types/node": "^24.10.0",
+    "@types/three": "^0.181.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vitest/coverage-v8": "^2.1.4",
@@ -72,8 +73,8 @@
     "@loaders.gl/polyfills": "^4.3.4",
     "@pixiv/three-vrm": "^3.4.4",
     "@xrift/avatar-optimizer-texture-atlas": "workspace:*",
-    "commander": "^14.0.2",
     "canvas": "^3.2.0",
+    "commander": "^14.0.2",
     "jimp": "^1.6.0",
     "neverthrow": "^8.2.0",
     "three": "^0.181.1"
