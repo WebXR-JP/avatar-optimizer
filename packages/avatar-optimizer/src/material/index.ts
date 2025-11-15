@@ -15,6 +15,7 @@ import type {
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
+import { remapMeshUVsByMaterial } from './uv'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -85,8 +86,11 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
   const atlasMap = atlasesResult.value
 
   // 生成されたアトラス画像をマテリアルに設定
-  for (const material of materials)
+  for (let i = 0; i < materials.length; i++)
   {
+    const material = materials[i]
+    const placement = placements[i]
+
     // スロットごとにアトラステクスチャをマテリアルに割り当て
     if (atlasMap.map) material.map = atlasMap.map
     if (atlasMap.normalMap) material.normalMap = atlasMap.normalMap
@@ -97,12 +101,9 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
     if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
     if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
-  }
 
-  // TODO: プリミティブの UV 座標を再マッピング
-  for (const mesh of meshes)
-  {
-    // TODO: Geometry から TEXCOORD_0 を更新
+    // マテリアルを使用するメッシュの UV 座標を再マッピング
+    remapMeshUVsByMaterial(rootNode, material, placement)
   }
 }
 
