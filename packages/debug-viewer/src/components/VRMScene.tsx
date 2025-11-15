@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
+import { OrbitControls } from '@react-three/drei'
 import { GridHelper, DirectionalLight, AmbientLight } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 
@@ -10,6 +11,7 @@ interface VRMSceneProps {
 /**
  * React Three Fiberのシーンコンポーネント。
  * ライティング、グリッド、VRMモデルの配置を管理します。
+ * OrbitControls でマウスによるカメラ操作を提供します。
  */
 function VRMScene({ vrm }: VRMSceneProps) {
   const { scene } = useThree()
@@ -49,7 +51,17 @@ function VRMScene({ vrm }: VRMSceneProps) {
     }
   }, [scene])
 
-  return null
+  return (
+    <>
+      <OrbitControls
+        autoRotate={false}
+        dampingFactor={0.1}
+        enableDamping
+        enableZoom
+        enablePan
+      />
+    </>
+  )
 }
 
 export default VRMScene

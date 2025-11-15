@@ -1,21 +1,32 @@
-// Optimization functions
-export { optimizeVRM } from './core/optimizer'
-export { importVRMWithThreeVRM } from './vrm/three-vrm-loader'
-export { exportVRMDocumentToGLB } from './vrm/exporter'
+/**
+ * @xrift/avatar-optimizer - avatar optimization library for XRift
+ */
 
-// Type exports
+// Material module (Three.js MToonMaterial support)
+export { setAtlasTexturesToObjectsWithCorrectUV, generateAtlasImages } from './material/index'
+export type { AtlasImageMap } from './material/index'
+
+// Material types
 export type {
-  OptimizationError,
+  AtlasTextureDescriptor,
+  Rectangle,
+  TexturePackingInfo,
+  PackingResult,
+  TextureImageData,
+  SlotAtlasImage,
+  MaterialPlacement,
+  AtlasBuildResult,
+  UVMapping,
+  AtlasResult,
+  AtlasError,
+} from './material/types'
+
+// Root types
+export type {
   OptimizationOptions,
-  ProcessingError,
   ThreeVRMDocument,
-  TextureSlotInfo,
-  ValidationError,
   VRMStatistics,
-  VRMValidationResult,
-  VRMValidationIssue,
+  TextureSlotInfo,
+  ProcessingError,
+  OptimizationError,
 } from './types'
-export type {
-  ThreeVRMLoadResult,
-  ThreeVRMLoaderOptions,
-} from './vrm/three-vrm-loader'

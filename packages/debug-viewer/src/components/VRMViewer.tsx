@@ -1,18 +1,40 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VRM } from '@pixiv/three-vrm'
-import { loadVRMFromFile } from '../hooks'
+import { loadVRM, loadVRMFromFile } from '../hooks'
 import VRMCanvas from './VRMCanvas'
 import './VRMViewer.css'
 
 /**
  * VRMビューアの完全なUIコンポーネント。
  * ファイルアップロード、VRM読み込み、表示を管理します。
+ * 起動時に public/AliciaSolid.vrm をデフォルトで読み込みます。
  */
 function VRMViewer() {
   const [vrm, setVRM] = useState<VRM | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 起動時にデフォルト VRM を読み込み
+  useEffect(() => {
+    const loadDefaultVRM = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      const result = await loadVRM('/AliciaSolid.vrm')
+
+      if (result.isErr()) {
+        setError(result.error.message)
+        setIsLoading(false)
+        return
+      }
+
+      setVRM(result.value)
+      setIsLoading(false)
+    }
+
+    loadDefaultVRM()
+  }, [])
 
   const handleFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
