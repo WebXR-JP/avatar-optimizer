@@ -1,11 +1,19 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
+import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
+import './VRMCanvas.css'
 
 interface VRMCanvasProps {
   vrm: VRM | null
+  currentTab: number
+  isLoading: boolean
+  error: string | null
+  onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onOptimize: () => Promise<void>
+  isOptimizing: boolean
 }
 
 /**
@@ -30,9 +38,23 @@ function CameraAspectUpdater() {
  * React Three Fiberのキャンバスをラップするコンポーネント。
  * VRMモデルを表示するための3Dシーンを提供します。
  * カメラアスペクト比は容器の実際のサイズに追従します。
+ * タブが3D Viewport の時のみ UI を表示します。
  */
-function VRMCanvas({ vrm }: VRMCanvasProps) {
+function VRMCanvas({
+  vrm,
+  currentTab,
+  isLoading,
+  error,
+  onFileChange,
+  onOptimize,
+  isOptimizing,
+}: VRMCanvasProps) {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleButtonClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
 
   return (
     <div
@@ -58,6 +80,44 @@ function VRMCanvas({ vrm }: VRMCanvasProps) {
         <CameraAspectUpdater />
         <VRMScene vrm={vrm} />
       </Canvas>
+
+      {/* 3D Viewport タブのときのみ UI を表示 */}
+      {currentTab === 0 && (
+        <>
+          <div className="vrm-canvas__header">
+            <h1>VRM Debug Viewer</h1>
+            <button
+              className="vrm-canvas__upload-btn"
+              onClick={handleButtonClick}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading...' : 'Upload VRM'}
+            </button>
+            <button
+              className="vrm-canvas__optimize-btn"
+              onClick={onOptimize}
+              disabled={!vrm || isOptimizing}
+            >
+              {isOptimizing ? 'Optimizing...' : 'Optimize Material'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".vrm"
+              onChange={onFileChange}
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          {error && <div className="vrm-canvas__error">{error}</div>}
+
+          {vrm && (
+            <div className="vrm-canvas__info">
+              <p>VRM loaded: {vrm.scene.name || 'Unnamed Model'}</p>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

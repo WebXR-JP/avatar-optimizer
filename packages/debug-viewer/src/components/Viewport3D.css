@@ -1,4 +1,4 @@
-.vrm-viewer {
+.viewport-3d {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -8,7 +8,7 @@
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-.vrm-viewer__header {
+.viewport-3d__header {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -17,13 +17,14 @@
   border-bottom: 1px solid #333;
 }
 
-.vrm-viewer__header h1 {
+.viewport-3d__header h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
 }
 
-.vrm-viewer__upload-btn {
+.viewport-3d__upload-btn,
+.viewport-3d__optimize-btn {
   padding: 0.5rem 1rem;
   background-color: #0066cc;
   color: white;
@@ -35,26 +36,28 @@
   transition: background-color 0.2s;
 }
 
-.vrm-viewer__upload-btn:hover:not(:disabled) {
+.viewport-3d__upload-btn:hover:not(:disabled),
+.viewport-3d__optimize-btn:hover:not(:disabled) {
   background-color: #0052a3;
 }
 
-.vrm-viewer__upload-btn:disabled {
+.viewport-3d__upload-btn:disabled,
+.viewport-3d__optimize-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.vrm-viewer__canvas-container {
+.viewport-3d__canvas-container {
   flex: 1;
   position: relative;
   overflow: hidden;
 }
 
-.vrm-viewer__canvas-container canvas {
+.viewport-3d__canvas-container canvas {
   display: block;
 }
 
-.vrm-viewer__error {
+.viewport-3d__error {
   padding: 0.75rem 1rem;
   background-color: #c41c3b;
   color: white;
@@ -62,13 +65,13 @@
   border-bottom: 1px solid #a01530;
 }
 
-.vrm-viewer__info {
+.viewport-3d__info {
   padding: 0.75rem 1rem;
   background-color: #1e1e1e;
   border-top: 1px solid #333;
   font-size: 0.875rem;
 }
 
-.vrm-viewer__info p {
+.viewport-3d__info p {
   margin: 0;
 }
