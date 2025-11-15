@@ -3,38 +3,25 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-/**
- * テクスチャアトラス化のオプション
- */
-export interface AtlasOptions {
-  /** アトラスの最大サイズ（ピクセル）デフォルト: 2048 */
-  maxSize?: number
-}
+/** 3x3 行列型定義 */
+export type Matrix = [number, number, number, number, number, number, number, number, number]
 
 /**
  * アトラス化対象となる1枚のテクスチャ
  */
-export interface AtlasTextureDescriptor {
+export interface AtlasTextureDescriptor
+{
   /** 画像の幅（ピクセル） */
   width: number
   /** 画像の高さ（ピクセル） */
   height: number
-  /** RGBA ビットマップを返す非同期ローダー */
-  readImageData(): Promise<Uint8Array>
-}
-
-/**
- * 1 つのマテリアルに紐づくテクスチャ集合
- */
-export interface AtlasMaterialDescriptor {
-  /** このマテリアルでアトラス化したいテクスチャ */
-  primaryTexture: AtlasTextureDescriptor
 }
 
 /**
  * テクスチャ内の矩形領域を表す
  */
-export interface Rectangle {
+export interface Rectangle
+{
   x: number
   y: number
   width: number
@@ -44,7 +31,8 @@ export interface Rectangle {
 /**
  * パックされたテクスチャの配置情報
  */
-export interface PackedTexture extends Rectangle {
+export interface TexturePackingInfo extends Rectangle
+{
   /** オリジナルテクスチャのインデックス */
   index: number
   /** 入力時の元のテクスチャ幅（スケーリング前） */
@@ -60,45 +48,21 @@ export interface PackedTexture extends Rectangle {
 /**
  * テクスチャパッキングの結果
  */
-export interface PackingResult {
+export interface PackingResult
+{
   /** アトラスの幅 */
   atlasWidth: number
   /** アトラスの高さ */
   atlasHeight: number
   /** パックされたテクスチャ情報 */
-  packed: PackedTexture[]
-}
-
-/**
- * 正規化座標で表現したパッキング結果
- */
-export interface NormalizedPackedTexture {
-  /** オリジナルテクスチャのインデックス */
-  index: number
-  /** UV 空間での配置（最小値） */
-  uvMin: { u: number; v: number }
-  /** UV 空間での配置（最大値） */
-  uvMax: { u: number; v: number }
-  /** 入力時の元のテクスチャ幅（スケーリング前） */
-  sourceWidth: number
-  /** 入力時の元のテクスチャ高さ（スケーリング前） */
-  sourceHeight: number
-  /** パッキング時のスケーリング後の幅 */
-  scaledWidth: number
-  /** パッキング時のスケーリング後の高さ */
-  scaledHeight: number
-}
-
-export interface NormalizedPackingResult {
-  atlasWidth: number
-  atlasHeight: number
-  packed: NormalizedPackedTexture[]
+  packed: TexturePackingInfo[]
 }
 
 /**
  * テクスチャ画像データ
  */
-export interface TextureImageData {
+export interface TextureImageData
+{
   width: number
   height: number
   data: Uint8ClampedArray
@@ -107,7 +71,8 @@ export interface TextureImageData {
 /**
  * スロットごとに生成されたアトラス画像
  */
-export interface SlotAtlasImage {
+export interface SlotAtlasImage
+{
   /** アトラス PNG などのバイナリバッファ */
   atlasImage: Uint8Array
   /** アトラス幅 */
@@ -120,17 +85,17 @@ export interface SlotAtlasImage {
  * マテリアル単位で適用する UV 変換行列
  * 3x3 行列を一次元配列で保持 (列優先/行優先は利用側と合意)
  */
-export interface MaterialPlacement {
-  /** UV を再計算する対象マテリアル ID */
-  materialId: string
+export interface MaterialPlacement
+{
   /** 3x3 変換行列（9 要素） */
-  uvTransform: [number, number, number, number, number, number, number, number, number]
+  uvTransform: Matrix
 }
 
 /**
  * アトラス生成結果（ドキュメント非依存のメタデータのみ）
  */
-export interface AtlasBuildResult {
+export interface AtlasBuildResult
+{
   /** スロットごとに生成されたアトラス画像 */
   atlases: SlotAtlasImage[]
   /** 各マテリアルに適用する UV 変換行列 */
@@ -140,7 +105,8 @@ export interface AtlasBuildResult {
 /**
  * UV座標マッピング情報
  */
-export interface UVMapping {
+export interface UVMapping
+{
   /** プリミティティブのインデックス */
   primitiveIndex: number
   /** マテリアルのテクスチャスロット */
@@ -156,7 +122,8 @@ export interface UVMapping {
 /**
  * テクスチャアトラス化の結果
  */
-export interface AtlasResult {
+export interface AtlasResult
+{
   /** アトラス化されたドキュメント */
   document: any // Document 型（避けるため any）
   /** UV座標マッピング情報 */

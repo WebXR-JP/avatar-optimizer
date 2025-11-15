@@ -44,6 +44,9 @@ importers:
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
+      rectpack-ts:
+        specifier: ^0.0.2
+        version: 0.0.2
       three:
         specifier: ^0.181.1
         version: 0.181.1

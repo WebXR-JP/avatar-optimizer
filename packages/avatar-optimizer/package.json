@@ -77,6 +77,7 @@
     "commander": "^14.0.2",
     "jimp": "^1.6.0",
     "neverthrow": "^8.2.0",
+    "rectpack-ts": "^0.0.2",
     "three": "^0.181.1"
   }
 }
