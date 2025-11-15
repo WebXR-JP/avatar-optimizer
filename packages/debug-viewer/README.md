@@ -1,144 +1,73 @@
-# @xrift/avatar-optimizer-debug-viewer
+# React + TypeScript + Vite
 
-VRM モデル表示用のシンプルなデバッグビューアライブラリです。Three.js と @pixiv/three-vrm を使用して、VRM モデルをリアルタイムで表示できます。
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 特徴
+Currently, two official plugins are available:
 
-- ✨ **軽量**: 最小限の実装でVRM表示を実現
-- 🎨 **Three.js ベース**: 標準的な WebGL レンダリング
-- 📦 **ESM/CJS**: ブラウザとNode.js環境に対応
-- 🔧 **Result 型**: neverthrow によるエラーハンドリング
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## インストール
+## React Compiler
 
-```bash
-pnpm add @xrift/avatar-optimizer-debug-viewer
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-ピア依存関係をインストール:
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-```bash
-pnpm add three @pixiv/three-vrm
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
-
-## 基本的な使用方法
-
-### ブラウザでの使用
-
-```typescript
-import { VRMViewer } from '@xrift/avatar-optimizer-debug-viewer'
-
-// ビューア初期化
-const viewer = new VRMViewer({
-  container: document.getElementById('canvas-container'),
-  width: 800,
-  height: 600,
-})
-
-// VRM ファイルをロード
-const result = await viewer.loadVRM('/models/avatar.vrm')
-
-if (result.isErr()) {
-  console.error(`Failed to load VRM: ${result.error.message}`)
-} else {
-  console.log('VRM loaded successfully')
-}
-
-// クリーンアップ
-viewer.dispose()
-```
-
-### File オブジェクトからのロード
-
-```typescript
-const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')
-
-fileInput?.addEventListener('change', async (event) => {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-
-  const result = await viewer.loadVRMFile(file)
-
-  if (result.isErr()) {
-    console.error('Failed to load:', result.error.message)
-  }
-})
-```
-
-### ウィンドウリサイズへの対応
-
-```typescript
-window.addEventListener('resize', () => {
-  viewer.resize(window.innerWidth, window.innerHeight)
-})
-```
-
-## API リファレンス
-
-### VRMViewer クラス
-
-#### コンストラクタ
-
-```typescript
-new VRMViewer(options: VRMViewerOptions)
-```
-
-#### メソッド
-
-- `loadVRM(url: string): ResultAsync<void, ViewerError>`
-  - URL から VRM を読み込み
-
-- `loadVRMFile(file: File): ResultAsync<void, ViewerError>`
-  - File オブジェクトから VRM を読み込み
-
-- `resize(width: number, height: number): void`
-  - ビューアをリサイズ
-
-- `dispose(): void`
-  - ビューアをクリーンアップ
-
-- `getState(): Readonly<VRMViewerState>`
-  - 内部状態を取得（デバッグ用）
-
-### ユーティリティ関数
-
-```typescript
-// VRM ローダー
-loadVRM(url: string): ResultAsync<VRM, ViewerError>
-loadVRMFromFile(file: File): ResultAsync<VRM, ViewerError>
-
-// シーン操作
-setupScene(options: VRMViewerOptions): VRMViewerState
-resizeRenderer(state: VRMViewerState, width: number, height: number): void
-disposeScene(state: VRMViewerState): void
-```
-
-## 開発
-
-### ビルド
-
-```bash
-pnpm -F debug-viewer run build
-```
-
-### 開発モード（ウォッチ）
-
-```bash
-pnpm -F debug-viewer run dev
-```
-
-### テスト
-
-```bash
-pnpm -F debug-viewer run test
-```
-
-### 手動確認
-
-```bash
-pnpm -F debug-viewer run manual-viewer
-```
-
-## ライセンス
-
-MIT
