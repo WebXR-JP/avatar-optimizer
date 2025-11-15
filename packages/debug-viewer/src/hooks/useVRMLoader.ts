@@ -1,7 +1,11 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
-import { ResultAsync, err, ok } from 'neverthrow'
-import type { ViewerError } from '../types'
+import { ResultAsync } from 'neverthrow'
+import type { GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js'
+
+export type VRMLoaderError =
+  | { type: 'VRM_LOAD_FAILED'; message: string }
+  | { type: 'INVALID_VRM'; message: string }
 
 /**
  * URLからVRMモデルを非同期で読み込みます。
@@ -10,29 +14,25 @@ import type { ViewerError } from '../types'
  * @param url - VRMファイルのURL
  * @returns VRMオブジェクトまたはエラー
  */
-export function loadVRM(url: string): ResultAsync<VRM, ViewerError> {
+export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError> {
   return ResultAsync.fromPromise(
     (async () => {
-      try {
-        const loader = new GLTFLoader()
-        loader.register((parser) => new VRMLoaderPlugin(parser))
+      const loader = new GLTFLoader()
+      loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser))
 
-        const gltf = await loader.loadAsync(url)
-        const vrm = gltf.userData.vrm as VRM | undefined
+      const gltf = await loader.loadAsync(url)
+      const vrm = gltf.userData.vrm as VRM | undefined
 
-        if (!vrm) {
-          throw new Error('VRM data not found in loaded file')
-        }
-
-        return vrm
-      } catch (error) {
-        throw error
+      if (!vrm) {
+        throw new Error('VRM data not found in loaded file')
       }
+
+      return vrm
     })(),
     (error) => ({
       type: 'VRM_LOAD_FAILED' as const,
       message: `Failed to load VRM: ${String(error)}`,
-    })
+    }),
   )
 }
 
@@ -43,13 +43,13 @@ export function loadVRM(url: string): ResultAsync<VRM, ViewerError> {
  * @param file - VRMのFileオブジェクト
  * @returns VRMオブジェクトまたはエラー
  */
-export function loadVRMFromFile(file: File): ResultAsync<VRM, ViewerError> {
+export function loadVRMFromFile(file: File): ResultAsync<VRM, VRMLoaderError> {
   return ResultAsync.fromPromise(
     (async () => {
       const url = URL.createObjectURL(file)
       try {
         const loader = new GLTFLoader()
-        loader.register((parser) => new VRMLoaderPlugin(parser))
+        loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser))
 
         const gltf = await loader.loadAsync(url)
         const vrm = gltf.userData.vrm as VRM | undefined
@@ -66,6 +66,6 @@ export function loadVRMFromFile(file: File): ResultAsync<VRM, ViewerError> {
     (error) => ({
       type: 'VRM_LOAD_FAILED' as const,
       message: `Failed to load VRM from file: ${String(error)}`,
-    })
+    }),
   )
 }
