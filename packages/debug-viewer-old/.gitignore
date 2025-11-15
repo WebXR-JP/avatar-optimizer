@@ -1,4 +1,0 @@
-__tests__/input/*
-__tests__/output/*
-!__tests__/input/.gitkeep
-!__tests__/output/.gitkeep
