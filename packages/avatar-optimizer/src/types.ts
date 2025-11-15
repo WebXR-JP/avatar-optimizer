@@ -1,4 +1,3 @@
-import type { AtlasError } from '@xrift/avatar-optimizer-texture-atlas'
 import type { VRM } from '@pixiv/three-vrm'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
@@ -52,38 +51,6 @@ export interface TextureSlotInfo
 }
 
 /**
- * VRM バリデーション結果の詳細情報
- */
-export interface VRMValidationIssue
-{
-  code: string
-  message: string
-  severity: 'error' | 'warning' | 'info'
-  pointer?: string
-}
-
-/**
- * VRM バリデーション結果
- */
-export interface VRMValidationResult
-{
-  isValid: boolean
-  issues: VRMValidationIssue[]
-  info?: {
-    generator?: string
-    version?: string
-  }
-}
-
-/**
- * バリデーション処理のエラー型
- */
-export type ValidationError =
-  | { type: 'INVALID_FILE_TYPE'; message: string }
-  | { type: 'VALIDATION_FAILED'; message: string }
-  | { type: 'VALIDATOR_ERROR'; message: string }
-
-/**
  * テクスチャ処理などの内部処理のエラー型
  */
 export type ProcessingError =
@@ -98,21 +65,10 @@ export type ProcessingError =
  */
 
 export type OptimizationError =
-
   | { type: 'INVALID_FILE_TYPE'; message: string }
-
   | { type: 'LOAD_FAILED'; message: string }
-
   | { type: 'DOCUMENT_PARSE_FAILED'; message: string }
-
   | { type: 'TEXTURE_EXTRACTION_FAILED'; message: string }
-
   | { type: 'UNKNOWN_ERROR'; message: string }
-
   | { type: 'UNSUPPORTED_VRM_VERSION'; message: string }
-
-  | ValidationError
-
   | ProcessingError
-
-  | AtlasError

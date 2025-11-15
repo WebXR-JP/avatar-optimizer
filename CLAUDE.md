@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-このファイルは、@xrift/avatar-optimizer (3Dモデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
+このファイルは、@xrift/avatar-optimizer (3D モデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
 
 ## 会話について
 
@@ -8,7 +8,7 @@
 
 ## プロジェクト概要
 
-**@xrift/avatar-optimizer** は WebXR アプリケーション向けの 3Dモデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザとノード環境の両方で動作します。
+**@xrift/avatar-optimizer** は WebXR アプリケーション向けの 3D モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザ環境で動作します。
 
 ## プロジェクト構成
 
@@ -19,49 +19,45 @@
 - **@gltf-transform/extensions** (4.0+): VRM 拡張機能サポート
 - **pnpm** (workspace): monorepo パッケージ管理
 - **tsup** (8.0+): ビルドツール (ESM/CJS 出力)
+- **Vitest** (2.0+): ライブラリ/ビューア双方のユニットテスト
+- **Three.js / @pixiv/three-vrm**: debug-viewer パッケージでの VRM 描画
 
 ### ディレクトリ構成（pnpm monorepo）
 
 ```
 packages/
-├── avatar-optimizer/              # メインライブラリ + CLI パッケージ
+├── avatar-optimizer/              # メインライブラリ (VRM最適化 + テクスチャアトラス)
 │   ├── src/
+│   │   ├── core/                 # 最適化ロジック
+│   │   ├── texture-atlas/        # 旧 texture-atlas 機能の統合モジュール
+│   │   ├── vrm/                  # VRM 読み込み/エクスポート層
 │   │   ├── index.ts              # ライブラリエクスポート管理
-│   │   ├── cli.ts                # CLI エントリーポイント (Commander ベース)
-│   │   ├── optimizer.ts          # 最適化ロジック
 │   │   └── types.ts              # 型定義集約
-│   ├── __tests__/
-│   │   ├── *.test.ts             # Jest 自動テスト
-│   │   ├── fixtures/             # テスト用サンプルファイル (git追跡)
-│   │   ├── input/                # 手動確認用入力ファイル (.gitignore)
-│   │   ├── output/               # 手動実行スクリプトの出力 (.gitignore)
-│   │   └── manual/               # 手動実行確認スクリプト
-│   ├── dist/                     # ビルド出力 (ESM/型定義 + CLI)
+│   ├── tests/                    # Vitest 自動テスト
+│   │   ├── *.test.ts             # 最適化/アトラス/アダプタ検証
+│   │   └── texture-atlas/        # アトラス関連の治具
+│   ├── docs/                     # 仕様メモや VRM マッピング資料
+│   ├── dist/                     # ビルド出力 (ESM/型定義)
 │   ├── package.json
 │   ├── tsconfig.json
-│   ├── jest.config.js
+│   ├── vitest.config.ts
 │   └── tsup.config.ts
 │
-└── texture-atlas/                 # テクスチャアトラスライブラリ
+└── debug-viewer/                 # VRM 表示用の簡易デバッグビューア
     ├── src/
-    │   ├── index.ts              # メインエントリーポイント
-    │   ├── types.ts              # 型定義集約
-    │   ├── atlas/                # アトラス処理ロジック
-    │   │   ├── packing.ts        # Bin packing アルゴリズム
-    │   │   ├── draw-image-jimp.ts # Canvas 画像描画
-    │   │   ├── process-gltf-atlas.ts # glTF ドキュメント統合
-    │   │   └── uv-remapping.ts   # UV 座標再マッピング
-    │   └── utils/                # ユーティリティ
-    │       └── canvas.ts         # Canvas 操作
+    │   ├── viewer/               # Three.js + three-vrm 実装
+    │   ├── utils/                # レンダリングユーティリティ
+    │   ├── index.ts              # エントリーポイント
+    │   └── types.ts              # 型定義集約
     ├── __tests__/
-    │   ├── *.test.ts             # Jest テスト
-    │   ├── fixtures/             # テスト用画像
-    │   ├── manual/               # 手動確認スクリプト
-    │   └── output/               # 出力結果
+    │   ├── fixtures/             # テスト用 VRM サンプル (git追跡)
+    │   ├── input/                # 手動確認用入力ファイル (.gitignore)
+    │   ├── output/               # manual スクリプト出力 (.gitignore)
+    │   └── manual/               # viewer.manual.ts
     ├── dist/                     # ビルド出力
     ├── package.json
     ├── tsconfig.json
-    ├── jest.config.js
+    ├── vitest.config.ts
     └── tsup.config.ts
 
 pnpm-workspace.yaml               # workspace 設定
@@ -74,12 +70,6 @@ package.json                       # ルート package.json (scripts 集約)
 
 - `optimizeVRM(file, options)`: テクスチャ圧縮・メッシュ削減による最適化
 - `calculateVRMStatistics(file)`: VRM 統計計算 (ポリゴン数、テクスチャ数など)
-
-#### CLI コマンド
-
-```bash
-xrift-optimize <input> -o <output> [options]
-```
 
 詳細は `README.md` を参照してください。
 
@@ -124,171 +114,33 @@ pnpm -F avatar-optimizer run dev
 # avatar-optimizer のテスト
 pnpm -F avatar-optimizer run test
 
-# texture-atlas のビルド
-pnpm -F texture-atlas run build
-
-# texture-atlas のテスト
-pnpm -F texture-atlas run test
-
-# texture-atlas の手動テスト
-pnpm -F texture-atlas run manual-atlas
+# debug-viewer (VRM 確認用)
+pnpm -F debug-viewer run build
+pnpm -F debug-viewer run dev
+pnpm -F debug-viewer run test
 ```
 
-### CLI のテスト
-
-```bash
-# ローカル CLI テスト（avatar-optimizer パッケージから）
-cd packages/avatar-optimizer
-node dist/cli.mjs <input> -o <output>
-
-# または、グローバルコマンドでテスト（pnpm link 後）
-pnpm link --global
-xrift-optimize <input> -o <output>
-```
-
-### 手動テストスクリプト
-
-```bash
-# avatar-optimizer の手動テスト
-pnpm -F avatar-optimizer exec tsx __tests__/manual/cli.manual.ts
-
-# texture-atlas の手動テスト
-pnpm -F texture-atlas exec tsx __tests__/manual/atlas.manual.ts
-```
+テクスチャアトラス機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されたため、個別パッケージ向けのコマンドは不要です。`pnpm -F avatar-optimizer run test` がアトラス関連テストも実行します。
 
 **pnpm monorepo コマンドの基本**:
 
-| コマンド | 説明 |
-| --- | --- |
-| `pnpm install` | 全ワークスペースの依存関係をインストール |
-| `pnpm build` | 全パッケージをビルド（ルートスクリプト） |
-| `pnpm -F <package> run <script>` | 特定のパッケージのスクリプトを実行 |
-| `pnpm -r run <script>` | すべてのパッケージでスクリプトを実行 |
-| `pnpm -F <package> add <dep>` | 特定のパッケージに依存関係を追加 |
-| `pnpm link --global` | パッケージをグローバルにリンク |
-| `pnpm exec <command>` | ローカル node_modules の実行可能ファイルを実行 |
+| コマンド                         | 説明                                           |
+| -------------------------------- | ---------------------------------------------- |
+| `pnpm install`                   | 全ワークスペースの依存関係をインストール       |
+| `pnpm build`                     | 全パッケージをビルド（ルートスクリプト）       |
+| `pnpm -F <package> run <script>` | 特定のパッケージのスクリプトを実行             |
+| `pnpm -r run <script>`           | すべてのパッケージでスクリプトを実行           |
+| `pnpm -F <package> add <dep>`    | 特定のパッケージに依存関係を追加               |
+| `pnpm link --global`             | パッケージをグローバルにリンク                 |
+| `pnpm exec <command>`            | ローカル node_modules の実行可能ファイルを実行 |
 
 ## 重要な開発ルール
 
 1. **React 依存なし**: このライブラリは React に依存しない純粋なユーティリティライブラリです
-2. **ブラウザ互換**: @gltf-transform/core の WebIO を使用してブラウザ環境で動作
+2. **ブラウザ環境専用**: @gltf-transform/core の WebIO を使用してブラウザ環境で動作
 3. **モジュール形式**: 名前付きエクスポートを使用 (ESM/CJS の両形式をサポート)
 4. **依存関係最小化**: ピア依存関係は @gltf-transform のみ
-5. **テスト**: `__tests__/` ディレクトリ内で純粋関数のテストを記述
-6. **CLI ビルド**: `src/cli/index.ts` は ES Module (`.mjs`) として独立ビルド。ブラウザとの互換性は不要
-
-## CLI 開発ガイドライン
-
-### CLI アーキテクチャ
-
-- **エントリーポイント**: `packages/avatar-optimizer/src/cli/index.ts`
-- **ビルド出力**: `packages/avatar-optimizer/dist/cli.mjs` (Node.js 実行可能、shebang 付き)
-- **パーサー**: Commander.js
-- **ファイル I/O**: `fs/promises` (Node.js 専用)
-
-### CLI 実装のベストプラクティス
-
-#### 1. ライブラリ関数の再利用
-
-CLI は `optimizeVRM`, `calculateVRMStatistics` などのライブラリ関数をラッパーとして使用：
-
-```typescript
-import { optimizeVRM, type OptimizationOptions } from './index'
-
-async function runCLI() {
-  // ファイル読み込み → File オブジェクト変換 → ライブラリ関数呼び出し → 出力
-  const file = new File([buffer], filename, { type: 'model/gltf-binary' })
-  const result = await optimizeVRM(file, options)
-
-  if (result.isErr()) {
-    // neverthrow エラー処理
-    console.error(`Error: ${result.error.message}`)
-    process.exit(1)
-  }
-}
-```
-
-#### 2. エラーハンドリング
-
-- ライブラリ関数は `ResultAsync` を返すため、`.isErr()` でチェック
-- CLI 固有のエラー（ファイルシステム）は try-catch で対応
-- 常に適切な exit code を設定 (`process.exit(0)` / `process.exit(1)`)
-
-```typescript
-try {
-  const buffer = await readFile(inputPath)
-  // ... ライブラリ呼び出し ...
-} catch (error) {
-  console.error(`❌ Unexpected error: ${String(error)}`)
-  process.exit(1)
-}
-```
-
-#### 3. ユーザーフレンドリーな出力
-
-- 進捗表示 (📖, ⚙️, 💾 など適度なシンボルを使用)
-- 成功メッセージ (✅)
-- エラーメッセージ (❌)
-- ファイルサイズ削減率の表示
-
-#### 4. オプション管理
-
-Commander で定義したオプションは型安全に処理：
-
-```typescript
-program
-  .option('-o, --output <path>', 'Path to output', 'output.vrm')
-  .option('--max-texture-size <size>', 'Max texture size', '2048')
-  .action(async (input, options) => {
-    // options は { output: string, maxTextureSize: string } 型
-    const maxSize = parseInt(options.maxTextureSize, 10)
-  })
-```
-
-### ビルド設定
-
-`tsup.config.ts` で CLI を独立ビルド：
-
-```typescript
-{
-  name: 'cli',
-  entry: ['src/cli/index.ts'],
-  format: ['esm'],           // Node.js 用 ES Module
-  outExtension: () => ({ js: '.mjs' }),  // .mjs 拡張子
-  dts: false,                // CLI は型定義不要
-  sourcemap: false,          // パフォーマンス最適化
-}
-```
-
-`package.json` の `bin` フィールド：
-
-```json
-{
-  "bin": {
-    "xrift-optimize": "./dist/cli.mjs"
-  }
-}
-```
-
-### CLI テスト戦略
-
-- **機能テスト**: `packages/avatar-optimizer/__tests__/manual/cli.manual.ts` で実際のファイル処理を確認
-- **テスト入力ファイル**:
-  - `packages/avatar-optimizer/__tests__/fixtures/`: git 追跡されるサンプル（CI/CD でも使用）
-  - `packages/avatar-optimizer/__tests__/input/`: 開発者が配置する実ファイル（.gitignore）
-- **出力確認**: `packages/avatar-optimizer/__tests__/output/` で結果を検証
-
-```bash
-# 手動テスト実行
-pnpm -F avatar-optimizer exec tsx __tests__/manual/cli.manual.ts
-
-# ローカル CLI テスト
-cd packages/avatar-optimizer
-node dist/cli.mjs __tests__/fixtures/sample.glb -o __tests__/output/result.glb
-
-# グローバルコマンドでテスト（pnpm link 後）
-xrift-optimize __tests__/fixtures/sample.glb -o __tests__/output/result.glb
-```
+5. **テスト**: `packages/avatar-optimizer/tests/` や `packages/debug-viewer/__tests__/` で純粋関数のテストを記述
 
 ## AI 支援開発のためのコーディング規約
 
@@ -309,7 +161,7 @@ export function calculateDistance(a: Vector3, b: Vector3): number {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
 }
 
-// __tests__/utils.test.ts 内
+// tests/utils.test.ts 内
 describe('calculateDistance', () => {
   it('should calculate distance between two points', () => {
     const result = calculateDistance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 })
@@ -318,72 +170,17 @@ describe('calculateDistance', () => {
 })
 ```
 
-**純粋関数 (ロジック検証用)**: 重要なビジネスロジックや複雑な計算は `__tests__/` ディレクトリ内の Jest テストでカバレッジを確保
+**純粋関数 (ロジック検証用)**: 重要なビジネスロジックや複雑な計算は `packages/avatar-optimizer/tests/` や `packages/debug-viewer/__tests__/` で実行する Vitest テストでカバレッジを確保
 
-**手動確認が必要な機能**: テクスチャアトラス化、メッシュ処理、ジオメトリ最適化など視覚的な確認が重要な場合、各パッケージの `__tests__/` ディレクトリに**手動実行用スクリプト**を配置：
+**手動確認が必要な機能**: テクスチャアトラス化、メッシュ処理、ジオメトリ最適化など視覚的な確認が重要な場合、ブラウザベースのツールで検証します。
 
-```typescript
-// packages/texture-atlas/__tests__/manual/atlas.manual.ts
-// 手動実行用スクリプト: pnpm -F texture-atlas exec tsx __tests__/manual/atlas.manual.ts
+`packages/avatar-optimizer/tests/*.test.ts` でロジックを Vitest から実行し、ビジュアル検証はブラウザで行います。
 
-import { atlasTexturesInDocument } from '../../src/index'
-import fs from 'fs'
-import path from 'path'
+**テスト Fixture フォルダ**:
 
-/**
- * テクスチャアトラス化の処理を確認するためのスクリプト
- * 出力ファイルを視覚的に検証してからコミット
- */
-async function manualCheckTextureAtlas() {
-  // fixtures: git追跡されるテスト用サンプルファイル
-  const fixtureFile = path.join(__dirname, '../fixtures/sample.glb')
-
-  // input: 手動確認用の一時的な入力ファイル (開発者が配置, .gitignore)
-  const inputFile = path.join(__dirname, '../input/my-avatar.vrm')
-
-  // 存在するファイルで処理
-  const targetFile = fs.existsSync(inputFile) ? inputFile : fixtureFile
-  const fileData = fs.readFileSync(targetFile)
-  const result = await atlasTexturesInDocument(fileData, { maxSize: 2048 })
-
-  // output: スクリプト実行時の出力結果 (.gitignore)
-  const outputDir = path.join(__dirname, '../output')
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true })
-  }
-
-  fs.writeFileSync(path.join(outputDir, 'atlas-result.glb'), result)
-  console.log('✓ 出力ファイル: __tests__/output/atlas-result.glb')
-  console.log('  BlenderやVRM ビューアで視覚的に確認してください')
-}
-
-manualCheckTextureAtlas()
-```
-
-**Fixture フォルダの使い分け**:
-
-| フォルダ    | 内容                         | Git追跡       | 用途                   |
-| ----------- | ---------------------------- | ------------- | ---------------------- |
-| `fixtures/` | 小さなテスト用VRM サンプル   | ✅ 必須       | CI/CD やテストで使用   |
-| `input/`    | 開発者が配置する実際のモデル | ❌ .gitignore | 手動実行時の処理検証用 |
-| `output/`   | スクリプト実行時の出力結果   | ❌ .gitignore | ビジュアル確認用       |
-
-**.gitignore 設定例**:
-
-```
-__tests__/input/*
-__tests__/output/*
-!__tests__/input/.gitkeep
-!__tests__/output/.gitkeep
-```
-
-**手動スクリプトの運用フロー**:
-
-1. `input/` に確認したいモデルを配置
-2. 手動スクリプトを実行: `npx tsx __tests__/manual/texture-atlas.manual.ts`
-3. `output/` の結果を Blender/VRM ビューアで目視確認
-4. ビジュアル品質を確認してからコミット
-5. コミットメッセージに「手動確認済み」と記載
+| フォルダ    | パス                                             | 内容                        | Git 追跡 | 用途               |
+| ----------- | ------------------------------------------------ | --------------------------- | -------- | ------------------ |
+| `fixtures/` | `packages/debug-viewer/__tests__/fixtures/`      | 小さなテスト用 VRM サンプル | ✅ 必須  | CI/CD やテストで使用 |
 
 ### 自己説明的なコード
 
@@ -521,21 +318,15 @@ export function optimizeVRM(
   }
 
   // 非同期処理をチェーン
-  return ResultAsync.fromPromise(
-    file.arrayBuffer(),
-    (error) => ({
-      type: 'LOAD_FAILED' as const,
-      message: `Failed to read file: ${String(error)}`,
-    })
-  )
+  return ResultAsync.fromPromise(file.arrayBuffer(), (error) => ({
+    type: 'LOAD_FAILED' as const,
+    message: `Failed to read file: ${String(error)}`,
+  }))
     .andThen((arrayBuffer) =>
-      ResultAsync.fromPromise(
-        loadDocument(arrayBuffer),
-        (error) => ({
-          type: 'DOCUMENT_PARSE_FAILED' as const,
-          message: String(error),
-        })
-      )
+      ResultAsync.fromPromise(loadDocument(arrayBuffer), (error) => ({
+        type: 'DOCUMENT_PARSE_FAILED' as const,
+        message: String(error),
+      })),
     )
     .map((document) => processFile(document))
 }
@@ -544,13 +335,10 @@ export function optimizeVRM(
 function _processTextureAsync(
   texture: Texture,
 ): ResultAsync<Texture, ProcessingError> {
-  return ResultAsync.fromPromise(
-    compressTexture(texture),
-    (error) => ({
-      type: 'PROCESSING_FAILED' as const,
-      message: String(error),
-    })
-  )
+  return ResultAsync.fromPromise(compressTexture(texture), (error) => ({
+    type: 'PROCESSING_FAILED' as const,
+    message: String(error),
+  }))
 }
 
 // チェーン例
@@ -571,7 +359,9 @@ _processTextureAsync(texture)
 const result = await optimizeVRM(file, options)
 
 if (result.isErr()) {
-  console.error(`Optimization failed (${result.error.type}): ${result.error.message}`)
+  console.error(
+    `Optimization failed (${result.error.type}): ${result.error.message}`,
+  )
   // エラー時の処理
   return
 }
@@ -601,10 +391,10 @@ export type ProcessingError =
 
 **使い分けの原則**:
 
-| 関数タイプ | 戻り値型 | エラー処理 | 用途 |
-| --- | --- | --- | --- |
-| 非同期関数（全て） | `ResultAsync<T, E>` | Result 型チェーン | Public API・内部向け共通 |
-| 同期/バリデーション | `Result<T, E>` | Result 型チェーン | 純粋なバリデーション処理 |
+| 関数タイプ          | 戻り値型            | エラー処理        | 用途                     |
+| ------------------- | ------------------- | ----------------- | ------------------------ |
+| 非同期関数（全て）  | `ResultAsync<T, E>` | Result 型チェーン | Public API・内部向け共通 |
+| 同期/バリデーション | `Result<T, E>`      | Result 型チェーン | 純粋なバリデーション処理 |
 
 この統一パターンにより、外部向け・内部向けを区別せず、一貫したエラーハンドリングロジックを適用できます。
 
@@ -669,33 +459,43 @@ export type { OptimizationOptions, VRMStatistics }
 ピア依存関係を安装するユーザーに対して同じバージョンを強制してください。
 
 **neverthrow の使用対象**:
+
 - ✅ 同期関数の戻り値（Result 型）
 - ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
 - ❌ 外部向けの非同期関数（Promise + throw を使用）
 
-## Texture-Atlas パッケージについて
+## Texture-Atlas モジュールについて
 
-**texture-atlas** (`packages/texture-atlas/`) は テクスチャアトラス化機能を提供する独立したパッケージです。
+テクスチャアトラス化機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されています。
 
-詳細な開発ガイドは `packages/texture-atlas/CLAUDE.md` を参照してください：
+- `index.ts`: `buildTextureAtlas` などメイン API をエクスポート
+- `packing.ts`: Bin packing/Island 配置アルゴリズム
+- `image.ts`: Jimp/canvas を用いた画像合成
+- `uv-remapping.ts`: UV 書き換え + padding 処理
+- `types.ts`: `AtlasBuildResult` などの型定義
 
-- **Bin Packing アルゴリズム**: 効率的なテクスチャレイアウト計算
-- **テクスチャアトラス化**: 複数のテクスチャを1つのアトラスに統合
-- **UV 座標再マッピング**: glTF-Transform ドキュメント内のプリミティティブ UV を更新
-- **開発コマンド**: ビルド、テスト実行方法
+ユニットテストは `packages/avatar-optimizer/tests/atlas.test.ts` や `packages/avatar-optimizer/tests/uv-remap.test.ts` にまとまっています。追加の治具は `packages/avatar-optimizer/tests/texture-atlas/` に配置して管理してください。
 
-### クイックリンク
+## Debug-Viewer パッケージについて
+
+**@xrift/avatar-optimizer-debug-viewer** (`packages/debug-viewer/`) は最適化済み VRM の挙動を即座に確認する lightweight ビューアです。Three.js と @pixiv/three-vrm を使用し、neverthrow ベースの Result 型でエラーを通知します。
+
+- `src/viewer/`: シーン初期化、リサイズ、破棄
+- `src/utils/`: Canvas/loader 周辺のユーティリティ
+- `README.md`: API とブラウザでの利用ガイド
+
+### Debug-Viewer クイックリンク
 
 ```bash
-# texture-atlas のビルド
-pnpm -F texture-atlas run build
+# ビルド
+pnpm -F debug-viewer run build
 
-# texture-atlas のテスト
-pnpm -F texture-atlas run test
+# ウォッチ
+pnpm -F debug-viewer run dev
 
-# texture-atlas の手動テスト
-pnpm -F texture-atlas run manual-atlas
+# テスト
+pnpm -F debug-viewer run test
 
-# texture-atlas の開発ガイド
-cat packages/texture-atlas/CLAUDE.md
+# ドキュメント
+cat packages/debug-viewer/README.md
 ```
