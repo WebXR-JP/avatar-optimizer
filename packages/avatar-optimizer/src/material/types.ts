@@ -3,8 +3,7 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-/** 3x3 行列型定義 */
-export type Matrix = [number, number, number, number, number, number, number, number, number]
+import { Matrix3 } from "three"
 
 /**
  * アトラス化対象となる1枚のテクスチャ
@@ -33,8 +32,6 @@ export interface Rectangle
  */
 export interface TexturePackingInfo extends Rectangle
 {
-  /** オリジナルテクスチャのインデックス */
-  index: number
   /** 入力時の元のテクスチャ幅（スケーリング前） */
   sourceWidth: number
   /** 入力時の元のテクスチャ高さ（スケーリング前） */
@@ -88,7 +85,7 @@ export interface SlotAtlasImage
 export interface MaterialPlacement
 {
   /** 3x3 変換行列（9 要素） */
-  uvTransform: Matrix
+  uvTransform: Matrix3
 }
 
 /**
