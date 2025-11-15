@@ -9,30 +9,12 @@
 export interface AtlasOptions {
   /** アトラスの最大サイズ（ピクセル）デフォルト: 2048 */
   maxSize?: number
-  /** テクスチャのダウンスケール係数 (0.1-1.0)。デフォルト: 1.0（縮小なし） */
-  textureScale?: number
 }
-
-/**
- * アトラス化対象のテクスチャスロット種別
- * 既知スロット + 拡張用 custom を許容
- */
-export type TextureSlot =
-  | 'baseColor'
-  | 'metallicRoughness'
-  | 'normal'
-  | 'occlusion'
-  | 'emissive'
-  | `custom:${string}`
 
 /**
  * アトラス化対象となる1枚のテクスチャ
  */
 export interface AtlasTextureDescriptor {
-  /** シーン内で一意となるテクスチャ ID */
-  id: string
-  /** このテクスチャが属するスロット */
-  slot: TextureSlot
   /** 画像の幅（ピクセル） */
   width: number
   /** 画像の高さ（ピクセル） */
@@ -43,15 +25,10 @@ export interface AtlasTextureDescriptor {
 
 /**
  * 1 つのマテリアルに紐づくテクスチャ集合
- * primaryTextureIndex によって配置の基準テクスチャを決める
  */
 export interface AtlasMaterialDescriptor {
-  /** マテリアルを一意に識別する ID */
-  id: string
-  /** このマテリアルでアトラス化したいテクスチャ群 */
-  textures: AtlasTextureDescriptor[]
-  /** textures 配列内で配置基準にする代表テクスチャのインデックス */
-  primaryTextureIndex: number
+  /** このマテリアルでアトラス化したいテクスチャ */
+  primaryTexture: AtlasTextureDescriptor
 }
 
 /**
@@ -131,8 +108,6 @@ export interface TextureImageData {
  * スロットごとに生成されたアトラス画像
  */
 export interface SlotAtlasImage {
-  /** 対象となるテクスチャスロット */
-  slot: TextureSlot
   /** アトラス PNG などのバイナリバッファ */
   atlasImage: Uint8Array
   /** アトラス幅 */
