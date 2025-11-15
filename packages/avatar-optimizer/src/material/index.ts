@@ -5,7 +5,7 @@
  * そしてマテリアル単位の UV 変換行列を生成する責務を持つ。
  */
 
-import { Mesh, Object3D, Texture } from 'three'
+import { Matrix3, Mesh, Object3D, Texture } from 'three'
 import { packTextures } from './packing'
 import type {
   MaterialPlacement,
@@ -267,7 +267,7 @@ function buildPlacements(
     const translateU = tex.x / packingResult.atlasWidth
     const translateV = tex.y / packingResult.atlasHeight
 
-    const uvTransform: MaterialPlacement['uvTransform'] = [
+    const uvTransform = new Matrix3().set(
       scaleU,
       0,
       translateU,
@@ -277,7 +277,7 @@ function buildPlacements(
       0,
       0,
       1,
-    ]
+    )
 
     return {
       uvTransform,
