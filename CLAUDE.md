@@ -43,6 +43,18 @@ packages/
 │   ├── vitest.config.ts
 │   └── tsup.config.ts
 │
+├── mtoon-instancing/             # MToon インスタンシング マテリアル
+│   ├── src/
+│   │   ├── index.ts              # MToonInstancingMaterial クラス
+│   │   └── types.ts              # 型定義 (ParameterTextureDescriptor, AtlasedTextureSet など)
+│   ├── tests/                    # Vitest テスト
+│   ├── dist/                     # ビルド出力
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vitest.config.ts
+│   ├── tsup.config.ts
+│   └── README.md
+│
 └── debug-viewer/                 # VRM 表示用の簡易デバッグビューア
     ├── src/
     │   ├── viewer/               # Three.js + three-vrm 実装
@@ -113,6 +125,11 @@ pnpm -F avatar-optimizer run dev
 
 # avatar-optimizer のテスト
 pnpm -F avatar-optimizer run test
+
+# mtoon-instancing (MToon インスタンシング)
+pnpm -F mtoon-instancing run build
+pnpm -F mtoon-instancing run dev
+pnpm -F mtoon-instancing run test
 
 # debug-viewer (VRM 確認用)
 pnpm -F debug-viewer run build
@@ -475,6 +492,77 @@ export type { OptimizationOptions, VRMStatistics }
 - `types.ts`: `AtlasBuildResult` などの型定義
 
 ユニットテストは `packages/avatar-optimizer/tests/atlas.test.ts` や `packages/avatar-optimizer/tests/uv-remap.test.ts` にまとまっています。追加の治具は `packages/avatar-optimizer/tests/texture-atlas/` に配置して管理してください。
+
+## MToon Instancing パッケージについて
+
+**@xrift/mtoon-instancing** (`packages/mtoon-instancing/`) は複数の MToon マテリアルをインスタンシング化するための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
+
+### 主な機能
+
+- **MToonInstancingMaterial**: MToonNodeMaterial を拡張したクラス
+  - 全19種類の数値パラメータを自動サンプリング（ParameterTexture から）
+  - 8種類のテクスチャマップを自動設定（AtlasedTextureSet から）
+- **スロット属性管理**: 頂点属性経由でマテリアルスロットをインスタンスごとに指定
+- **SkinnedMesh 対応**: InstancedMesh 不要でスキニングアニメーションと互換
+
+### ファイル構成
+
+- `src/index.ts`: `MToonInstancingMaterial` クラス実装
+- `src/types.ts`: 型定義
+  - `ParameterTextureDescriptor`: パラメータテクスチャ情報（19パラメータ）
+  - `AtlasedTextureSet`: アトラス化テクスチャセット（8種類）
+  - `MaterialSlotAttributeConfig`: スロット属性メタデータ
+  - `ParameterSemanticId`: パラメータセマンティクス ID（19種）
+  - `DEFAULT_PARAMETER_LAYOUT`: デフォルトレイアウト定義
+
+### API 利用例
+
+```typescript
+import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+
+const material = new MToonInstancingMaterial()
+material.setParameterTexture({
+  texture: packedParameterTexture,
+  slotCount: 10,
+  texelsPerSlot: 8,
+  atlasedTextures: {
+    baseColor: atlasBaseColorTexture,
+    normal: atlasNormalTexture,
+    shade: atlasShadeTexture,
+    // 他のテクスチャ...
+  }
+})
+```
+
+### MToon Instancing クイックリンク
+
+```bash
+# ビルド
+pnpm -F mtoon-instancing run build
+
+# ウォッチ
+pnpm -F mtoon-instancing run dev
+
+# テスト
+pnpm -F mtoon-instancing run test
+
+# ドキュメント
+cat packages/mtoon-instancing/README.md
+```
+
+### 対応パラメータ
+
+| カテゴリ | パラメータ | テクセル | チャンネル |
+|---------|-----------|---------|----------|
+| 基本カラー | baseColor, shadeColor, emissiveColor, emissiveIntensity | 0-2 | RGB/A |
+| シェーディング | shadingShift, shadingToony, shadingShiftTextureScale | 0-1 | RGB/A |
+| リムライティング | rimLightingMix, parametricRimColor/Lift/FresnelPower | 5-6 | RGB/A |
+| Matcap | matcapColor | 3 | RGB |
+| アウトライン | outlineWidth/Color/LightingMix | 3-4 | RGB/A |
+| UV アニメーション | uvAnimationScrollX/Y/Rotation | 6-7 | RGB/A |
+| ノーマルマップ | normalScale | 7 | RG |
+
+---
 
 ## Debug-Viewer パッケージについて
 
