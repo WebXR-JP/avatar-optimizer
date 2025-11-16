@@ -108,19 +108,12 @@ export function applyPlacementsToGeometries(
 {
   try
   {
-    const processed = new Set<BufferGeometry>()
-    const sharedGeometries = new WeakSet<BufferGeometry>()
-    const sharedUVAttributes = new WeakSet<any>()
-
     rootNode.traverse((obj) =>
     {
       if (!(obj instanceof Mesh)) return
       if (!(obj.geometry instanceof BufferGeometry)) return
 
       let material: MToonMaterial | null = null
-
-      const targetGeometry = ensureUniqueGeometry(obj, sharedGeometries, sharedUVAttributes)
-      if (processed.has(targetGeometry)) return
 
       if (Array.isArray(obj.material))
       {
@@ -143,15 +136,16 @@ export function applyPlacementsToGeometries(
         return
       }
 
-      const result = remapGeometryUVs(targetGeometry, placement)
+      const clonedGeometry = obj.geometry.clone()
+      obj.geometry = clonedGeometry
+
+      const result = remapGeometryUVs(clonedGeometry, placement)
       if (result.isErr())
       {
         throw result.error
       }
       console.log(`processed: ${obj.name}`)
       debugLogMeshUVBounds(obj)
-
-      processed.add(targetGeometry)
     })
 
     return ok()
@@ -160,50 +154,6 @@ export function applyPlacementsToGeometries(
   {
     return err(error instanceof Error ? error : new Error(String(error)))
   }
-}
-
-function ensureUniqueGeometry(
-  mesh: Mesh,
-  seenGeometries: WeakSet<BufferGeometry>,
-  seenUVAttributes: WeakSet<any>,
-): BufferGeometry
-{
-  const geometry = mesh.geometry
-  if (!(geometry instanceof BufferGeometry))
-  {
-    throw new Error('Mesh geometry must be BufferGeometry')
-  }
-
-  let targetGeometry = geometry
-
-  if (seenGeometries.has(geometry))
-  {
-    targetGeometry = geometry.clone()
-    mesh.geometry = targetGeometry
-  }
-
-  seenGeometries.add(targetGeometry)
-  ensureUniqueUVAttribute(targetGeometry, seenUVAttributes)
-  return targetGeometry
-}
-
-function ensureUniqueUVAttribute(
-  geometry: BufferGeometry,
-  seenUVAttributes: WeakSet<any>,
-): void
-{
-  const uvAttribute = geometry.getAttribute('uv')
-  if (!uvAttribute) return
-
-  if (seenUVAttributes.has(uvAttribute.array))
-  {
-    const cloned = uvAttribute.clone()
-    geometry.setAttribute('uv', cloned)
-    seenUVAttributes.add(cloned.array)
-    return
-  }
-
-  seenUVAttributes.add(uvAttribute.array)
 }
 
 /**
