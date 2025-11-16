@@ -1,9 +1,0 @@
-テクスチャ種類,VRM 0.x (VRM/MToon シェーダー),VRM 1.0 (VRMC_materials_mtoon 拡張)
-メイン/ディフューズ (Lit/Base Color),extensions.VRM.materials[].textureIndex: textures 配列のインデックス (number)。baseColorFactor と乗算。,materials[].pbrMetallicRoughness.baseColorTexture.index: textureInfo 内の textures インデックス。baseColorFactor と乗算。textureIndex0 (拡張内) で代替可能だが、非推奨。
-ノーマルマップ,extensions.VRM.materials[].normalTextureIndex: textures インデックス。,materials[].normalTexture.index: textureInfo 内のインデックス。normalTexture.scale で強度調整。
-エミッション,extensions.VRM.materials[].emissionTextureIndex: textures インデックス。emissionFactor と乗算。,materials[].emissiveTexture.index: textureInfo 内のインデックス。emissiveFactor と乗算。
-シェード (Shade Multiply),extensions.VRM.materials[].shadeTextureIndex: textures インデックス。影色 (shadeColorFactor) と乗算。,extensions.VRMC_materials_mtoon.shadeMultiplyTexture.index: textureInfo 内のインデックス。shadeColorFactor と乗算。影領域のトゥーン表現専用。
-リム (Rim),extensions.VRM.materials[].rimTextureIndex: textures インデックス。リム強度と乗算。,extensions.VRMC_materials_mtoon.rimMultiplyTexture.index: textureInfo 内のインデックス。リム照明効果専用。
-アウトライン (Outline),extensions.VRM.materials[].outlineTextureIndex: textures インデックス。アウトライン幅/色調整。,extensions.VRMC_materials_mtoon.outlineWidthTexture.index: textureInfo 内のインデックス。outlineWidthFactor と乗算（幅調整）。色は outlineColorFactor。
-マットキャップ (MatCap),なし（0.x 非サポート）。,extensions.VRMC_materials_mtoon.matcapTexture.index: textureInfo 内のインデックス。ビュー空間ノーマルでマッピング、事前ベイク照明用。matcapFactor で調整。
-UV アニメマスク,extensions.VRM.materials[].uvAnimationMaskTextureIndex: textures インデックス。スクロール/回転アニメ用。,extensions.VRMC_materials_mtoon.uvAnimationMaskTexture.index: textureInfo 内のインデックス。uvAnimationScrollXSpeedFactor などで速度調整。MatCap 除く全テクスチャに適用。
