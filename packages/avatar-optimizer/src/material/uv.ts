@@ -5,9 +5,17 @@
  * モデルの UV 座標も同じ量だけ移動させる
  */
 
-import { BufferGeometry } from 'three'
-import type { MaterialPlacement } from './types'
+import { BufferGeometry, Mesh, Object3D, Vector2 } from 'three'
+import type { OffsetScale } from './types'
 import { ok, err, Result } from 'neverthrow'
+import { MToonMaterial } from '@pixiv/three-vrm';
+
+function wrapUV(uv: Vector2) {
+  return new Vector2(
+    uv.x - Math.floor(uv.x),
+    uv.y - Math.floor(uv.y)
+  );
+}
 
 /**
  * UV 座標を変換する共通処理
@@ -35,32 +43,29 @@ function applyUVTransform(
     const oldU = uvArray[i]
     const oldV = uvArray[i + 1]
 
-    // アトラス座標への変換: newUV = translate + scale * oldUV
-    const newU = translateU + scaleU * oldU
-    const newV = translateV + scaleV * oldV
+    // 先に0-1範囲にラップ
+    const wrapped = wrapUV(new Vector2(oldU, oldV))
+    const oldUWrapped = wrapped.x
+    const oldVWrapped = wrapped.y
 
+    // アトラス座標への変換: newUV = translate + scale * oldUV
+    const newU = translateU + scaleU * oldUWrapped
+    const newV = translateV + scaleV * oldVWrapped
     uvArray[i] = newU
     uvArray[i + 1] = newV
   }
+
 }
 
 /**
  * BufferGeometry の UV 属性を再マッピング
  *
- * Matrix3 の UV 変換行列（uvTransform）を使用して、
- * 全頂点の UV 座標をアトラス座標空間に変換
- *
- * Matrix3 形式:
- * [ scaleU   0     translateU ]
- * [   0    scaleV  translateV ]
- * [   0      0        1      ]
- *
  * @param geometry - 更新対象のジオメトリ
- * @param placement - マテリアル配置情報（uvTransform を含む）
+ * @param uvTransform - UV配置情報
  */
 export function remapGeometryUVs(
   geometry: BufferGeometry,
-  placement: MaterialPlacement,
+  uvTransform: OffsetScale,
 ): Result<void, Error>
 {
   // uv 属性を取得
@@ -78,17 +83,186 @@ export function remapGeometryUVs(
     return err(new Error('UV attribute itemSize must be 2'))
   }
 
-  // Matrix3 から変換係数を抽出
-  const elements = placement.uvTransform.elements
-  const scaleU = elements[0]
-  const scaleV = elements[4]
-  const translateU = elements[6]
-  const translateV = elements[7]
-
   // 全頂点の UV を変換
-  applyUVTransform(uvArray, scaleU, scaleV, translateU, translateV)
+  applyUVTransform(uvArray, uvTransform.scale.x, uvTransform.scale.y, uvTransform.offset.x, uvTransform.offset.y)
 
   // 属性を更新
   uvAttribute.needsUpdate = true
   return ok()
 }
+
+/**
+ * GLTF/VRM フロー前提で 1 Mesh = 1 Material のみをサポートし、(ただし Outline付きMToonは例外的に複数マテリアルを許容)
+ * 実装簡略化と UV 再マッピングの二重適用防止を優先する。
+ * 複数マテリアルの Mesh を検出した場合はエラーを返す。
+ * MToonMaterial のみを対象とする。
+ *
+ * @param rootNode - 処理対象のルートノード
+ * @param materialPlacementMap - マテリアルごとの UV 配置情報マップ
+ * @returns 処理結果
+ */
+export function applyPlacementsToGeometries(
+  rootNode: Object3D,
+  materialPlacementMap: Map<MToonMaterial, OffsetScale>,
+): Result<void, Error>
+{
+  try
+  {
+    const processed = new Set<BufferGeometry>()
+    const sharedGeometries = new WeakSet<BufferGeometry>()
+    const sharedUVAttributes = new WeakSet<any>()
+
+    rootNode.traverse((obj) =>
+    {
+      if (!(obj instanceof Mesh)) return
+      if (!(obj.geometry instanceof BufferGeometry)) return
+
+      let material: MToonMaterial | null = null
+
+      const targetGeometry = ensureUniqueGeometry(obj, sharedGeometries, sharedUVAttributes)
+      if (processed.has(targetGeometry)) return
+
+      if (Array.isArray(obj.material))
+      {
+        // Outline付きMToonの場合はOutline用に複数マテリアルになっている
+        // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
+        material = obj.material[0];
+      } else if (obj.material instanceof MToonMaterial)
+      {
+        material = obj.material
+      }
+
+      if (!(material instanceof MToonMaterial))
+      {
+        return
+      }
+
+      const placement = materialPlacementMap.get(material)
+      if (!placement)
+      {
+        return
+      }
+
+      const result = remapGeometryUVs(targetGeometry, placement)
+      if (result.isErr())
+      {
+        throw result.error
+      }
+      console.log(`processed: ${obj.name}`)
+      debugLogMeshUVBounds(obj)
+
+      processed.add(targetGeometry)
+    })
+
+    return ok()
+  }
+  catch (error)
+  {
+    return err(error instanceof Error ? error : new Error(String(error)))
+  }
+}
+
+function ensureUniqueGeometry(
+  mesh: Mesh,
+  seenGeometries: WeakSet<BufferGeometry>,
+  seenUVAttributes: WeakSet<any>,
+): BufferGeometry
+{
+  const geometry = mesh.geometry
+  if (!(geometry instanceof BufferGeometry))
+  {
+    throw new Error('Mesh geometry must be BufferGeometry')
+  }
+
+  let targetGeometry = geometry
+
+  if (seenGeometries.has(geometry))
+  {
+    targetGeometry = geometry.clone()
+    mesh.geometry = targetGeometry
+  }
+
+  seenGeometries.add(targetGeometry)
+  ensureUniqueUVAttribute(targetGeometry, seenUVAttributes)
+  return targetGeometry
+}
+
+function ensureUniqueUVAttribute(
+  geometry: BufferGeometry,
+  seenUVAttributes: WeakSet<any>,
+): void
+{
+  const uvAttribute = geometry.getAttribute('uv')
+  if (!uvAttribute) return
+
+  if (seenUVAttributes.has(uvAttribute.array))
+  {
+    const cloned = uvAttribute.clone()
+    geometry.setAttribute('uv', cloned)
+    seenUVAttributes.add(cloned.array)
+    return
+  }
+
+  seenUVAttributes.add(uvAttribute.array)
+}
+
+/**
+ * Object3D 以下の各 Mesh の UV bounding box をログ出力する
+ * デバッグ用関数
+ *
+ * @param rootNode - 対象の Object3D
+ */
+export function debugLogMeshUVBounds(rootNode: Object3D): void
+{
+  const meshUVBounds: Array<{
+    meshName: string
+    width: number
+    height: number
+  }> = []
+
+  rootNode.traverse((obj) =>
+  {
+    if (!(obj instanceof Mesh)) return
+    if (!(obj.geometry instanceof BufferGeometry)) return
+
+    const uvAttribute = obj.geometry.getAttribute('uv')
+    if (!uvAttribute) return
+
+    const uvArray = uvAttribute.array as Float32Array
+    if (!uvArray) return
+
+    // UV bounding box を計算
+    let minU = Infinity
+    let maxU = -Infinity
+    let minV = Infinity
+    let maxV = -Infinity
+
+    for (let i = 0; i < uvArray.length; i += 2)
+    {
+      const u = uvArray[i]
+      const v = uvArray[i + 1]
+      minU = Math.min(minU, u)
+      maxU = Math.max(maxU, u)
+      minV = Math.min(minV, v)
+      maxV = Math.max(maxV, v)
+    }
+
+    const width = maxU - minU
+    const height = maxV - minV
+
+    meshUVBounds.push({
+      meshName: obj.name,
+      width,
+      height
+    })
+  })
+
+  console.log('=== Mesh UV Bounds ===')
+  meshUVBounds.forEach((bounds) =>
+  {
+    console.log(`[${bounds.meshName}] width: ${bounds.width.toFixed(4)}, height: ${bounds.height.toFixed(4)}`)
+  })
+}
+
+// テスト用に内部処理を公開（Single-Material mesh 前提）
+export const __applyPlacementsToGeometries = applyPlacementsToGeometries

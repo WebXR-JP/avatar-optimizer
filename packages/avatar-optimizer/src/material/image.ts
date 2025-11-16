@@ -19,12 +19,13 @@ import
   DoubleSide,
   RepeatWrapping,
 } from 'three'
+import { OffsetScale } from './types'
 
 /** Image + UV変換行列のペア */
 export interface ImageMatrixPair
 {
   image: Texture
-  uvTransform: Matrix3
+  uvTransform: OffsetScale
 }
 
 /** 合成時のオプション */
@@ -142,7 +143,7 @@ function createRenderer(): WebGLRenderer
 }
 
 /**
- * Matrix3 の UV 変換を PlaneGeometry のワールド変換に適用したメッシュを作成
+ * UV 変換を PlaneGeometry のワールド変換に適用したメッシュを作成
  *
  * @param layer - テクスチャと UV 変換行列
  * @returns メッシュオブジェクト
@@ -153,16 +154,6 @@ function createLayerMesh(
 {
   const texture = layer.image
   const uvTransform = layer.uvTransform
-
-  // Matrix3 から位置・スケール・回転を抽出
-  // Matrix3: [ scaleU  0       translateU ]
-  //          [ 0      scaleV  translateV ]
-  //          [ 0      0       1          ]
-  const elements = uvTransform.elements
-  const scaleU = elements[0]
-  const scaleV = elements[4]
-  const translateU = elements[6]
-  const translateV = elements[7]
 
   // PlaneGeometry: デフォルトは 1x1、中心が原点
   const geometry = new PlaneGeometry()
@@ -177,12 +168,12 @@ function createLayerMesh(
   const mesh = new Mesh(geometry, material)
 
   // ワールド座標での位置・スケール・回転を設定
-  mesh.position.x = translateU + scaleU * 0.25
-  mesh.position.y = translateV + scaleV * 0.25
+  mesh.position.x = uvTransform.offset.x + uvTransform.scale.x * 0.5
+  mesh.position.y = uvTransform.offset.y + uvTransform.scale.y * 0.5
   mesh.position.z = 0
 
-  mesh.scale.x = scaleU * .5
-  mesh.scale.y = scaleV * .5
+  mesh.scale.x = uvTransform.scale.x
+  mesh.scale.y = uvTransform.scale.y
   mesh.scale.z = 1
 
   return mesh
