@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Tabs, Tab } from '@mui/material'
 import type { VRM } from '@pixiv/three-vrm'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer } from './components'
 import { loadVRM, loadVRMFromFile } from './hooks'
 import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
@@ -75,6 +76,72 @@ function App() {
     }
   }, [vrm])
 
+  const handleExportScene = useCallback(() => {
+    if (!vrm) return
+
+    try {
+      const sceneData = vrm.scene.toJSON()
+      const jsonString = JSON.stringify(sceneData, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${vrm.scene.name || 'vrm-scene'}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(`Export failed: ${String(err)}`)
+    }
+  }, [vrm])
+
+  const handleExportGLTF = useCallback(() => {
+    if (!vrm) return
+
+    const exporter = new GLTFExporter()
+
+    exporter.parse(
+      vrm.scene,
+      (result) => {
+        try {
+          let blob: Blob
+          let filename: string
+
+          if (result instanceof ArrayBuffer) {
+            // Binary GLTF (.glb)
+            blob = new Blob([result], { type: 'application/octet-stream' })
+            filename = `${vrm.scene.name || 'vrm-model'}.glb`
+          } else {
+            // JSON GLTF (.gltf)
+            const jsonString = JSON.stringify(result, null, 2)
+            blob = new Blob([jsonString], { type: 'application/json' })
+            filename = `${vrm.scene.name || 'vrm-model'}.gltf`
+          }
+
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        } catch (err) {
+          setError(`GLTF export failed: ${String(err)}`)
+        }
+      },
+      (error) => {
+        setError(`GLTF export failed: ${String(error)}`)
+      },
+      {
+        binary: true, // .glb形式で出力
+        trs: false,
+        onlyVisible: true,
+      },
+    )
+  }, [vrm])
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Tabs value={currentTab} onChange={handleTabChange}>
@@ -93,6 +160,8 @@ function App() {
           onFileChange={handleFileChange}
           onOptimize={handleOptimize}
           isOptimizing={isOptimizing}
+          onExportScene={handleExportScene}
+          onExportGLTF={handleExportGLTF}
         />
 
         {/* Textures タブの場合はオーバーレイ */}
