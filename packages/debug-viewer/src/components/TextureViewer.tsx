@@ -164,7 +164,8 @@ function TextureViewer({ vrm }: TextureViewerProps) {
             <Box sx={{ flex: 1, overflow: 'hidden' }}>
               <Canvas
                 style={{ width: '100%', height: '100%' }}
-                camera={{ position: [0, 0, 2], fov: 50 }}
+                orthographic
+                camera={{ position: [0, 0, 5] }}
               >
                 <TexturePreviewScene texture={selectedTexture.texture} />
               </Canvas>
