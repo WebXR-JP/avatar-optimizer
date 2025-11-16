@@ -3,7 +3,7 @@ import { Box, Tabs, Tab } from '@mui/material'
 import type { VRM } from '@pixiv/three-vrm'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer } from './components'
-import { loadVRM, loadVRMFromFile } from './hooks'
+import { loadVRM, loadVRMFromFile, replaceVRMTextures } from './hooks'
 import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
 import './App.css'
 
@@ -13,6 +13,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
+  const [isReplacingTextures, setIsReplacingTextures] = useState(false)
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue)
@@ -74,6 +75,21 @@ function App() {
     } finally {
       setIsOptimizing(false)
     }
+  }, [vrm])
+
+  const handleReplaceTextures = useCallback(async () => {
+    if (!vrm) return
+
+    setIsReplacingTextures(true)
+    setError(null)
+
+    const result = await replaceVRMTextures(vrm, '/uv.png')
+
+    if (result.isErr()) {
+      setError(`Texture replacement failed: ${result.error.message}`)
+    }
+
+    setIsReplacingTextures(false)
   }, [vrm])
 
   const handleExportScene = useCallback(() => {
@@ -162,6 +178,8 @@ function App() {
           isOptimizing={isOptimizing}
           onExportScene={handleExportScene}
           onExportGLTF={handleExportGLTF}
+          onReplaceTextures={handleReplaceTextures}
+          isReplacingTextures={isReplacingTextures}
         />
 
         {/* Textures タブの場合はオーバーレイ */}
