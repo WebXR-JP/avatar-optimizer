@@ -5,25 +5,23 @@
  * そしてマテリアル単位の UV 変換行列を生成する責務を持つ。
  */
 
-import { Matrix3, Mesh, Object3D, Texture, BufferGeometry } from 'three'
+import { Mesh, Object3D, Texture } from 'three'
 import { packTextures } from './packing'
 import type {
-  MaterialPlacement,
-  PackingResult,
   AtlasTextureDescriptor,
   TextureSlot,
   TextureCombinationPattern,
   PatternMaterialMapping,
   OffsetScale,
 } from './types'
-import { MToonMaterial } from '@pixiv/three-vrm'
+import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
-import { applyPlacementsToGeometries, debugLogMeshUVBounds, remapGeometryUVs } from './uv'
+import { applyPlacementsToGeometries } from './uv'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
- * Three.jsの複数MToonMaterialをチャンネルごとにテクスチャパッキング
+ * Three.jsの複数MToonNodeMaterialをチャンネルごとにテクスチャパッキング
  * アトラス化したテクスチャを各マテリアルに設定する
  * 対応するメッシュのUVをパッキング結果に基づき修正する
  *
@@ -41,15 +39,15 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     }
   })
 
-  let materials: MToonMaterial[] = []
+  let materials: MToonNodeMaterial[] = []
   for (const mesh of meshes)
   {
     if (Array.isArray(mesh.material))
     {
-      materials.push(...(mesh.material.filter((m) => m instanceof MToonMaterial) as MToonMaterial[]))
-    } else if (mesh.material instanceof MToonMaterial)
+      materials.push(...(mesh.material.filter((m) => m instanceof MToonNodeMaterial) as MToonNodeMaterial[]))
+    } else if (mesh.material instanceof MToonNodeMaterial)
     {
-      materials.push(mesh.material as MToonMaterial)
+      materials.push(mesh.material as MToonNodeMaterial)
     }
   }
   materials = Array.from(new Set(materials)) // 重複排除
@@ -86,7 +84,7 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
 
   const atlasMap = atlasesResult.value
 
-  const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
+  const materialPlacementMap = new Map<MToonNodeMaterial, OffsetScale>()
   patternMappings.forEach((mapping, index) =>
   {
     const placement = packingResult.packed[index]
@@ -165,7 +163,7 @@ function roundToNearestPowerOfTwo(value: number): number
 }
 
 /**
- * MToonMaterial のテクスチャスロット一覧
+ * MToonNodeMaterial のテクスチャスロット一覧
  */
 const MATERIAL_TEXTURE_SLOTS: TextureSlot[] = [
   'map',
@@ -194,14 +192,14 @@ function hasSize(
 
 /**
  * 各チャンネル(例: MainTex, BumpMap)ごとのアトラス画像を生成する
- * 現状はMToonMaterialのみ対応
+ * 現状はMToonNodeMaterialのみ対応
  *
  * @param materials - アトラス化対象のマテリアル配列
  * @param placements - マテリアルごとのパッキング情報配列
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
 export async function generateAtlasImages(
-  materials: MToonMaterial[],
+  materials: MToonNodeMaterial[],
   placements: OffsetScale[]
 ): Promise<Result<AtlasImageMap, Error>>
 {
@@ -257,7 +255,7 @@ export async function generateAtlasImages(
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
 async function generateAtlasImagesFromPatterns(
-  materials: MToonMaterial[],
+  materials: MToonNodeMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[]
 ): Promise<Result<AtlasImageMap, Error>>
@@ -310,7 +308,7 @@ async function generateAtlasImagesFromPatterns(
 }
 
 function assignAtlasTexturesToMaterial(
-  material: MToonMaterial,
+  material: MToonNodeMaterial,
   atlasMap: AtlasImageMap,
 ): void
 {
@@ -328,10 +326,10 @@ function assignAtlasTexturesToMaterial(
 /**
  * マテリアルからテクスチャ組み合わせパターンを抽出
  *
- * @param material - MToonMaterial
+ * @param material - MToonNodeMaterial
  * @returns テクスチャ組み合わせパターン
  */
-function extractTexturePattern(material: MToonMaterial): TextureCombinationPattern
+function extractTexturePattern(material: MToonNodeMaterial): TextureCombinationPattern
 {
   const slots = new Map<TextureSlot, any | null>()
 
@@ -374,11 +372,11 @@ function isSamePattern(
  * マテリアル配列から一意なテクスチャ組み合わせパターンを抽出し、
  * 各パターンを使用するマテリアルのインデックスをマッピング
  *
- * @param materials - MToonMaterial配列
+ * @param materials - MToonNodeMaterial配列
  * @returns パターンとマテリアルのマッピング配列
  */
 function buildPatternMaterialMappings(
-  materials: MToonMaterial[]
+  materials: MToonNodeMaterial[]
 ): PatternMaterialMapping[]
 {
   const mappings: PatternMaterialMapping[] = []

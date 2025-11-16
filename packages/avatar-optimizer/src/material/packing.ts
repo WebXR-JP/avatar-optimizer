@@ -10,8 +10,8 @@
 
 import { Packer, MaxRectsBssf } from 'rectpack-ts'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
-import type { OffsetScale, PackingResult } from './types'
-import { Matrix3, Vector2 } from 'three';
+import type { PackingResult } from './types'
+import { Vector2 } from 'three';
 import { Rectangle } from 'rectpack-ts/dist/src/geometry';
 
 const SCALE_SEARCH_EPSILON = 0.0001

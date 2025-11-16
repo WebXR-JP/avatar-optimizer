@@ -1,7 +1,6 @@
 import { err, ok, Result } from 'neverthrow'
 import
 {
-  Matrix3,
   Texture,
   WebGLRenderer,
   Scene,
@@ -11,7 +10,6 @@ import
   MeshBasicMaterial,
   WebGLRenderTarget,
   Color,
-  ClampToEdgeWrapping,
   DataTexture,
   LinearFilter,
   RGBAFormat,
@@ -20,8 +18,6 @@ import
   RepeatWrapping,
   CustomBlending,
   OneFactor,
-  SrcAlphaFactor,
-  OneMinusSrcAlphaFactor,
   AddEquation,
 } from 'three'
 import { OffsetScale } from './types'
