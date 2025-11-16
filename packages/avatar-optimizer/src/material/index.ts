@@ -32,8 +32,6 @@ import { applyPlacementsToGeometries, debugLogMeshUVBounds, remapGeometryUVs } f
  */
 export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D, atlasSize = 2048): Promise<Result<void, Error>>
 {
-  console.log('start setAtlasTexturesToObjectsWithCorrectUV')
-
   const meshes: Mesh[] = []
   rootNode.traverse(obj =>
   {
@@ -73,24 +71,6 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     atlasSize,
     atlasSize,
   )
-
-  const debugObjects: any[] = [] // デバッグ用オブジェクト格納配列
-  for (let i = 0; i < patternMappings.length; i++)
-  {
-    const mapping = patternMappings[i]
-    const placement = packingResult.packed[i]
-
-    const name = `Pattern ${i} (Mats: ${materials[mapping.materialIndices[0]].name})`
-
-    debugObjects.push({
-      name,
-      uvOffset: { x: placement.offset.x, y: placement.offset.y },
-      uvScale: { x: placement.scale.x, y: placement.scale.y },
-      textureDescriptor: texturesToPack[i],
-      packingInfo: packingResult.packed[i],
-    })
-  }
-  console.log('Atlas Builder Debug Info:', debugObjects)
 
   // パターンごとのアトラス画像を生成
   const atlasesResult = await generateAtlasImagesFromPatterns(
