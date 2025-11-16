@@ -331,6 +331,7 @@ function assignAtlasTexturesToMaterial(
  * GLTF/VRM フロー前提で 1 Mesh = 1 Material のみをサポートし、
  * 実装簡略化と UV 再マッピングの二重適用防止を優先する。
  * 複数マテリアルの Mesh を検出した場合はエラーを返す。
+ * MToonMaterial のみを対象とする。
  */
 function applyPlacementsToGeometries(
   rootNode: Object3D,
@@ -346,18 +347,25 @@ function applyPlacementsToGeometries(
       if (!(obj instanceof Mesh)) return
       if (!(obj.geometry instanceof BufferGeometry)) return
 
+      let material: MToonMaterial | null = null
+
       if (processed.has(obj.geometry)) return
       if (Array.isArray(obj.material))
       {
-        throw new Error('Meshes with multiple materials are not supported')
+        // Outline付きMToonの場合はOutline用に複数マテリアルになっている
+        // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
+        material = obj.material[0];
+      } else if (obj.material instanceof MToonMaterial)
+      {
+        material = obj.material
       }
 
-      if (!(obj.material instanceof MToonMaterial))
+      if (!(material instanceof MToonMaterial))
       {
         return
       }
 
-      const placement = materialPlacementMap.get(obj.material)
+      const placement = materialPlacementMap.get(material)
       if (!placement)
       {
         return
