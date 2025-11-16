@@ -9,8 +9,6 @@ export type { AtlasImageMap } from './material/index'
 // Material types
 export type {
   AtlasTextureDescriptor,
-  Rectangle,
-  TexturePackingInfo,
   PackingResult,
   TextureImageData,
   SlotAtlasImage,
