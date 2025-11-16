@@ -144,8 +144,6 @@ export function applyPlacementsToGeometries(
       {
         throw result.error
       }
-      console.log(`processed: ${obj.name}`)
-      debugLogMeshUVBounds(obj)
     })
 
     return ok()
