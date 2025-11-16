@@ -33,6 +33,9 @@ function TexturePreviewScene({ texture }: TexturePreviewSceneProps) {
     const material = new MeshBasicMaterial({ map: texture })
     const plane = new Mesh(geometry, material)
 
+    // テクスチャを上下反転して表示
+    plane.scale.y = -1
+
     scene.add(plane)
     meshRef.current = plane
 

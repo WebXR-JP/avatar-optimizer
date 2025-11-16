@@ -16,6 +16,8 @@ interface VRMCanvasProps {
   isOptimizing: boolean
   onExportScene: () => void
   onExportGLTF: () => void
+  onReplaceTextures: () => Promise<void>
+  isReplacingTextures: boolean
 }
 
 /**
@@ -52,6 +54,8 @@ function VRMCanvas({
   isOptimizing,
   onExportScene,
   onExportGLTF,
+  onReplaceTextures,
+  isReplacingTextures,
 }: VRMCanvasProps) {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -117,6 +121,13 @@ function VRMCanvas({
               disabled={!vrm}
             >
               Export GLTF
+            </button>
+            <button
+              className="vrm-canvas__replace-textures-btn"
+              onClick={onReplaceTextures}
+              disabled={!vrm || isReplacingTextures}
+            >
+              {isReplacingTextures ? 'Replacing...' : 'Replace Textures with UV'}
             </button>
             <input
               ref={fileInputRef}
