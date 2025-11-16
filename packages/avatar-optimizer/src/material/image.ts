@@ -17,6 +17,7 @@ import
   RGBAFormat,
   UnsignedByteType,
   DoubleSide,
+  RepeatWrapping,
 } from 'three'
 
 /** Image + UV変換行列のペア */
@@ -105,8 +106,8 @@ export function composeImagesToAtlas(
   // 必要に応じて
   tex.magFilter = LinearFilter;
   tex.minFilter = LinearFilter;
-  tex.wrapS = ClampToEdgeWrapping;
-  tex.wrapT = ClampToEdgeWrapping;
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = RepeatWrapping;
 
   // 6. リソース解放
   scene.traverse((obj) =>
