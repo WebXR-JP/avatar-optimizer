@@ -1,0 +1,51 @@
+{
+  "name": "@xrift/mtoon-instancing",
+  "version": "0.1.0",
+  "description": "MToon shader instancing optimization for three-vrm",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write 'src/**/*.ts'",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "@pixiv/three-vrm": "^2.0.0",
+    "@pixiv/three-vrm-materials-mtoon": "^2.0.0",
+    "three": ">=0.167"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "three.js",
+    "vrm",
+    "mtoon",
+    "shader",
+    "instancing",
+    "optimization"
+  ],
+  "author": "xrift",
+  "license": "MIT",
+  "packageManager": "pnpm@10.22.0"
+}
