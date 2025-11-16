@@ -24,6 +24,14 @@ packages/
 │   ├── dist/                     # ビルド出力 (ESM/型定義)
 │   └── package.json
 │
+├── mtoon-instancing/             # MToon インスタンシング マテリアル
+│   ├── src/
+│   │   ├── index.ts              # MToonInstancingMaterial クラス
+│   │   └── types.ts              # 型定義 (ParameterTextureDescriptor など)
+│   ├── tests/                    # Vitest ユニットテスト
+│   ├── dist/                     # ビルド出力 (ESM/型定義)
+│   └── package.json
+│
 └── debug-viewer/                 # VRM 表示用デバッグビューア
     ├── src/
     │   ├── viewer/               # Three.js + @pixiv/three-vrm 実装
@@ -91,6 +99,15 @@ pnpm -F avatar-optimizer run dev
 
 # avatar-optimizer のテスト
 pnpm -F avatar-optimizer run test
+
+# mtoon-instancing のビルド
+pnpm -F mtoon-instancing run build
+
+# mtoon-instancing の開発モード（ウォッチ）
+pnpm -F mtoon-instancing run dev
+
+# mtoon-instancing のテスト
+pnpm -F mtoon-instancing run test
 
 # debug-viewer のビルド
 pnpm -F debug-viewer run build
