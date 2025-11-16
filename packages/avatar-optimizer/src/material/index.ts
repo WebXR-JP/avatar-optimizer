@@ -18,7 +18,7 @@ import type {
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
-import { remapGeometryUVs, remapGeometryUVsByGroup } from './uv'
+import { remapGeometryUVs } from './uv'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -327,131 +327,60 @@ function assignAtlasTexturesToMaterial(
   if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
 }
 
-interface GeometryPlacementInfo
-{
-  applyEntireGeometry: boolean
-  materialIndices: Set<number>
-}
-
 /**
- * ジオメトリのUV座標をマテリアル配置情報に基づき更新する
- * マテリアルから対応するジオメトリを逆引きしてplacementとの対応関係を作成し、
- * 各ジオメトリごとに1回だけUV変換を適用する
- *
- * @param rootNode - 最適化対象のThree.jsオブジェクトのルートノード
- * @param materialPlacementMap - マテリアルごとの配置情報マップ
- * @returns 処理結果（成功またはエラー）
+ * GLTF/VRM フロー前提で 1 Mesh = 1 Material のみをサポートし、
+ * 実装簡略化と UV 再マッピングの二重適用防止を優先する。
+ * 複数マテリアルの Mesh を検出した場合はエラーを返す。
  */
 function applyPlacementsToGeometries(
   rootNode: Object3D,
   materialPlacementMap: Map<MToonMaterial, MaterialPlacement>,
 ): Result<void, Error>
 {
-  const geometryPlacementMap = new Map<BufferGeometry, Map<MaterialPlacement, GeometryPlacementInfo>>()
-
-  rootNode.traverse((obj) =>
+  try
   {
-    if (!(obj instanceof Mesh)) return
-    if (!(obj.geometry instanceof BufferGeometry)) return
+    const processed = new Set<BufferGeometry>()
 
-    const geometry = obj.geometry as BufferGeometry
-    const register = (material: MToonMaterial, groupIndex: number | null) =>
+    rootNode.traverse((obj) =>
     {
-      const placement = materialPlacementMap.get(material)
-      if (!placement) return
-      registerGeometryPlacement(geometryPlacementMap, geometry, placement, groupIndex)
-    }
+      if (!(obj instanceof Mesh)) return
+      if (!(obj.geometry instanceof BufferGeometry)) return
 
-    if (Array.isArray(obj.material))
-    {
-      if (geometry.groups.length > 0)
+      if (processed.has(obj.geometry)) return
+      if (Array.isArray(obj.material))
       {
-        for (const group of geometry.groups)
-        {
-          const materialIndex = group.materialIndex ?? -1
-          if (materialIndex < 0 || materialIndex >= obj.material.length) continue
-          const material = obj.material[materialIndex]
-          if (material instanceof MToonMaterial)
-          {
-            register(material, materialIndex)
-          }
-        }
-      } else
-      {
-        for (const mat of obj.material)
-        {
-          if (mat instanceof MToonMaterial)
-          {
-            register(mat, null)
-          }
-        }
+        throw new Error('Meshes with multiple materials are not supported')
       }
-    } else if (obj.material instanceof MToonMaterial)
-    {
-      register(obj.material, null)
-    }
-  })
 
-  for (const [geometry, placementMap] of geometryPlacementMap.entries())
-  {
-    for (const [placement, info] of placementMap.entries())
-    {
-      if (info.applyEntireGeometry)
+      if (!(obj.material instanceof MToonMaterial))
       {
-        const result = remapGeometryUVs(geometry, placement)
-        if (result.isErr())
-        {
-          return err(result.error)
-        }
-      } else
-      {
-        for (const materialIndex of info.materialIndices)
-        {
-          const result = remapGeometryUVsByGroup(geometry, placement, materialIndex)
-          if (result.isErr())
-          {
-            return err(result.error)
-          }
-        }
+        return
       }
-    }
+
+      const placement = materialPlacementMap.get(obj.material)
+      if (!placement)
+      {
+        return
+      }
+
+      const result = remapGeometryUVs(obj.geometry, placement)
+      if (result.isErr())
+      {
+        throw result.error
+      }
+
+      processed.add(obj.geometry)
+    })
+
+    return ok()
   }
-
-  return ok()
-}
-
-function registerGeometryPlacement(
-  geometryPlacementMap: Map<BufferGeometry, Map<MaterialPlacement, GeometryPlacementInfo>>,
-  geometry: BufferGeometry,
-  placement: MaterialPlacement,
-  materialIndex: number | null,
-): void
-{
-  let placementMap = geometryPlacementMap.get(geometry)
-  if (!placementMap)
+  catch (error)
   {
-    placementMap = new Map()
-    geometryPlacementMap.set(geometry, placementMap)
-  }
-
-  let info = placementMap.get(placement)
-  if (!info)
-  {
-    info = { applyEntireGeometry: false, materialIndices: new Set() }
-    placementMap.set(placement, info)
-  }
-
-  if (materialIndex === null)
-  {
-    info.applyEntireGeometry = true
-    info.materialIndices.clear()
-  } else if (!info.applyEntireGeometry)
-  {
-    info.materialIndices.add(materialIndex)
+    return err(error instanceof Error ? error : new Error(String(error)))
   }
 }
 
-// テスト用に内部処理を公開
+// テスト用に内部処理を公開（Single-Material mesh 前提）
 export const __applyPlacementsToGeometries = applyPlacementsToGeometries
 
 /**
