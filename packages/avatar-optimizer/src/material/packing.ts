@@ -10,7 +10,9 @@
 
 import { Packer, MaxRectsBssf } from 'rectpack-ts'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
-import type { PackingResult, TexturePackingInfo } from './types'
+import type { OffsetScale, PackingResult } from './types'
+import { Matrix3, Vector2 } from 'three';
+import { Rectangle } from 'rectpack-ts/dist/src/geometry';
 
 const SCALE_SEARCH_EPSILON = 0.0001
 
@@ -38,16 +40,12 @@ export function packTexturesWithMaxRects(
   sizes: Array<{ width: number; height: number }>,
   atlasWidth: number,
   atlasHeight: number,
-  originalSizes?: Array<{ width: number; height: number }>,
 ): PackingResult
 {
   if (sizes.length === 0)
   {
     throw new Error('No textures to pack')
   }
-
-  // originalSizes が指定されていない場合は sizes を使用
-  const baseOriginalSizes = originalSizes || sizes
 
   // Packer インスタンスを作成
   // - packAlgo: MaxRectsBssf（最短辺フィット）
@@ -82,30 +80,14 @@ export function packTexturesWithMaxRects(
   const bin = bins[0]
 
   // rect リストに変換（PackedTexture フォーマット）
-  const packed: TexturePackingInfo[] = bin.rectangles.map((rect: any) =>
-  {
-    const originalIndex =
-      rect.rid !== null && rect.rid !== undefined ? parseInt(String(rect.rid), 10) : -1
-    if (originalIndex < 0 || originalIndex >= sizes.length)
-    {
-      throw new Error(`Invalid rectangle index: ${originalIndex}`)
-    }
+  const packed = bin.rectangles.map((rect: Rectangle) => ({
+    rid: rect.rid,
+    offset: new Vector2(rect.x / bin.width, rect.y / bin.height),
+    scale: new Vector2(rect.width / bin.width, rect.height / bin.height),
+  }))
 
-    const scaledSize = sizes[originalIndex]
-    const baseOriginalSize = baseOriginalSizes[originalIndex]
-
-    return {
-      index: originalIndex,
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
-      sourceWidth: baseOriginalSize.width,
-      sourceHeight: baseOriginalSize.height,
-      scaledWidth: scaledSize.width,
-      scaledHeight: scaledSize.height,
-    }
-  })
+  // ridでソートして元の順序に戻す
+  packed.sort((a, b) => Number(a.rid) - Number(b.rid))
 
   // すべてのテクスチャがパッキングされたか確認
   if (packed.length !== sizes.length)
@@ -157,7 +139,7 @@ export async function packTexturesWithAutoScaling(
   const attemptPack = (scale: number) =>
   {
     const scaledSizes = scaleTextureSizes(sizes, scale)
-    return packTexturesWithMaxRects(scaledSizes, atlasWidth, atlasHeight, sizes)
+    return packTexturesWithMaxRects(scaledSizes, atlasWidth, atlasHeight)
   }
 
   // まずは等倍でトライし、成功すればそのまま返す

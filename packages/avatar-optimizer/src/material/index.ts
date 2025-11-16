@@ -14,11 +14,12 @@ import type {
   TextureSlot,
   TextureCombinationPattern,
   PatternMaterialMapping,
+  OffsetScale,
 } from './types'
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
-import { remapGeometryUVs } from './uv'
+import { applyPlacementsToGeometries, debugLogMeshUVBounds, remapGeometryUVs } from './uv'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -31,6 +32,8 @@ import { remapGeometryUVs } from './uv'
  */
 export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D, atlasSize = 2048): Promise<Result<void, Error>>
 {
+  console.log('start setAtlasTexturesToObjectsWithCorrectUV')
+
   const meshes: Mesh[] = []
   rootNode.traverse(obj =>
   {
@@ -71,14 +74,29 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     atlasSize,
   )
 
-  // パッキング結果からパターンごとのUV変換行列を構築
-  const patternPlacements = buildPlacements(packingResult)
+  const debugObjects: any[] = [] // デバッグ用オブジェクト格納配列
+  for (let i = 0; i < patternMappings.length; i++)
+  {
+    const mapping = patternMappings[i]
+    const placement = packingResult.packed[i]
+
+    const name = `Pattern ${i} (Mats: ${materials[mapping.materialIndices[0]].name})`
+
+    debugObjects.push({
+      name,
+      uvOffset: { x: placement.offset.x, y: placement.offset.y },
+      uvScale: { x: placement.scale.x, y: placement.scale.y },
+      textureDescriptor: texturesToPack[i],
+      packingInfo: packingResult.packed[i],
+    })
+  }
+  console.log('Atlas Builder Debug Info:', debugObjects)
 
   // パターンごとのアトラス画像を生成
   const atlasesResult = await generateAtlasImagesFromPatterns(
     materials,
     patternMappings,
-    patternPlacements
+    packingResult.packed
   )
 
   if (atlasesResult.isErr())
@@ -88,10 +106,10 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
 
   const atlasMap = atlasesResult.value
 
-  const materialPlacementMap = new Map<MToonMaterial, MaterialPlacement>()
+  const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
   patternMappings.forEach((mapping, index) =>
   {
-    const placement = patternPlacements[index]
+    const placement = packingResult.packed[index]
     for (const materialIndex of mapping.materialIndices)
     {
       const material = materials[materialIndex]
@@ -100,11 +118,17 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     }
   })
 
+  console.log('debug in line:121')
+  debugLogMeshUVBounds(rootNode)
+
   const applyResult = applyPlacementsToGeometries(rootNode, materialPlacementMap)
   if (applyResult.isErr())
   {
     return err(applyResult.error)
   }
+
+  console.log('debug in line:130')
+  debugLogMeshUVBounds(rootNode)
 
   return ok()
 }
@@ -204,7 +228,7 @@ function hasSize(
  */
 export async function generateAtlasImages(
   materials: MToonMaterial[],
-  placements: MaterialPlacement[]
+  placements: OffsetScale[]
 ): Promise<Result<AtlasImageMap, Error>>
 {
   if (materials.length !== placements.length)
@@ -228,7 +252,7 @@ export async function generateAtlasImages(
       {
         layers.push({
           image: texture,
-          uvTransform: placement.uvTransform,
+          uvTransform: placement,
         })
       }
     }
@@ -261,7 +285,7 @@ export async function generateAtlasImages(
 async function generateAtlasImagesFromPatterns(
   materials: MToonMaterial[],
   patternMappings: PatternMaterialMapping[],
-  patternPlacements: MaterialPlacement[]
+  patternPlacements: OffsetScale[]
 ): Promise<Result<AtlasImageMap, Error>>
 {
   if (patternMappings.length !== patternPlacements.length)
@@ -290,7 +314,7 @@ async function generateAtlasImagesFromPatterns(
       {
         layers.push({
           image: texture,
-          uvTransform: placement.uvTransform,
+          uvTransform: placement
         })
       }
     }
@@ -325,105 +349,6 @@ function assignAtlasTexturesToMaterial(
   if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
   if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
   if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
-}
-
-/**
- * GLTF/VRM フロー前提で 1 Mesh = 1 Material のみをサポートし、
- * 実装簡略化と UV 再マッピングの二重適用防止を優先する。
- * 複数マテリアルの Mesh を検出した場合はエラーを返す。
- * MToonMaterial のみを対象とする。
- */
-function applyPlacementsToGeometries(
-  rootNode: Object3D,
-  materialPlacementMap: Map<MToonMaterial, MaterialPlacement>,
-): Result<void, Error>
-{
-  try
-  {
-    const processed = new Set<BufferGeometry>()
-
-    rootNode.traverse((obj) =>
-    {
-      if (!(obj instanceof Mesh)) return
-      if (!(obj.geometry instanceof BufferGeometry)) return
-
-      let material: MToonMaterial | null = null
-
-      if (processed.has(obj.geometry)) return
-      if (Array.isArray(obj.material))
-      {
-        // Outline付きMToonの場合はOutline用に複数マテリアルになっている
-        // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
-        material = obj.material[0];
-      } else if (obj.material instanceof MToonMaterial)
-      {
-        material = obj.material
-      }
-
-      if (!(material instanceof MToonMaterial))
-      {
-        return
-      }
-
-      const placement = materialPlacementMap.get(material)
-      if (!placement)
-      {
-        return
-      }
-
-      const result = remapGeometryUVs(obj.geometry, placement)
-      if (result.isErr())
-      {
-        throw result.error
-      }
-
-      processed.add(obj.geometry)
-    })
-
-    return ok()
-  }
-  catch (error)
-  {
-    return err(error instanceof Error ? error : new Error(String(error)))
-  }
-}
-
-// テスト用に内部処理を公開（Single-Material mesh 前提）
-export const __applyPlacementsToGeometries = applyPlacementsToGeometries
-
-/**
- * PackingResultのピクセル単位情報からUV変換行列を構築する
- *
- * @param packingResult - ピクセル単位のパッキング結果
- * @returns - マテリアルごとのUV変換行列配列
- */
-function buildPlacements(
-  packingResult: PackingResult,
-): MaterialPlacement[]
-{
-  return packingResult.packed.map((tex) =>
-  {
-    const scaleU = tex.scaledWidth / tex.sourceWidth
-    const scaleV = tex.scaledHeight / tex.sourceHeight
-    const translateU = tex.x / packingResult.atlasWidth
-    const translateV = tex.y / packingResult.atlasHeight
-
-    const uvTransform = new Matrix3().set(
-      scaleU,
-      0,
-      translateU,
-      0,
-      scaleV,
-      translateV,
-      0,
-      0,
-      1,
-    )
-
-    return {
-      uvTransform,
-    }
-  })
 }
 
 /**

@@ -3,7 +3,7 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-import { Matrix3 } from "three"
+import { Matrix3, Vector2 } from "three"
 
 /**
  * アトラス化対象となる1枚のテクスチャ
@@ -17,29 +17,12 @@ export interface AtlasTextureDescriptor
 }
 
 /**
- * テクスチャ内の矩形領域を表す
+ * 主にUVで使用するオフセットとスケール情報
  */
-export interface Rectangle
+export interface OffsetScale
 {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-/**
- * パックされたテクスチャの配置情報
- */
-export interface TexturePackingInfo extends Rectangle
-{
-  /** 入力時の元のテクスチャ幅（スケーリング前） */
-  sourceWidth: number
-  /** 入力時の元のテクスチャ高さ（スケーリング前） */
-  sourceHeight: number
-  /** パッキング時のスケーリング後の幅（width と同じ値） */
-  scaledWidth: number
-  /** パッキング時のスケーリング後の高さ（height と同じ値） */
-  scaledHeight: number
+  offset: Vector2,
+  scale: Vector2,
 }
 
 /**
@@ -52,7 +35,7 @@ export interface PackingResult
   /** アトラスの高さ */
   atlasHeight: number
   /** パックされたテクスチャ情報 */
-  packed: TexturePackingInfo[]
+  packed: OffsetScale[]
 }
 
 /**
