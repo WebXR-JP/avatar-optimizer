@@ -11,6 +11,9 @@ import type {
   MaterialPlacement,
   PackingResult,
   AtlasTextureDescriptor,
+  TextureSlot,
+  TextureCombinationPattern,
+  PatternMaterialMapping,
 } from './types'
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result } from 'neverthrow'
@@ -26,7 +29,7 @@ import { remapMeshUVsByMaterial } from './uv'
  * @param rootNode - 最適化対象のThree.jsオブジェクトのルートノード
  * @param atlasSize - 生成するアトラス画像のサイズ（ピクセル）
  */
-export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D, atlasSize = 2048): Promise<void>
+export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D, atlasSize = 2048): Promise<Result<void, Error>>
 {
   const meshes: Mesh[] = []
   rootNode.traverse(obj =>
@@ -49,62 +52,72 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     }
   }
   materials = Array.from(new Set(materials)) // 重複排除
+  console.log('found materials:', materials)
 
-  const mainTextures = materials.map(mat =>
-  {
-    if (!mat.map) return null
-    if (!hasSize(mat.map.image)) return null
-    return {
-      width: mat.map.image.width,
-      height: mat.map.image.height,
-    } as AtlasTextureDescriptor
-  })
+  // テクスチャ組み合わせパターンを抽出してマッピングを構築
+  const patternMappings = buildPatternMaterialMappings(materials)
+  console.log('unique texture patterns:', patternMappings.length)
 
-  // null を含む値を処理: 有効なテクスチャから平均を計算して 2 の n 乗に丸める
-  const texturesToPack = fillNullTexturesWithAverageDimensions(mainTextures)
+  // パターンごとのテクスチャディスクリプタを収集
+  const textureDescriptors = patternMappings.map(m => m.textureDescriptor)
 
-  // テクスチャパッキングを実行
+  // width/heightが0のものを有効なテクスチャの平均値で埋める
+  const texturesToPack = fillNullTexturesWithAverageDimensions(
+    textureDescriptors.map(d => (d.width > 0 && d.height > 0) ? d : null)
+  )
+
+  // テクスチャパッキングを実行（パターン数分）
   const packingResult = await packTextures(
     texturesToPack,
     atlasSize,
     atlasSize,
   )
 
-  // パッキング結果からマテリアルごとのUV変換行列を構築
-  const placements = buildPlacements(packingResult)
+  // パッキング結果からパターンごとのUV変換行列を構築
+  const patternPlacements = buildPlacements(packingResult)
 
-  const atlasesResult = await generateAtlasImages(
+  // パターンごとのアトラス画像を生成
+  const atlasesResult = await generateAtlasImagesFromPatterns(
     materials,
-    placements
+    patternMappings,
+    patternPlacements
   )
 
   if (atlasesResult.isErr())
   {
-    throw atlasesResult.error
+    return err(atlasesResult.error)
   }
 
   const atlasMap = atlasesResult.value
 
-  // 生成されたアトラス画像をマテリアルに設定
-  for (let i = 0; i < materials.length; i++)
+  // 各マテリアルにアトラス画像とUV変換を設定
+  for (const mapping of patternMappings)
   {
-    const material = materials[i]
-    const placement = placements[i]
+    const patternIndex = patternMappings.indexOf(mapping)
+    const placement = patternPlacements[patternIndex]
 
-    // スロットごとにアトラステクスチャをマテリアルに割り当て
-    if (atlasMap.map) material.map = atlasMap.map
-    if (atlasMap.normalMap) material.normalMap = atlasMap.normalMap
-    if (atlasMap.emissiveMap) material.emissiveMap = atlasMap.emissiveMap
-    if (atlasMap.shadeMultiplyTexture) material.shadeMultiplyTexture = atlasMap.shadeMultiplyTexture
-    if (atlasMap.shadingShiftTexture) material.shadingShiftTexture = atlasMap.shadingShiftTexture
-    if (atlasMap.matcapTexture) material.matcapTexture = atlasMap.matcapTexture
-    if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
-    if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
-    if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
+    // このパターンを使用するすべてのマテリアルに適用
+    for (const materialIndex of mapping.materialIndices)
+    {
+      const material = materials[materialIndex]
 
-    // マテリアルを使用するメッシュの UV 座標を再マッピング
-    remapMeshUVsByMaterial(rootNode, material, placement)
+      // スロットごとにアトラステクスチャをマテリアルに割り当て
+      if (atlasMap.map) material.map = atlasMap.map
+      if (atlasMap.normalMap) material.normalMap = atlasMap.normalMap
+      if (atlasMap.emissiveMap) material.emissiveMap = atlasMap.emissiveMap
+      if (atlasMap.shadeMultiplyTexture) material.shadeMultiplyTexture = atlasMap.shadeMultiplyTexture
+      if (atlasMap.shadingShiftTexture) material.shadingShiftTexture = atlasMap.shadingShiftTexture
+      if (atlasMap.matcapTexture) material.matcapTexture = atlasMap.matcapTexture
+      if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
+      if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
+      if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
+
+      // マテリアルを使用するメッシュの UV 座標を再マッピング
+      remapMeshUVsByMaterial(rootNode, material, placement)
+    }
   }
+
+  return ok()
 }
 
 /**
@@ -167,7 +180,7 @@ function roundToNearestPowerOfTwo(value: number): number
 /**
  * MToonMaterial のテクスチャスロット一覧
  */
-const MATERIAL_TEXTURE_SLOTS = [
+const MATERIAL_TEXTURE_SLOTS: TextureSlot[] = [
   'map',
   'normalMap',
   'emissiveMap',
@@ -177,12 +190,7 @@ const MATERIAL_TEXTURE_SLOTS = [
   'rimMultiplyTexture',
   'outlineWidthMultiplyTexture',
   'uvAnimationMaskTexture',
-] as const
-
-/**
- * テクスチャスロット名の型
- */
-type TextureSlot = typeof MATERIAL_TEXTURE_SLOTS[number]
+]
 
 /**
  * テクスチャスロット名をキーにしたアトラス画像マップの型
@@ -227,6 +235,68 @@ export async function generateAtlasImages(
       const placement = placements[i]
 
       const texture = mat[slot]
+      if (texture)
+      {
+        layers.push({
+          image: texture,
+          uvTransform: placement.uvTransform,
+        })
+      }
+    }
+
+    const atlasResult = composeImagesToAtlas(layers, {
+      width: 2048,
+      height: 2048,
+    })
+
+    if (atlasResult.isErr())
+    {
+      return err(atlasResult.error)
+    }
+
+    atlasMap[slot] = atlasResult.value
+  }
+
+  return ok(atlasMap as AtlasImageMap)
+}
+
+/**
+ * テクスチャ組み合わせパターンに基づいてアトラス画像を生成
+ * 各スロットごとに、一意なパターンのテクスチャのみをアトラス化
+ *
+ * @param materials - 全マテリアル配列
+ * @param patternMappings - パターンとマテリアルのマッピング
+ * @param patternPlacements - パターンごとのUV変換行列
+ * @returns スロット名をキーにしたアトラス画像のマップ
+ */
+async function generateAtlasImagesFromPatterns(
+  materials: MToonMaterial[],
+  patternMappings: PatternMaterialMapping[],
+  patternPlacements: MaterialPlacement[]
+): Promise<Result<AtlasImageMap, Error>>
+{
+  if (patternMappings.length !== patternPlacements.length)
+  {
+    return err(new Error('Pattern mappings and placements length mismatch'))
+  }
+
+  const atlasMap: Partial<AtlasImageMap> = {}
+
+  for (const slot of MATERIAL_TEXTURE_SLOTS)
+  {
+    const layers: ImageMatrixPair[] = []
+
+    // 各パターンについて、最初のマテリアルからテクスチャを取得
+    for (let i = 0; i < patternMappings.length; i++)
+    {
+      const mapping = patternMappings[i]
+      const placement = patternPlacements[i]
+
+      // このパターンの最初のマテリアルを代表として使用
+      const representativeMaterialIndex = mapping.materialIndices[0]
+      const material = materials[representativeMaterialIndex]
+
+      const texture = material[slot]
       if (texture)
       {
         layers.push({
@@ -328,4 +398,118 @@ async function applyPreservingNullIndices<T, R>(
   }
 
   return resultsWithNulls
+}
+
+/**
+ * 2つのテクスチャが同じ画像を参照しているか判定する
+ * テクスチャのuuidではなく、imageオブジェクトの同一性で判定
+ *
+ * @param tex1 - 比較するテクスチャ1
+ * @param tex2 - 比較するテクスチャ2
+ * @returns 同じ画像を参照している場合true
+ */
+function isSameImage(tex1: Texture | null, tex2: Texture | null): boolean
+{
+  if (tex1 === null && tex2 === null) return true
+  if (tex1 === null || tex2 === null) return false
+
+  // imageオブジェクトの参照が同じかチェック
+  return tex1.image === tex2.image
+}
+
+/**
+ * マテリアルからテクスチャ組み合わせパターンを抽出
+ *
+ * @param material - MToonMaterial
+ * @returns テクスチャ組み合わせパターン
+ */
+function extractTexturePattern(material: MToonMaterial): TextureCombinationPattern
+{
+  const slots = new Map<TextureSlot, any | null>()
+
+  for (const slot of MATERIAL_TEXTURE_SLOTS)
+  {
+    const texture = material[slot]
+    // テクスチャのimageオブジェクトを保持（nullの場合はnull）
+    slots.set(slot, texture?.image ?? null)
+  }
+
+  return { slots }
+}
+
+/**
+ * 2つのテクスチャ組み合わせパターンが同じか判定
+ * 各スロットのimageオブジェクトの同一性で判定
+ *
+ * @param pattern1 - パターン1
+ * @param pattern2 - パターン2
+ * @returns 同じパターンの場合true
+ */
+function isSamePattern(
+  pattern1: TextureCombinationPattern,
+  pattern2: TextureCombinationPattern
+): boolean
+{
+  for (const slot of MATERIAL_TEXTURE_SLOTS)
+  {
+    const img1 = pattern1.slots.get(slot) ?? null
+    const img2 = pattern2.slots.get(slot) ?? null
+
+    // imageオブジェクトの参照が異なる場合はfalse
+    if (img1 !== img2) return false
+  }
+
+  return true
+}
+
+/**
+ * マテリアル配列から一意なテクスチャ組み合わせパターンを抽出し、
+ * 各パターンを使用するマテリアルのインデックスをマッピング
+ *
+ * @param materials - MToonMaterial配列
+ * @returns パターンとマテリアルのマッピング配列
+ */
+function buildPatternMaterialMappings(
+  materials: MToonMaterial[]
+): PatternMaterialMapping[]
+{
+  const mappings: PatternMaterialMapping[] = []
+
+  for (let i = 0; i < materials.length; i++)
+  {
+    const material = materials[i]
+    const pattern = extractTexturePattern(material)
+
+    // 既存のパターンと一致するか確認
+    const existingMapping = mappings.find(m => isSamePattern(m.pattern, pattern))
+
+    if (existingMapping)
+    {
+      // 既存パターンにマテリアルインデックスを追加
+      existingMapping.materialIndices.push(i)
+    }
+    else
+    {
+      // 新しいパターンとして追加
+      // テクスチャディスクリプタはmapスロットから取得（nullの場合は後で平均値で埋める）
+      const mapTexture = material.map
+      const textureDescriptor: AtlasTextureDescriptor = (mapTexture && hasSize(mapTexture.image))
+        ? {
+            width: mapTexture.image.width,
+            height: mapTexture.image.height,
+          }
+        : {
+            width: 0,
+            height: 0,
+          }
+
+      mappings.push({
+        pattern,
+        materialIndices: [i],
+        textureDescriptor,
+      })
+    }
+  }
+
+  return mappings
 }

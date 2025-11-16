@@ -135,6 +135,43 @@ export interface AtlasResult
 }
 
 /**
+ * テクスチャスロット名の型
+ */
+export type TextureSlot =
+  | 'map'
+  | 'normalMap'
+  | 'emissiveMap'
+  | 'shadeMultiplyTexture'
+  | 'shadingShiftTexture'
+  | 'matcapTexture'
+  | 'rimMultiplyTexture'
+  | 'outlineWidthMultiplyTexture'
+  | 'uvAnimationMaskTexture'
+
+/**
+ * テクスチャ組み合わせパターン
+ * 各スロットに設定されているテクスチャのImage参照を保持
+ */
+export interface TextureCombinationPattern
+{
+  /** 各スロットのImage参照（nullの場合はテクスチャなし） */
+  slots: Map<TextureSlot, any | null>
+}
+
+/**
+ * 組み合わせパターンとマテリアルのマッピング情報
+ */
+export interface PatternMaterialMapping
+{
+  /** 一意な組み合わせパターン */
+  pattern: TextureCombinationPattern
+  /** このパターンを使用するマテリアルのインデックス配列 */
+  materialIndices: number[]
+  /** パッキング用のテクスチャディスクリプタ */
+  textureDescriptor: AtlasTextureDescriptor
+}
+
+/**
  * エラー型定義
  */
 export type AtlasError =
