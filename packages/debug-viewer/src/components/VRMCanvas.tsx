@@ -14,6 +14,8 @@ interface VRMCanvasProps {
   onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onOptimize: () => Promise<void>
   isOptimizing: boolean
+  onExportScene: () => void
+  onExportGLTF: () => void
 }
 
 /**
@@ -48,6 +50,8 @@ function VRMCanvas({
   onFileChange,
   onOptimize,
   isOptimizing,
+  onExportScene,
+  onExportGLTF,
 }: VRMCanvasProps) {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -99,6 +103,20 @@ function VRMCanvas({
               disabled={!vrm || isOptimizing}
             >
               {isOptimizing ? 'Optimizing...' : 'Optimize Material'}
+            </button>
+            <button
+              className="vrm-canvas__export-btn"
+              onClick={onExportScene}
+              disabled={!vrm}
+            >
+              Export Scene
+            </button>
+            <button
+              className="vrm-canvas__export-gltf-btn"
+              onClick={onExportGLTF}
+              disabled={!vrm}
+            >
+              Export GLTF
             </button>
             <input
               ref={fileInputRef}

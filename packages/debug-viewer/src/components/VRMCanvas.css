@@ -20,7 +20,9 @@
 }
 
 .vrm-canvas__upload-btn,
-.vrm-canvas__optimize-btn {
+.vrm-canvas__optimize-btn,
+.vrm-canvas__export-btn,
+.vrm-canvas__export-gltf-btn {
   padding: 0.5rem 1rem;
   background-color: #0066cc;
   color: white;
@@ -33,12 +35,16 @@
 }
 
 .vrm-canvas__upload-btn:hover:not(:disabled),
-.vrm-canvas__optimize-btn:hover:not(:disabled) {
+.vrm-canvas__optimize-btn:hover:not(:disabled),
+.vrm-canvas__export-btn:hover:not(:disabled),
+.vrm-canvas__export-gltf-btn:hover:not(:disabled) {
   background-color: #0052a3;
 }
 
 .vrm-canvas__upload-btn:disabled,
-.vrm-canvas__optimize-btn:disabled {
+.vrm-canvas__optimize-btn:disabled,
+.vrm-canvas__export-btn:disabled,
+.vrm-canvas__export-gltf-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
