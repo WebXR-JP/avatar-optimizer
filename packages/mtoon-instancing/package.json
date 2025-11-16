@@ -27,14 +27,17 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "@pixiv/three-vrm": "^2.0.0",
-    "@pixiv/three-vrm-materials-mtoon": "^2.0.0",
-    "three": ">=0.167"
+    "@pixiv/three-vrm": "^3.4.4",
+    "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
+    "three": ">=0.181"
   },
   "devDependencies": {
+    "@pixiv/three-vrm": "^3.4.4",
+    "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
     "@types/node": "^22.0.0",
-    "typescript": "^5.0.0",
+    "three": "^0.181.1",
     "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   },
   "keywords": [
