@@ -18,6 +18,11 @@ import
   UnsignedByteType,
   DoubleSide,
   RepeatWrapping,
+  CustomBlending,
+  OneFactor,
+  SrcAlphaFactor,
+  OneMinusSrcAlphaFactor,
+  AddEquation,
 } from 'three'
 import { OffsetScale } from './types'
 
@@ -61,14 +66,19 @@ export function composeImagesToAtlas(
   const renderer = createRenderer()
   const scene = new Scene()
 
-  // 背景色を設定
-  scene.background = backgroundColor instanceof Color ? backgroundColor : new Color().setRGB(0, 0, 0)
+  // 背景色を設定（指定がない場合は透明）
+  if (backgroundColor !== null && backgroundColor !== undefined) {
+    scene.background = backgroundColor
+  } else {
+    // null または undefined の場合は背景なし（透明）
+    scene.background = null
+  }
 
   // 平行投影カメラ: ピクセルパーフェクトな座標系
   const camera = new OrthographicCamera(0, 1, 1, 0, 0.1, 1000)
   camera.position.z = 10
 
-  // 2. オフスクリーンレンダーターゲットを作成
+  // 2. オフスクリーンレンダーターゲットを作成（透明対応）
   const renderTarget = new WebGLRenderTarget(width, height)
 
   // 3. 各レイヤーをシーンに追加
@@ -88,6 +98,9 @@ export function composeImagesToAtlas(
 
   // 4. WebGLRenderTarget に描画
   renderer.setRenderTarget(renderTarget)
+  // 透明背景でクリア（alpha = 0）
+  renderer.setClearColor(0x000000, 0)
+  renderer.clear()
   renderer.render(scene, camera)
 
   // 5. ピクセルデータを読み取りテクスチャを作成
@@ -159,10 +172,15 @@ function createLayerMesh(
   const geometry = new PlaneGeometry()
 
   // マテリアル: テクスチャを割り当て
+  // 背景色に影響されないようカスタムブレンディングを設定
   const material = new MeshBasicMaterial({
     map: texture,
     side: DoubleSide,
     transparent: true,
+    blending: CustomBlending,
+    blendSrc: SrcAlphaFactor,
+    blendDst: OneMinusSrcAlphaFactor,
+    blendEquation: AddEquation,
   })
 
   const mesh = new Mesh(geometry, material)
