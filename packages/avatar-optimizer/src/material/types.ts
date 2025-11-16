@@ -164,3 +164,46 @@ export type AtlasError =
   | { type: 'DOCUMENT_ERROR'; message: string }
   | { type: 'UV_MAPPING_FAILED'; message: string }
   | { type: 'UNKNOWN_ERROR'; message: string }
+
+/**
+ * マテリアル結合のオプション
+ */
+export interface CombineMaterialOptions
+{
+  /** アトラスサイズ（デフォルト: 2048） */
+  atlasSize?: number
+  /** スロット属性名（デフォルト: 'mtoonMaterialSlot'） */
+  slotAttributeName?: string
+  /** パラメータテクスチャのテクセル数（デフォルト: 8） */
+  texelsPerSlot?: number
+}
+
+/**
+ * マテリアル結合の結果
+ */
+export interface CombinedMeshResult
+{
+  /** 結合されたメッシュ */
+  mesh: any // Mesh型（Three.js依存を避けるためany）
+  /** 使用されたMToonInstancingMaterial */
+  material: any // MToonInstancingMaterial型
+  /** 統計情報 */
+  statistics: {
+    /** 元のメッシュ数 */
+    originalMeshCount: number
+    /** 元のマテリアル数（重複排除後） */
+    originalMaterialCount: number
+    /** 削減されたドローコール数 */
+    reducedDrawCalls: number
+  }
+}
+
+/**
+ * マテリアル結合のエラー型
+ */
+export type CombineError =
+  | { type: 'NO_MATERIALS_FOUND'; message: string }
+  | { type: 'PARAMETER_TEXTURE_FAILED'; message: string }
+  | { type: 'ATLAS_GENERATION_FAILED'; message: string }
+  | { type: 'GEOMETRY_MERGE_FAILED'; message: string }
+  | { type: 'UNKNOWN_ERROR'; message: string }

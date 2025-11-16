@@ -15,8 +15,6 @@
 ### スタック
 
 - **TypeScript** (5.0+): 型安全なユーティリティ開発
-- **@gltf-transform/core** (4.0+): glTF/VRM モデル操作
-- **@gltf-transform/extensions** (4.0+): VRM 拡張機能サポート
 - **pnpm** (workspace): monorepo パッケージ管理
 - **tsup** (8.0+): ビルドツール (ESM/CJS 出力)
 - **Vitest** (2.0+): ライブラリ/ビューア双方のユニットテスト
@@ -139,25 +137,11 @@ pnpm -F debug-viewer run test
 
 テクスチャアトラス機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されたため、個別パッケージ向けのコマンドは不要です。`pnpm -F avatar-optimizer run test` がアトラス関連テストも実行します。
 
-**pnpm monorepo コマンドの基本**:
-
-| コマンド                         | 説明                                           |
-| -------------------------------- | ---------------------------------------------- |
-| `pnpm install`                   | 全ワークスペースの依存関係をインストール       |
-| `pnpm build`                     | 全パッケージをビルド（ルートスクリプト）       |
-| `pnpm -F <package> run <script>` | 特定のパッケージのスクリプトを実行             |
-| `pnpm -r run <script>`           | すべてのパッケージでスクリプトを実行           |
-| `pnpm -F <package> add <dep>`    | 特定のパッケージに依存関係を追加               |
-| `pnpm link --global`             | パッケージをグローバルにリンク                 |
-| `pnpm exec <command>`            | ローカル node_modules の実行可能ファイルを実行 |
-
 ## 重要な開発ルール
 
 1. **React 依存なし**: このライブラリは React に依存しない純粋なユーティリティライブラリです
-2. **ブラウザ環境専用**: @gltf-transform/core の WebIO を使用してブラウザ環境で動作
-3. **モジュール形式**: 名前付きエクスポートを使用 (ESM/CJS の両形式をサポート)
-4. **依存関係最小化**: ピア依存関係は @gltf-transform のみ
-5. **テスト**: `packages/avatar-optimizer/tests/` や `packages/debug-viewer/__tests__/` で純粋関数のテストを記述
+3. **モジュール形式**: 名前付きエクスポートを使用 (ESM形式をサポート)
+5. **テスト**: `packages/avatar-optimizer/tests/` や `packages/debug-viewer/tests/` で純粋関数のテストを記述
 
 ## AI 支援開発のためのコーディング規約
 
