@@ -24,16 +24,18 @@ import {
   Vector4,
 } from 'three'
 import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
+import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+import type {
+  ParameterTextureDescriptor,
+  AtlasedTextureSet,
+  MaterialSlotAttributeConfig,
+} from '@xrift/mtoon-instancing'
 import { err, ok, Result } from 'neverthrow'
 import type {
   CombineError,
   CombinedMeshResult,
   CombineMaterialOptions,
 } from './types'
-
-// TODO: 実際には @xrift/mtoon-instancing からインポートする
-type ParameterTextureDescriptor = any
-type MToonInstancingMaterial = any
 
 /**
  * デフォルトオプション
@@ -258,11 +260,11 @@ export function combineMToonMaterials(
   const mergedGeometry = mergeResult.value
 
   // 6. MToonInstancingMaterialの作成
-  // NOTE: 実際にはmtoon-instancingパッケージから正しく型を取る必要がある
-  // ここではダミー実装
   const instancingMaterial = createMToonInstancingMaterial(
     materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
     parameterTexture,
+    materials.length, // スロット数
+    opts.texelsPerSlot, // テクセル数
     opts.slotAttributeName
   )
 
@@ -452,47 +454,78 @@ function packParameterValue(
  *
  * @param representativeMaterial - テクスチャを取得するマテリアル
  * @param parameterTexture - パラメータテクスチャ
+ * @param slotCount - マテリアルスロット数
+ * @param texelsPerSlot - スロットあたりのテクセル数
  * @param slotAttributeName - スロット属性名
  * @returns MToonInstancingMaterial
  */
 function createMToonInstancingMaterial(
   representativeMaterial: MToonNodeMaterial,
   parameterTexture: DataTexture,
+  slotCount: number,
+  texelsPerSlot: number,
   slotAttributeName: string
-): any
+): MToonInstancingMaterial
 {
-  // TODO: 実際には @xrift/mtoon-instancing から MToonInstancingMaterial をインポート
-  // ここではダミー実装。実装時には以下のようになる:
-  // import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
-  // const material = new MToonInstancingMaterial({
-  //   parameterTexture: {
-  //     texture: parameterTexture,
-  //     slotCount: materials.length,
-  //     texelsPerSlot: opts.texelsPerSlot,
-  //     atlasedTextures: {
-  //       baseColor: representativeMaterial.map,
-  //       shade: representativeMaterial.shadeMultiplyTexture,
-  //       shadingShift: representativeMaterial.shadingShiftTexture,
-  //       normal: representativeMaterial.normalMap,
-  //       emissive: representativeMaterial.emissiveMap,
-  //       matcap: representativeMaterial.matcapTexture,
-  //       rim: representativeMaterial.rimMultiplyTexture,
-  //       uvAnimationMask: representativeMaterial.uvAnimationMaskTexture,
-  //     }
-  //   },
-  //   slotAttribute: {
-  //     name: slotAttributeName,
-  //     description: 'Material slot index for instancing'
-  //   }
-  // })
-  // return material
+  // アトラス化されたテクスチャセットを構築
+  const atlasedTextures: AtlasedTextureSet = {}
 
-  // ダミー実装: MToonNodeMaterialをそのまま返す
-  // 実装完了後は削除
-  const dummy = representativeMaterial.clone()
-  ;(dummy as any)._parameterTexture = parameterTexture
-  ;(dummy as any)._slotAttributeName = slotAttributeName
-  return dummy
+  // 代表マテリアルからアトラス化テクスチャを取得
+  if (representativeMaterial.map)
+  {
+    atlasedTextures.baseColor = representativeMaterial.map
+  }
+  if (representativeMaterial.shadeMultiplyTexture)
+  {
+    atlasedTextures.shade = representativeMaterial.shadeMultiplyTexture
+  }
+  if (representativeMaterial.shadingShiftTexture)
+  {
+    atlasedTextures.shadingShift = representativeMaterial.shadingShiftTexture
+  }
+  if (representativeMaterial.normalMap)
+  {
+    atlasedTextures.normal = representativeMaterial.normalMap
+  }
+  if (representativeMaterial.emissiveMap)
+  {
+    atlasedTextures.emissive = representativeMaterial.emissiveMap
+  }
+  if (representativeMaterial.matcapTexture)
+  {
+    atlasedTextures.matcap = representativeMaterial.matcapTexture
+  }
+  if (representativeMaterial.rimMultiplyTexture)
+  {
+    atlasedTextures.rim = representativeMaterial.rimMultiplyTexture
+  }
+  if (representativeMaterial.uvAnimationMaskTexture)
+  {
+    atlasedTextures.uvAnimationMask =
+      representativeMaterial.uvAnimationMaskTexture
+  }
+
+  // パラメータテクスチャディスクリプタを構築
+  const parameterTextureDescriptor: ParameterTextureDescriptor = {
+    texture: parameterTexture,
+    slotCount,
+    texelsPerSlot,
+    atlasedTextures,
+  }
+
+  // スロット属性設定
+  const slotAttribute: MaterialSlotAttributeConfig = {
+    name: slotAttributeName,
+    description: 'Material slot index for instancing',
+  }
+
+  // MToonInstancingMaterialを作成
+  const material = new MToonInstancingMaterial({
+    parameterTexture: parameterTextureDescriptor,
+    slotAttribute,
+  })
+
+  return material
 }
 
 /**

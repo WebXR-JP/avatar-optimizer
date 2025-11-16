@@ -6,7 +6,12 @@ export default defineConfig([
     name: 'library',
     entry: ['src/index.ts'],
     format: ['esm'],
-    dts: true,
+    dts: {
+      resolve: true,
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
     splitting: false,
     sourcemap: true,
     clean: true,
