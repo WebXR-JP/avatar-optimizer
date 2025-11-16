@@ -5,7 +5,7 @@
  * そしてマテリアル単位の UV 変換行列を生成する責務を持つ。
  */
 
-import { Matrix3, Mesh, Object3D, Texture } from 'three'
+import { Matrix3, Mesh, Object3D, Texture, BufferGeometry } from 'three'
 import { packTextures } from './packing'
 import type {
   MaterialPlacement,
@@ -18,7 +18,7 @@ import type {
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
-import { remapMeshUVsByMaterial } from './uv'
+import { remapGeometryUVs, remapGeometryUVsByGroup } from './uv'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -52,11 +52,9 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     }
   }
   materials = Array.from(new Set(materials)) // 重複排除
-  console.log('found materials:', materials)
 
   // テクスチャ組み合わせパターンを抽出してマッピングを構築
   const patternMappings = buildPatternMaterialMappings(materials)
-  console.log('unique texture patterns:', patternMappings.length)
 
   // パターンごとのテクスチャディスクリプタを収集
   const textureDescriptors = patternMappings.map(m => m.textureDescriptor)
@@ -90,31 +88,22 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
 
   const atlasMap = atlasesResult.value
 
-  // 各マテリアルにアトラス画像とUV変換を設定
-  for (const mapping of patternMappings)
+  const materialPlacementMap = new Map<MToonMaterial, MaterialPlacement>()
+  patternMappings.forEach((mapping, index) =>
   {
-    const patternIndex = patternMappings.indexOf(mapping)
-    const placement = patternPlacements[patternIndex]
-
-    // このパターンを使用するすべてのマテリアルに適用
+    const placement = patternPlacements[index]
     for (const materialIndex of mapping.materialIndices)
     {
       const material = materials[materialIndex]
-
-      // スロットごとにアトラステクスチャをマテリアルに割り当て
-      if (atlasMap.map) material.map = atlasMap.map
-      if (atlasMap.normalMap) material.normalMap = atlasMap.normalMap
-      if (atlasMap.emissiveMap) material.emissiveMap = atlasMap.emissiveMap
-      if (atlasMap.shadeMultiplyTexture) material.shadeMultiplyTexture = atlasMap.shadeMultiplyTexture
-      if (atlasMap.shadingShiftTexture) material.shadingShiftTexture = atlasMap.shadingShiftTexture
-      if (atlasMap.matcapTexture) material.matcapTexture = atlasMap.matcapTexture
-      if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
-      if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
-      if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
-
-      // マテリアルを使用するメッシュの UV 座標を再マッピング
-      remapMeshUVsByMaterial(rootNode, material, placement)
+      assignAtlasTexturesToMaterial(material, atlasMap)
+      materialPlacementMap.set(material, placement)
     }
+  })
+
+  const applyResult = applyPlacementsToGeometries(rootNode, materialPlacementMap)
+  if (applyResult.isErr())
+  {
+    return err(applyResult.error)
   }
 
   return ok()
@@ -322,8 +311,152 @@ async function generateAtlasImagesFromPatterns(
   return ok(atlasMap as AtlasImageMap)
 }
 
+function assignAtlasTexturesToMaterial(
+  material: MToonMaterial,
+  atlasMap: AtlasImageMap,
+): void
+{
+  if (atlasMap.map) material.map = atlasMap.map
+  if (atlasMap.normalMap) material.normalMap = atlasMap.normalMap
+  if (atlasMap.emissiveMap) material.emissiveMap = atlasMap.emissiveMap
+  if (atlasMap.shadeMultiplyTexture) material.shadeMultiplyTexture = atlasMap.shadeMultiplyTexture
+  if (atlasMap.shadingShiftTexture) material.shadingShiftTexture = atlasMap.shadingShiftTexture
+  // MatCapはUV非依存なのでスキップ
+  if (atlasMap.rimMultiplyTexture) material.rimMultiplyTexture = atlasMap.rimMultiplyTexture
+  if (atlasMap.outlineWidthMultiplyTexture) material.outlineWidthMultiplyTexture = atlasMap.outlineWidthMultiplyTexture
+  if (atlasMap.uvAnimationMaskTexture) material.uvAnimationMaskTexture = atlasMap.uvAnimationMaskTexture
+}
+
+interface GeometryPlacementInfo
+{
+  applyEntireGeometry: boolean
+  materialIndices: Set<number>
+}
+
+/**
+ * ジオメトリのUV座標をマテリアル配置情報に基づき更新する
+ * マテリアルから対応するジオメトリを逆引きしてplacementとの対応関係を作成し、
+ * 各ジオメトリごとに1回だけUV変換を適用する
+ *
+ * @param rootNode - 最適化対象のThree.jsオブジェクトのルートノード
+ * @param materialPlacementMap - マテリアルごとの配置情報マップ
+ * @returns 処理結果（成功またはエラー）
+ */
+function applyPlacementsToGeometries(
+  rootNode: Object3D,
+  materialPlacementMap: Map<MToonMaterial, MaterialPlacement>,
+): Result<void, Error>
+{
+  const geometryPlacementMap = new Map<BufferGeometry, Map<MaterialPlacement, GeometryPlacementInfo>>()
+
+  rootNode.traverse((obj) =>
+  {
+    if (!(obj instanceof Mesh)) return
+    if (!(obj.geometry instanceof BufferGeometry)) return
+
+    const geometry = obj.geometry as BufferGeometry
+    const register = (material: MToonMaterial, groupIndex: number | null) =>
+    {
+      const placement = materialPlacementMap.get(material)
+      if (!placement) return
+      registerGeometryPlacement(geometryPlacementMap, geometry, placement, groupIndex)
+    }
+
+    if (Array.isArray(obj.material))
+    {
+      if (geometry.groups.length > 0)
+      {
+        for (const group of geometry.groups)
+        {
+          const materialIndex = group.materialIndex ?? -1
+          if (materialIndex < 0 || materialIndex >= obj.material.length) continue
+          const material = obj.material[materialIndex]
+          if (material instanceof MToonMaterial)
+          {
+            register(material, materialIndex)
+          }
+        }
+      } else
+      {
+        for (const mat of obj.material)
+        {
+          if (mat instanceof MToonMaterial)
+          {
+            register(mat, null)
+          }
+        }
+      }
+    } else if (obj.material instanceof MToonMaterial)
+    {
+      register(obj.material, null)
+    }
+  })
+
+  for (const [geometry, placementMap] of geometryPlacementMap.entries())
+  {
+    for (const [placement, info] of placementMap.entries())
+    {
+      if (info.applyEntireGeometry)
+      {
+        const result = remapGeometryUVs(geometry, placement)
+        if (result.isErr())
+        {
+          return err(result.error)
+        }
+      } else
+      {
+        for (const materialIndex of info.materialIndices)
+        {
+          const result = remapGeometryUVsByGroup(geometry, placement, materialIndex)
+          if (result.isErr())
+          {
+            return err(result.error)
+          }
+        }
+      }
+    }
+  }
+
+  return ok()
+}
+
+function registerGeometryPlacement(
+  geometryPlacementMap: Map<BufferGeometry, Map<MaterialPlacement, GeometryPlacementInfo>>,
+  geometry: BufferGeometry,
+  placement: MaterialPlacement,
+  materialIndex: number | null,
+): void
+{
+  let placementMap = geometryPlacementMap.get(geometry)
+  if (!placementMap)
+  {
+    placementMap = new Map()
+    geometryPlacementMap.set(geometry, placementMap)
+  }
+
+  let info = placementMap.get(placement)
+  if (!info)
+  {
+    info = { applyEntireGeometry: false, materialIndices: new Set() }
+    placementMap.set(placement, info)
+  }
+
+  if (materialIndex === null)
+  {
+    info.applyEntireGeometry = true
+    info.materialIndices.clear()
+  } else if (!info.applyEntireGeometry)
+  {
+    info.materialIndices.add(materialIndex)
+  }
+}
+
+// テスト用に内部処理を公開
+export const __applyPlacementsToGeometries = applyPlacementsToGeometries
+
 /**
  * PackingResultのピクセル単位情報からUV変換行列を構築する
+ *
  * @param packingResult - ピクセル単位のパッキング結果
  * @returns - マテリアルごとのUV変換行列配列
  */
@@ -354,67 +487,6 @@ function buildPlacements(
       uvTransform,
     }
   })
-}
-
-/**
- * nullを除外して関数を実行し、結果にnullを再挿入してインデックス関係を復元
- * @param items - (T | null)[] 配列
- * @param fn - null以外のアイテムを受け取る非同期関数
- * @returns インデックス関係が保たれた結果
- */
-async function applyPreservingNullIndices<T, R>(
-  items: Array<T | null>,
-  fn: (validItems: T[]) => Promise<R[]>,
-): Promise<Array<R | null>>
-{
-  // nullを除外しつつ、元のインデックスを保持
-  const validItems: Array<{ item: T; originalIndex: number }> = []
-  for (let i = 0; i < items.length; i++)
-  {
-    if (items[i] !== null)
-    {
-      validItems.push({
-        item: items[i]!,
-        originalIndex: i,
-      })
-    }
-  }
-
-  // nullが全部の場合は空結果を返す
-  if (validItems.length === 0)
-  {
-    return Array(items.length).fill(null)
-  }
-
-  // 有効なアイテムのみで関数を実行
-  const results = await fn(validItems.map(v => v.item))
-
-  // 結果にnullを再挿入してインデックスを復元
-  const resultsWithNulls: Array<R | null> = Array(items.length).fill(null)
-  for (let i = 0; i < results.length; i++)
-  {
-    const original = validItems[i]
-    resultsWithNulls[original.originalIndex] = results[i]
-  }
-
-  return resultsWithNulls
-}
-
-/**
- * 2つのテクスチャが同じ画像を参照しているか判定する
- * テクスチャのuuidではなく、imageオブジェクトの同一性で判定
- *
- * @param tex1 - 比較するテクスチャ1
- * @param tex2 - 比較するテクスチャ2
- * @returns 同じ画像を参照している場合true
- */
-function isSameImage(tex1: Texture | null, tex2: Texture | null): boolean
-{
-  if (tex1 === null && tex2 === null) return true
-  if (tex1 === null || tex2 === null) return false
-
-  // imageオブジェクトの参照が同じかチェック
-  return tex1.image === tex2.image
 }
 
 /**

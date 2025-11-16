@@ -8,6 +8,7 @@
 import { BufferGeometry, Mesh, Object3D } from 'three'
 import type { MaterialPlacement } from './types'
 import { MToonMaterial } from '@pixiv/three-vrm'
+import { ok, err, Result } from 'neverthrow'
 
 /**
  * UV 座標を変換する共通処理
@@ -61,18 +62,22 @@ function applyUVTransform(
 export function remapGeometryUVs(
   geometry: BufferGeometry,
   placement: MaterialPlacement,
-): void
+): Result<void, Error>
 {
   // uv 属性を取得
   const uvAttribute = geometry.getAttribute('uv')
   if (!uvAttribute)
   {
-    return
+    return err(new Error('UV attribute not found'))
   }
 
   // UV データを取得
   const uvArray = uvAttribute.array as Float32Array
-  if (!uvArray) return
+  if (!uvArray) return err(new Error('UV array not found'))
+  if (uvAttribute.itemSize !== 2)
+  {
+    return err(new Error('UV attribute itemSize must be 2'))
+  }
 
   // Matrix3 から変換係数を抽出
   const elements = placement.uvTransform.elements
@@ -86,51 +91,7 @@ export function remapGeometryUVs(
 
   // 属性を更新
   uvAttribute.needsUpdate = true
-}
-
-/**
- * 指定したマテリアルを使用するメッシュのサブメッシュ単位で UV を再マッピング
- *
- * マテリアルが配列の場合、該当インデックスのグループのみ処理
- * マテリアルが単一の場合、全体を処理
- *
- * @param rootNode - ルートノード
- * @param material - 対象のマテリアル
- * @param placement - マテリアル配置情報（uvTransform を含む）
- */
-export function remapMeshUVsByMaterial(
-  rootNode: Object3D,
-  material: MToonMaterial,
-  placement: MaterialPlacement,
-): void
-{
-  rootNode.traverse((obj) =>
-  {
-    if (obj.type === 'Mesh')
-    {
-      const mesh = obj as Mesh
-
-      if (!(mesh.geometry instanceof BufferGeometry))
-      {
-        return
-      }
-
-      // マテリアルが配列の場合と単一マテリアルの場合に分岐
-      if (Array.isArray(mesh.material))
-      {
-        // 配列マテリアル：該当インデックスのグループのみ処理
-        const materialIndex = mesh.material.indexOf(material)
-        if (materialIndex !== -1)
-        {
-          remapGeometryUVsByGroup(mesh.geometry, placement, materialIndex)
-        }
-      } else if (mesh.material === material)
-      {
-        // 単一マテリアル：全体を処理
-        remapGeometryUVs(mesh.geometry, placement)
-      }
-    }
-  })
+  return ok()
 }
 
 /**
@@ -147,13 +108,13 @@ export function remapGeometryUVsByGroup(
   geometry: BufferGeometry,
   placement: MaterialPlacement,
   materialIndex: number,
-): void
+): Result<void, Error>
 {
   // uv 属性を取得
   const uvAttribute = geometry.getAttribute('uv')
   if (!uvAttribute)
   {
-    return
+    return err(new Error('UV attribute not found'))
   }
 
   // グループ情報を取得
@@ -161,13 +122,16 @@ export function remapGeometryUVsByGroup(
   if (groups.length === 0)
   {
     // グループがない場合は全体を処理
-    remapGeometryUVs(geometry, placement)
-    return
+    return remapGeometryUVs(geometry, placement)
   }
 
   // UV データを取得
   const uvArray = uvAttribute.array as Float32Array
-  if (!uvArray) return
+  if (!uvArray) return err(new Error('UV array not found'))
+  if (uvAttribute.itemSize !== 2)
+  {
+    return err(new Error('UV attribute itemSize must be 2'))
+  }
 
   // Matrix3 から変換係数を抽出
   const elements = placement.uvTransform.elements
@@ -176,18 +140,53 @@ export function remapGeometryUVsByGroup(
   const translateU = elements[6]
   const translateV = elements[7]
 
-  // 該当マテリアルインデックスのグループを処理
-  if (materialIndex < groups.length)
+  // マテリアルインデックスに紐づく全グループを抽出
+  const targetGroups = groups.filter((group) => group.materialIndex === materialIndex)
+  if (targetGroups.length === 0)
   {
-    const group = groups[materialIndex]
-    const start = group.start
-    const count = group.count
-    const end = start + count
+    // グループが見つからない場合は処理対象がないため成功扱い
+    return ok()
+  }
 
-    // グループ範囲の UV を変換
-    applyUVTransform(uvArray, scaleU, scaleV, translateU, translateV, start, end)
+  const indexAttribute = geometry.getIndex()
+
+  if (!indexAttribute)
+  {
+    // 非インデックスジオメトリ: group.start/count は Face Corner（= 頂点）数
+    for (const group of targetGroups)
+    {
+      const startElement = group.start * uvAttribute.itemSize
+      const endElement = startElement + group.count * uvAttribute.itemSize
+      applyUVTransform(uvArray, scaleU, scaleV, translateU, translateV, startElement, endElement)
+    }
+  } else
+  {
+    // インデックスジオメトリ: group.start/count はインデックス配列上の範囲
+    const indexArray = indexAttribute.array as ArrayLike<number>
+    const visitedVertices = new Set<number>()
+
+    for (const group of targetGroups)
+    {
+      const start = group.start
+      const end = start + group.count
+
+      for (let i = start; i < end; i += 1)
+      {
+        const vertexIndex = indexArray[i]
+        if (visitedVertices.has(vertexIndex))
+        {
+          continue
+        }
+        visitedVertices.add(vertexIndex)
+
+        const offset = vertexIndex * uvAttribute.itemSize
+        applyUVTransform(uvArray, scaleU, scaleV, translateU, translateV, offset, offset + uvAttribute.itemSize)
+      }
+    }
   }
 
   // 属性を更新
   uvAttribute.needsUpdate = true
+
+  return ok()
 }
