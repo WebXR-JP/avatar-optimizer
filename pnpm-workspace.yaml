@@ -2,3 +2,4 @@ packages:
   - 'packages/avatar-optimizer'
   - 'packages/texture-atlas'
   - 'packages/debug-viewer'
+  - 'packages/mtoon-instancing'
