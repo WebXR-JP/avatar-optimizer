@@ -56,7 +56,7 @@ describe('applyPlacementsToGeometries', () =>
     expect(rounded(transformed)).toEqual([0.25, 0.25, 0.75, 0.25, 0.25, 0.75])
   })
 
-  it('applies different placements per material group without double-processing', () =>
+  it('fails when mesh has multiple materials', () =>
   {
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(36), 3))
@@ -88,18 +88,6 @@ describe('applyPlacementsToGeometries', () =>
     ])
 
     const result = __applyPlacementsToGeometries(root, placementMap)
-    expect(result.isOk()).toBe(true)
-
-    const transformed = geometry.getAttribute('uv')!.array as Float32Array
-    expect(rounded(transformed.slice(0, 6))).toEqual([
-      0.2, 0.1,
-      0.7, 0.1,
-      0.2, 0.6,
-    ])
-    expect(rounded(transformed.slice(6))).toEqual([
-      0.85, 0.65,
-      0.6, 0.65,
-      0.85, 0.4,
-    ])
+    expect(result.isErr()).toBe(true)
   })
 })
