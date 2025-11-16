@@ -46,7 +46,8 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm -F avatar-optimizer run build:*)",
       "Bash(tee:*)",
-      "Bash(node /tmp/compare_vrms.js:*)"
+      "Bash(node /tmp/compare_vrms.js:*)",
+      "Bash(pnpm -F mtoon-instancing run build)"
     ],
     "deny": [
       "Read(credentials/)"

@@ -16,6 +16,7 @@ import {
   attribute,
   float,
   texture,
+  varying,
   vec2,
   type ShaderNodeObject,
 } from 'three/tsl'
@@ -167,10 +168,10 @@ export class MToonInstancingMaterial extends MToonNodeMaterial {
   }
 
   override clone(): this {
-    const MaterialCtor = this.constructor as {
-      new (options?: MToonInstancingOptions): this
-    }
-    return new MaterialCtor().copy(this)
+    const MaterialCtor = this.constructor as new (
+      options?: MToonInstancingOptions,
+    ) => MToonInstancingMaterial
+    return new MaterialCtor().copy(this) as this
   }
 
   override setupVariants(): void {

@@ -3,7 +3,7 @@
  */
 
 // Material module (Three.js MToonMaterial support)
-export { setAtlasTexturesToObjectsWithCorrectUV, generateAtlasImages } from './material/index'
+export { optimizeModelMaterials as setAtlasTexturesToObjectsWithCorrectUV, generateAtlasImages } from './material/index'
 export type { AtlasImageMap } from './material/index'
 
 // Material types

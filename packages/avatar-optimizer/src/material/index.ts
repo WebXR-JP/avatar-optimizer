@@ -18,6 +18,7 @@ import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
 import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
 import { applyPlacementsToGeometries } from './uv'
+import { combineMToonMaterials } from './combine'
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials, createParameterTexture } from './combine'
@@ -28,11 +29,28 @@ export type { CombineMaterialOptions, CombinedMeshResult, CombineError } from '.
  * Three.jsの複数MToonNodeMaterialをチャンネルごとにテクスチャパッキング
  * アトラス化したテクスチャを各マテリアルに設定する
  * 対応するメッシュのUVをパッキング結果に基づき修正する
+ * 最後にマテリアルを統合してドローコール数を削減する
  *
  * @param rootNode - 最適化対象のThree.jsオブジェクトのルートノード
  * @param atlasSize - 生成するアトラス画像のサイズ（ピクセル）
+ * @returns 最適化結果（統合メッシュ情報を含む）
  */
-export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D, atlasSize = 2048): Promise<Result<void, Error>>
+export async function optimizeModelMaterials(
+  rootNode: Object3D,
+  atlasSize = 2048
+): Promise<
+  Result<
+    {
+      combinedMesh?: Mesh
+      statistics?: {
+        originalMeshCount: number
+        originalMaterialCount: number
+        reducedDrawCalls: number
+      }
+    },
+    Error
+  >
+>
 {
   const meshes: Mesh[] = []
   rootNode.traverse(obj =>
@@ -106,7 +124,22 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     return err(applyResult.error)
   }
 
-  return ok()
+  // マテリアル結合処理：複数のMToonNodeMaterialを統合してドローコール数を削減
+  const combineResult = combineMToonMaterials(rootNode)
+  if (combineResult.isErr())
+  {
+    // マテリアル結合失敗時は警告として処理を継続
+    // テクスチャアトラス化は完了しているため、全体の最適化は成功とみなす
+    console.warn('Material combining failed:', combineResult.error.message)
+    return ok({})
+  }
+
+  const { mesh: combinedMesh, statistics } = combineResult.value
+
+  return ok({
+    combinedMesh,
+    statistics,
+  })
 }
 
 /**
@@ -405,13 +438,13 @@ function buildPatternMaterialMappings(
       const mapTexture = material.map
       const textureDescriptor: AtlasTextureDescriptor = (mapTexture && hasSize(mapTexture.image))
         ? {
-            width: mapTexture.image.width,
-            height: mapTexture.image.height,
-          }
+          width: mapTexture.image.width,
+          height: mapTexture.image.height,
+        }
         : {
-            width: 0,
-            height: 0,
-          }
+          width: 0,
+          height: 0,
+        }
 
       mappings.push({
         pattern,
