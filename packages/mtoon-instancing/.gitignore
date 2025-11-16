@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+*.pnp
+.pnp.js
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Development
+.env.local
+.DS_Store
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
