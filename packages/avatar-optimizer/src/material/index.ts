@@ -118,17 +118,11 @@ export async function setAtlasTexturesToObjectsWithCorrectUV(rootNode: Object3D,
     }
   })
 
-  console.log('debug in line:121')
-  debugLogMeshUVBounds(rootNode)
-
   const applyResult = applyPlacementsToGeometries(rootNode, materialPlacementMap)
   if (applyResult.isErr())
   {
     return err(applyResult.error)
   }
-
-  console.log('debug in line:130')
-  debugLogMeshUVBounds(rootNode)
 
   return ok()
 }
