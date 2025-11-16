@@ -1,17 +1,23 @@
-import { err, errAsync, ok, Result, ResultAsync } from 'neverthrow'
+import { err, ok, Result } from 'neverthrow'
 import
-  {
-    Matrix3,
-    Texture,
-    WebGLRenderer,
-    Scene,
-    OrthographicCamera,
-    Mesh,
-    PlaneGeometry,
-    MeshBasicMaterial,
-    WebGLRenderTarget,
-    Color,
-  } from 'three'
+{
+  Matrix3,
+  Texture,
+  WebGLRenderer,
+  Scene,
+  OrthographicCamera,
+  Mesh,
+  PlaneGeometry,
+  MeshBasicMaterial,
+  WebGLRenderTarget,
+  Color,
+  ClampToEdgeWrapping,
+  DataTexture,
+  LinearFilter,
+  RGBAFormat,
+  UnsignedByteType,
+  DoubleSide,
+} from 'three'
 
 /** Image + UV変換行列のペア */
 export interface ImageMatrixPair
@@ -28,8 +34,6 @@ export interface ComposeImageOptions
   backgroundColor?: Color | null
 }
 
-const DEFAULT_BG = 'rgba(0,0,0,0)'
-
 /**
  * Three.jsのQuadメッシュと平行投影カメラを使用してImageを合成する
  * 各レイヤーを独立したPlaneGeometryとして配置し、
@@ -44,7 +48,7 @@ export function composeImagesToAtlas(
   options: ComposeImageOptions,
 ): Result<Texture, Error>
 {
-  const { width, height, backgroundColor = DEFAULT_BG } = options
+  const { width, height, backgroundColor } = options
 
   if (width <= 0 || height <= 0)
   {
@@ -56,10 +60,10 @@ export function composeImagesToAtlas(
   const scene = new Scene()
 
   // 背景色を設定
-  scene.background = backgroundColor instanceof Color ? backgroundColor : null
+  scene.background = backgroundColor instanceof Color ? backgroundColor : new Color().setRGB(0, 0, 0)
 
   // 平行投影カメラ: ピクセルパーフェクトな座標系
-  const camera = new OrthographicCamera(0, width, height, 0, 0.1, 1000)
+  const camera = new OrthographicCamera(0, 1, 1, 0, 0.1, 1000)
   camera.position.z = 10
 
   // 2. オフスクリーンレンダーターゲットを作成
@@ -84,8 +88,25 @@ export function composeImagesToAtlas(
   renderer.setRenderTarget(renderTarget)
   renderer.render(scene, camera)
 
-  // 5. WebGLRenderTarget から Texture を取得
-  const resultTexture = renderTarget.texture
+  // 5. ピクセルデータを読み取りテクスチャを作成
+  const pixels = new Uint8Array(width * height * 4)
+  renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, pixels)
+
+  const tex = new DataTexture(
+    pixels,
+    width,
+    height,
+    RGBAFormat,
+    UnsignedByteType
+  );
+
+  tex.needsUpdate = true;
+
+  // 必要に応じて
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearFilter;
+  tex.wrapS = ClampToEdgeWrapping;
+  tex.wrapT = ClampToEdgeWrapping;
 
   // 6. リソース解放
   scene.traverse((obj) =>
@@ -102,7 +123,7 @@ export function composeImagesToAtlas(
   renderer.dispose()
   renderTarget.dispose()
 
-  return ok(resultTexture)
+  return ok(tex)
 }
 
 /**
@@ -132,7 +153,6 @@ function createLayerMesh(
   const texture = layer.image
   const uvTransform = layer.uvTransform
 
-
   // Matrix3 から位置・スケール・回転を抽出
   // Matrix3: [ scaleU  0       translateU ]
   //          [ 0      scaleV  translateV ]
@@ -144,26 +164,26 @@ function createLayerMesh(
   const translateV = elements[7]
 
   // PlaneGeometry: デフォルトは 1x1、中心が原点
-  const geometry = new PlaneGeometry(1, 1)
+  const geometry = new PlaneGeometry()
 
   // マテリアル: テクスチャを割り当て
   const material = new MeshBasicMaterial({
     map: texture,
-    side: 2, // THREE.FrontSide
+    side: DoubleSide,
     transparent: true,
   })
 
   const mesh = new Mesh(geometry, material)
 
   // ワールド座標での位置・スケール・回転を設定
-  // translateU, translateV は UV 空間なのでピクセル空間に変換
-  mesh.position.x = translateU + scaleU / 2
-  mesh.position.y = translateV + scaleV / 2
+  mesh.position.x = translateU + scaleU * 0.25
+  mesh.position.y = translateV + scaleV * 0.25
   mesh.position.z = 0
 
-  mesh.scale.x = scaleU
-  mesh.scale.y = scaleV
+  mesh.scale.x = scaleU * .5
+  mesh.scale.y = scaleV * .5
   mesh.scale.z = 1
 
   return mesh
 }
+
