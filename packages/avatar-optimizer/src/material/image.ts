@@ -137,6 +137,7 @@ export function composeImagesToAtlas(
   })
   renderer.dispose()
   renderTarget.dispose()
+  layers.forEach(layer => layer.image.dispose())
 
   return ok(tex)
 }
@@ -178,8 +179,8 @@ function createLayerMesh(
     side: DoubleSide,
     transparent: true,
     blending: CustomBlending,
-    blendSrc: SrcAlphaFactor,
-    blendDst: OneMinusSrcAlphaFactor,
+    blendSrc: OneFactor,
+    blendDst: OneFactor,
     blendEquation: AddEquation,
   })
 

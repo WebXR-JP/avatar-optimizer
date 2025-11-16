@@ -137,6 +137,7 @@ export function applyPlacementsToGeometries(
       }
 
       const clonedGeometry = obj.geometry.clone()
+      obj.geometry.dispose()
       obj.geometry = clonedGeometry
 
       const result = remapGeometryUVs(clonedGeometry, placement)
