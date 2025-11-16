@@ -19,6 +19,10 @@ import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
 import { applyPlacementsToGeometries } from './uv'
 
+// マテリアル結合のエクスポート
+export { combineMToonMaterials, createParameterTexture } from './combine'
+export type { CombineMaterialOptions, CombinedMeshResult, CombineError } from './types'
+
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
  * Three.jsの複数MToonNodeMaterialをチャンネルごとにテクスチャパッキング

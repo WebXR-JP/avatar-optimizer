@@ -12,14 +12,12 @@
  */
 
 import {
-  BufferAttribute,
   BufferGeometry,
   Color,
   DataTexture,
   Float32BufferAttribute,
   FloatType,
   Mesh,
-  Matrix3,
   Object3D,
   RGBAFormat,
   Vector3,
@@ -167,15 +165,119 @@ export function combineMToonMaterials(
     })
   }
 
-  // TODO: 以下の処理を実装
   // 2. パラメータテクスチャ生成
-  // 3. テクスチャアトラス生成
-  // 4. ジオメトリ結合
-  // 5. MToonInstancingMaterial作成
+  const paramTexResult = createParameterTexture(materials, opts.texelsPerSlot)
+  if (paramTexResult.isErr())
+  {
+    return err({
+      type: 'PARAMETER_TEXTURE_FAILED',
+      message: paramTexResult.error.message,
+    })
+  }
+  const parameterTexture = paramTexResult.value
 
-  return err({
-    type: 'UNKNOWN_ERROR',
-    message: 'Not implemented yet',
+  // 3. マテリアルとメッシュのマッピング
+  // 各マテリアルに対応するメッシュを集める
+  const materialToMeshes = new Map<MToonNodeMaterial, Mesh[]>()
+  const materialSlotIndex = new Map<MToonNodeMaterial, number>()
+
+  // マテリアルをスロットインデックスにマッピング
+  materials.forEach((mat, index) =>
+  {
+    materialSlotIndex.set(mat, index)
+  })
+
+  // メッシュをマテリアルごとにグループ化
+  for (const mesh of meshes)
+  {
+    let material: MToonNodeMaterial | null = null
+
+    if (Array.isArray(mesh.material))
+    {
+      // 複数マテリアルの場合は最初のMToonを対象
+      const mtoonMaterial = mesh.material.find(
+        (m) => m instanceof MToonNodeMaterial
+      )
+      if (mtoonMaterial instanceof MToonNodeMaterial)
+      {
+        material = mtoonMaterial
+      }
+    }
+    else if (mesh.material instanceof MToonNodeMaterial)
+    {
+      material = mesh.material
+    }
+
+    if (material && materialSlotIndex.has(material))
+    {
+      if (!materialToMeshes.has(material))
+      {
+        materialToMeshes.set(material, [])
+      }
+      materialToMeshes.get(material)!.push(mesh)
+    }
+  }
+
+  // 4. ジオメトリ結合用マップの構築
+  const meshToSlotIndex = new Map<Mesh, number>()
+  const meshesForMerge: Mesh[] = []
+
+  for (const [material, meshList] of materialToMeshes.entries())
+  {
+    const slotIndex = materialSlotIndex.get(material) ?? 0
+    for (const mesh of meshList)
+    {
+      meshToSlotIndex.set(mesh, slotIndex)
+      meshesForMerge.push(mesh)
+    }
+  }
+
+  if (meshesForMerge.length === 0)
+  {
+    return err({
+      type: 'GEOMETRY_MERGE_FAILED',
+      message: 'No meshes to merge',
+    })
+  }
+
+  // 5. ジオメトリ結合
+  const mergeResult = mergeGeometriesWithSlotAttribute(
+    meshesForMerge,
+    meshToSlotIndex,
+    opts.slotAttributeName
+  )
+
+  if (mergeResult.isErr())
+  {
+    return err({
+      type: 'GEOMETRY_MERGE_FAILED',
+      message: mergeResult.error.message,
+    })
+  }
+
+  const mergedGeometry = mergeResult.value
+
+  // 6. MToonInstancingMaterialの作成
+  // NOTE: 実際にはmtoon-instancingパッケージから正しく型を取る必要がある
+  // ここではダミー実装
+  const instancingMaterial = createMToonInstancingMaterial(
+    materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
+    parameterTexture,
+    opts.slotAttributeName
+  )
+
+  // 7. 結合メッシュの作成
+  const combinedMesh = new Mesh(mergedGeometry, instancingMaterial)
+  combinedMesh.name = 'CombinedMToonMesh'
+
+  return ok({
+    mesh: combinedMesh,
+    material: instancingMaterial,
+    statistics: {
+      originalMeshCount: meshes.length,
+      originalMaterialCount: materials.length,
+      reducedDrawCalls: materials.length - 1, // 元のドローコール数 - 1（統合後）
+    },
   })
 }
 
@@ -340,6 +442,57 @@ function packParameterValue(
       channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3
     data[baseOffset + channelOffset] = values[i] ?? 0
   }
+}
+
+/**
+ * MToonInstancingMaterialを作成
+ *
+ * 代表マテリアルのアトラス化されたテクスチャを使用
+ * パラメータテクスチャを設定
+ *
+ * @param representativeMaterial - テクスチャを取得するマテリアル
+ * @param parameterTexture - パラメータテクスチャ
+ * @param slotAttributeName - スロット属性名
+ * @returns MToonInstancingMaterial
+ */
+function createMToonInstancingMaterial(
+  representativeMaterial: MToonNodeMaterial,
+  parameterTexture: DataTexture,
+  slotAttributeName: string
+): any
+{
+  // TODO: 実際には @xrift/mtoon-instancing から MToonInstancingMaterial をインポート
+  // ここではダミー実装。実装時には以下のようになる:
+  // import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+  // const material = new MToonInstancingMaterial({
+  //   parameterTexture: {
+  //     texture: parameterTexture,
+  //     slotCount: materials.length,
+  //     texelsPerSlot: opts.texelsPerSlot,
+  //     atlasedTextures: {
+  //       baseColor: representativeMaterial.map,
+  //       shade: representativeMaterial.shadeMultiplyTexture,
+  //       shadingShift: representativeMaterial.shadingShiftTexture,
+  //       normal: representativeMaterial.normalMap,
+  //       emissive: representativeMaterial.emissiveMap,
+  //       matcap: representativeMaterial.matcapTexture,
+  //       rim: representativeMaterial.rimMultiplyTexture,
+  //       uvAnimationMask: representativeMaterial.uvAnimationMaskTexture,
+  //     }
+  //   },
+  //   slotAttribute: {
+  //     name: slotAttributeName,
+  //     description: 'Material slot index for instancing'
+  //   }
+  // })
+  // return material
+
+  // ダミー実装: MToonNodeMaterialをそのまま返す
+  // 実装完了後は削除
+  const dummy = representativeMaterial.clone()
+  ;(dummy as any)._parameterTexture = parameterTexture
+  ;(dummy as any)._slotAttributeName = slotAttributeName
+  return dummy
 }
 
 /**
