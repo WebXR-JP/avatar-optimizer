@@ -39,7 +39,8 @@
 				"anthropic.claude-code",
 				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode",
-				"eamodio.gitlens"
+				"eamodio.gitlens",
+				"Anthropic.claude-code"
 			],
 			"settings": {
 				"editor.formatOnSave": true,
