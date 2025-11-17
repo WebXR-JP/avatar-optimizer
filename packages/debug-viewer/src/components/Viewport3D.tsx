@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import type { VRM } from '@pixiv/three-vrm'
-import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
+import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
 import VRMCanvas from './VRMCanvas'
 import './Viewport3D.css'
 
@@ -37,7 +37,7 @@ function Viewport3D({
     onError('')
 
     try {
-      await setAtlasTexturesToObjectsWithCorrectUV(vrm.scene)
+      await optimizeModelMaterials(vrm.scene)
     } catch (err) {
       onError(`Optimization failed: ${String(err)}`)
     } finally {
