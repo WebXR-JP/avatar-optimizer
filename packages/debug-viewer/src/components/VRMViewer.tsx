@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VRM } from '@pixiv/three-vrm'
-import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
+import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
 import { loadVRM, loadVRMFromFile } from '../hooks'
 import VRMCanvas from './VRMCanvas'
 import './VRMViewer.css'
@@ -71,8 +71,9 @@ function VRMViewer() {
     setError(null)
 
     try {
-      await setAtlasTexturesToObjectsWithCorrectUV(vrm.scene)
+      await optimizeModelMaterials(vrm.scene)
     } catch (err) {
+      console.error(err)
       setError(`Optimization failed: ${String(err)}`)
     } finally {
       setIsOptimizing(false)

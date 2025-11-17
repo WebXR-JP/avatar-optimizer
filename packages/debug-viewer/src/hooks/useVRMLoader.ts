@@ -1,7 +1,8 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
+import { MToonMaterialLoaderPlugin, VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
 import { ResultAsync } from 'neverthrow'
 import type { GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
 
 export type VRMLoaderError =
   | { type: 'VRM_LOAD_FAILED'; message: string }
@@ -14,16 +15,24 @@ export type VRMLoaderError =
  * @param url - VRMファイルのURL
  * @returns VRMオブジェクトまたはエラー
  */
-export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError> {
+export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError>
+{
   return ResultAsync.fromPromise(
-    (async () => {
+    (async () =>
+    {
       const loader = new GLTFLoader()
-      loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser))
+      loader.register(parser => new VRMLoaderPlugin(parser, {
+        mtoonMaterialPlugin: new MToonMaterialLoaderPlugin(parser, {
+          materialType: MToonNodeMaterial
+        })
+      }))
 
       const gltf = await loader.loadAsync(url)
       const vrm = gltf.userData.vrm as VRM | undefined
+      console.log(vrm)
 
-      if (!vrm) {
+      if (!vrm)
+      {
         throw new Error('VRM data not found in loaded file')
       }
 
@@ -43,23 +52,28 @@ export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError> {
  * @param file - VRMのFileオブジェクト
  * @returns VRMオブジェクトまたはエラー
  */
-export function loadVRMFromFile(file: File): ResultAsync<VRM, VRMLoaderError> {
+export function loadVRMFromFile(file: File): ResultAsync<VRM, VRMLoaderError>
+{
   return ResultAsync.fromPromise(
-    (async () => {
+    (async () =>
+    {
       const url = URL.createObjectURL(file)
-      try {
+      try
+      {
         const loader = new GLTFLoader()
         loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser))
 
         const gltf = await loader.loadAsync(url)
         const vrm = gltf.userData.vrm as VRM | undefined
 
-        if (!vrm) {
+        if (!vrm)
+        {
           throw new Error('VRM data not found in loaded file')
         }
 
         return vrm
-      } finally {
+      } finally
+      {
         URL.revokeObjectURL(url)
       }
     })(),

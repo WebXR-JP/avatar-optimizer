@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
-import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
+import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
 import './VRMCanvas.css'
 
 interface VRMCanvasProps {

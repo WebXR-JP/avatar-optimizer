@@ -4,7 +4,7 @@ import type { VRM } from '@pixiv/three-vrm'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures } from './hooks'
-import { setAtlasTexturesToObjectsWithCorrectUV } from '@xrift/avatar-optimizer'
+import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
 import './App.css'
 
 function App() {
@@ -68,13 +68,21 @@ function App() {
     setIsOptimizing(true)
     setError(null)
 
-    try {
-      await setAtlasTexturesToObjectsWithCorrectUV(vrm.scene)
-    } catch (err) {
-      setError(`Optimization failed: ${String(err)}`)
-    } finally {
+    const result = await optimizeModelMaterials(vrm.scene)
+
+    if (result.isErr()) {
+      const err = result.error
+      console.error(err)
+      setError(`Optimization failed (${err.type}): ${err.message}`)
       setIsOptimizing(false)
+      return
     }
+
+    const optimizationResult = result.value
+    if (optimizationResult.combinedMesh) {
+      console.log('Optimization successful:', optimizationResult.statistics)
+    }
+    setIsOptimizing(false)
   }, [vrm])
 
   const handleReplaceTextures = useCallback(async () => {
