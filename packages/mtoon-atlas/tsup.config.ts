@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup'
+import { raw } from "esbuild-raw-plugin";
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -9,12 +10,5 @@ export default defineConfig({
   splitting: false,
   shims: true,
   outDir: 'dist',
-  esbuildOptions(options) {
-    // シェーダーファイルをテキストアセットとして処理
-    options.loader = {
-      ...options.loader,
-      '.vert': 'text',
-      '.frag': 'text',
-    }
-  },
+  esbuildPlugins: [raw()]
 })
