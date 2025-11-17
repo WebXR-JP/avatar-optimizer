@@ -1,22 +1,24 @@
-# @xrift/mtoon-instancing
+# @xrift/mtoon-atlas
 
-MToon shader instancing optimization utilities for three-vrm WebGL applications.
+MToon shader atlas optimization utilities for three-vrm WebGL applications.
 
 ## Overview
 
-`@xrift/mtoon-instancing` provides a custom MToon material that consumes the atlas + packed parameter textures produced by `@xrift/avatar-optimizer`.  
-本パッケージは `SkinnedMesh` で使用中の複数 `MToonNodeMaterial` を 1 つにまとめ、頂点属性経由で元マテリアルを参照する形に統一することを目的としています。
+`@xrift/mtoon-atlas` provides `MToonAtlasMaterial` - a WebGL-based custom MToon material that consumes the atlas + packed parameter textures produced by `@xrift/avatar-optimizer`.
+
+本パッケージは `SkinnedMesh` で使用中の複数 `MToonMaterial` を 1 つにまとめ、頂点属性経由で元マテリアルを参照する形に統一することを目的としています。
+
+**架構戦略**: `MToonAtlasMaterial` は `THREE.ShaderMaterial` を継承した WebGL ベースの実装です。WebXR 環境での互換性を重視しており、WebGPU 対応は将来の検討事項となっています。
 
 ## Features
 
-- **MToonNodeMaterial ベースのカスタムマテリアル**: 完全な MToon シェーダー互換性
-- **パラメータテクスチャサポート**: 全19種類の数値パラメータを自動サンプリング
+- **ShaderMaterial ベースのカスタムマテリアル**: WebGL 標準対応、WebXR 環境で動作確実
+- **パラメータテクスチャサポート**: 全19種類の数値パラメータをテクスチャからサンプリング
   - baseColor, shadeColor, emissiveColor, emissiveIntensity
   - shadingShift, shadingToony, shadingShiftTextureScale
   - rimLightingMix, parametricRimColor, parametricRimLift, parametricRimFresnelPower
   - matcapColor, outlineWidth, outlineColor, outlineLightingMix
-  - uvAnimationScrollX, uvAnimationScrollY, uvAnimationRotation
-  - normalScale
+  - uvAnimationScrollX, uvAnimationScrollY, uvAnimationRotation, normalScale
 - **アトラステクスチャ自動設定**: 8種類のテクスチャマップを自動バインディング
   - baseColor, shade, shadingShift, normal, emissive, matcap, rim, uvAnimationMask
 - **頂点属性ベースのスロット管理**: 元マテリアルのスロット index を頂点属性で受け取る
@@ -25,7 +27,7 @@ MToon shader instancing optimization utilities for three-vrm WebGL applications.
 ## Installation
 
 ```bash
-pnpm add @xrift/mtoon-instancing
+pnpm add @xrift/mtoon-atlas
 ```
 
 ## Requirements
@@ -40,14 +42,14 @@ pnpm add @xrift/mtoon-instancing
 
 ```typescript
 import { Float32BufferAttribute, Mesh } from 'three'
-import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 
 // 1. SkinnedMesh のジオメトリに slot index 属性を追加する
 const slotIndices = new Float32Array(vertexCount) // avatar-optimizer から得たインデックス
 geometry.setAttribute('mtoonMaterialSlot', new Float32BufferAttribute(slotIndices, 1))
 
 // 2. パラメータテクスチャとアトラステクスチャを設定
-const material = new MToonInstancingMaterial()
+const material = new MToonAtlasMaterial()
 material.setParameterTexture({
   texture: packedParameterTexture,
   slotCount: packedSlotCount,
@@ -72,10 +74,12 @@ const mesh = new Mesh(geometry, material)
 ### コンストラクタで一括設定
 
 ```typescript
-const material = new MToonInstancingMaterial({
-  // MToonNodeMaterial の既存パラメータも使用可能
+const material = new MToonAtlasMaterial({
+  // THREE.ShaderMaterial のパラメータ
   transparent: true,
   depthWrite: true,
+  fog: true,
+  lights: true,
 
   // パラメータテクスチャ設定
   parameterTexture: {
@@ -85,7 +89,15 @@ const material = new MToonInstancingMaterial({
     atlasedTextures: {
       baseColor: atlasMainTexture,
       normal: atlasNormalTexture,
+      shade: atlasShadeTexture,
+      emissive: atlasEmissiveTexture,
+      // ... その他のテクスチャ
     }
+  },
+
+  // スロット属性設定（オプション）
+  slotAttribute: {
+    name: 'mtoonMaterialSlot' // デフォルト値
   }
 })
 ```
@@ -93,7 +105,7 @@ const material = new MToonInstancingMaterial({
 ### 手動でテクスチャを設定する場合（従来の方法）
 
 ```typescript
-const material = new MToonInstancingMaterial({
+const material = new MToonAtlasMaterial({
   // MToonNodeMaterial のテクスチャプロパティを直接設定
   map: atlasMainTexture,
   normalMap: atlasNormalTexture,
@@ -120,19 +132,41 @@ geometry.setAttribute(
 )
 ```
 
-頂点属性を使用しているため `InstancedMesh` を組む必要はなく、スキニング後もそのまま varying としてシェーダに渡せます。次のステップではこの index を基にパラメータテクスチャから元 uniform 値を復元する TSL ノードを構築します。
+頂点属性を使用しているため `InstancedMesh` を組む必要はなく、スキニング後もそのまま varying としてシェーダに渡せます。
+
+**Vertex Shader での処理**:
+```glsl
+attribute float mtoonMaterialSlot;  // 頂点属性として受け取る
+varying float vMaterialSlot;         // Fragment Shader へ渡す
+
+void main() {
+  vMaterialSlot = mtoonMaterialSlot;
+  // ... 通常の頂点変換処理
+}
+```
+
+**Fragment Shader での処理**:
+```glsl
+varying float vMaterialSlot;  // Vertex Shader から受け取る
+
+void main() {
+  // vMaterialSlot を使用してパラメータテクスチャからパラメータをサンプリング
+  vec4 param0 = sampleParameter(vMaterialSlot, 0.0);
+  // ...
+}
+```
 
 ## API Reference
 
-### MToonInstancingMaterial
+### MToonAtlasMaterial
 
 #### Constructor
 
 ```typescript
-new MToonInstancingMaterial(options?: MToonInstancingOptions)
+new MToonAtlasMaterial(options?: MToonAtlasOptions)
 ```
 
-`MToonNodeMaterialParameters` のすべてのオプションに加え、以下のインスタンシング固有オプションをサポート：
+`THREE.ShaderMaterialParameters` を継承し、以下のインスタンシング固有オプションを追加サポート：
 
 - `parameterTexture?: ParameterTextureDescriptor` - パラメータテクスチャディスクリプタ
 - `slotAttribute?: MaterialSlotAttributeConfig` - スロット属性設定
@@ -157,7 +191,7 @@ new MToonInstancingMaterial(options?: MToonInstancingOptions)
 
 現在のパラメータテクスチャディスクリプタを取得します。
 
-**`isMToonInstancingMaterial: true` (読み取り専用)**
+**`isMToonAtlasMaterial: true` (読み取り専用)**
 
 マテリアル識別用フラグ。
 
@@ -201,7 +235,22 @@ interface MaterialSlotAttributeConfig {
 
 ## Parameter texture layout
 
-インスタンス化前の MToon マテリアルから取り出した uniform 値は、1 スロットあたり 8 texel（`texelsPerSlot = 8`）の RGBA に下記の順番で詰め込みます。`MToonInstancingMaterial` のシェーダはこのレイアウトを前提に TSL ノードを生成します。
+avatar-optimizer で生成されたパラメータテクスチャは、各スロット（元マテリアル）あたり 8 texel（`texelsPerSlot = 8`）の RGBA チャンネルに、以下の順番で 19 個のパラメータを詰め込んだ構造になっています。
+
+`MToonAtlasMaterial` の Fragment Shader はこのレイアウトを前提にパラメータをサンプリングします：
+
+```glsl
+// Fragment Shader でのサンプリング例
+vec4 param0 = sampleParameter(vMaterialSlot, 0.0);  // Texel 0: baseColor + shadingShift
+vec3 baseColor = param0.rgb;
+float shadingShift = param0.a;
+
+vec4 param1 = sampleParameter(vMaterialSlot, 1.0);  // Texel 1: shadeColor + shadingShiftTextureScale
+vec3 shadeColor = param1.rgb;
+float shadingShiftTextureScale = param1.a;
+
+// ... 以下同様に各テクセルをサンプリング
+```
 
 | Texel index | Channel(s) | Semantic | 内容 |
 | ----------- | ---------- | -------- | ---- |
@@ -230,19 +279,42 @@ interface MaterialSlotAttributeConfig {
 ### Build
 
 ```bash
-pnpm -F mtoon-instancing run build
+pnpm -F mtoon-atlas run build
 ```
+
+現在、大枠の実装が完成しており、ビルド・型定義生成が成功しています。詳細な実装は `docs/IMPLEMENTATION_PLAN.md` を参照してください。
+
+### Implementation Status
+
+**実装完了** ✅
+- クラス構造と骨組み（`MToonAtlasMaterial`）
+- 型定義（`ParameterTextureDescriptor`, `AtlasedTextureSet` など）
+- パブリック API の定義と Getter/Setter メソッド
+- シェーダーファイル（TODO コメント付き）
+- ビルドシステム（tsup + esbuild シェーダーローダー）
+
+**実装予定** 📋
+- Uniform 初期化（THREE.UniformsLib マージ）
+- `setParameterTexture()` の完全実装
+- `copy()/clone()` メソッド
+- `update()` メソッド（UV アニメーション更新）
+- Fragment Shader のパラメータサンプリング実装
+- テストの修正・充実
+
+詳細は [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) を参照してください。
 
 ### Test
 
 ```bash
-pnpm -F mtoon-instancing run test
+pnpm -F mtoon-atlas run test
 ```
+
+*現在、シェーダー parse エラーで成功していません。これは vitest の設定最適化で解決予定です。*
 
 ### Watch Mode
 
 ```bash
-pnpm -F mtoon-instancing run dev
+pnpm -F mtoon-atlas run dev
 ```
 
 ## License

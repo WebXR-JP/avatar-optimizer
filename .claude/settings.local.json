@@ -47,7 +47,13 @@
       "Bash(pnpm -F avatar-optimizer run build:*)",
       "Bash(tee:*)",
       "Bash(node /tmp/compare_vrms.js:*)",
-      "Bash(pnpm -F mtoon-instancing run build)"
+      "Bash(pnpm -F mtoon-instancing run build)",
+      "Bash(git -C /workspaces/avatar-optimizer log --all --oneline -- packages/mtoon-instancing)",
+      "Bash(git -C /workspaces/avatar-optimizer show d891925:packages/mtoon-instancing)",
+      "Bash(git -C /workspaces/avatar-optimizer log --oneline --all -- \"packages/mtoon-instancing/\")",
+      "Bash(pnpm -F mtoon-atlas run build)",
+      "Bash(pnpm -F mtoon-atlas run test)",
+      "Bash(npx vitest:*)"
     ],
     "deny": [
       "Read(credentials/)"

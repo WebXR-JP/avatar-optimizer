@@ -41,10 +41,8 @@ packages/
 │   ├── vitest.config.ts
 │   └── tsup.config.ts
 │
-├── mtoon-instancing/             # MToon インスタンシング マテリアル
+├── mtoon-atlas/             # MToon Atlas マテリアル
 │   ├── src/
-│   │   ├── index.ts              # MToonInstancingMaterial クラス
-│   │   └── types.ts              # 型定義 (ParameterTextureDescriptor, AtlasedTextureSet など)
 │   ├── tests/                    # Vitest テスト
 │   ├── dist/                     # ビルド出力
 │   ├── package.json
@@ -124,10 +122,10 @@ pnpm -F avatar-optimizer run dev
 # avatar-optimizer のテスト
 pnpm -F avatar-optimizer run test
 
-# mtoon-instancing (MToon インスタンシング)
-pnpm -F mtoon-instancing run build
-pnpm -F mtoon-instancing run dev
-pnpm -F mtoon-instancing run test
+# mtoon-atlas (MToon インスタンシング)
+pnpm -F mtoon-atlas run build
+pnpm -F mtoon-atlas run dev
+pnpm -F mtoon-atlas run test
 
 # debug-viewer (VRM 確認用)
 pnpm -F debug-viewer run build
@@ -465,46 +463,36 @@ export type { OptimizationOptions, VRMStatistics }
 - ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
 - ❌ 外部向けの非同期関数（Promise + throw を使用）
 
-## Texture-Atlas モジュールについて
+## Texture-atlas モジュールについて
 
 テクスチャアトラス化機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されています。
 
-- `index.ts`: `buildTextureAtlas` などメイン API をエクスポート
+- `index.ts`: `buildTextureatlas` などメイン API をエクスポート
 - `packing.ts`: Bin packing/Island 配置アルゴリズム
 - `image.ts`: Jimp/canvas を用いた画像合成
 - `uv-remapping.ts`: UV 書き換え + padding 処理
-- `types.ts`: `AtlasBuildResult` などの型定義
+- `types.ts`: `atlasBuildResult` などの型定義
 
 ユニットテストは `packages/avatar-optimizer/tests/atlas.test.ts` や `packages/avatar-optimizer/tests/uv-remap.test.ts` にまとまっています。追加の治具は `packages/avatar-optimizer/tests/texture-atlas/` に配置して管理してください。
 
-## MToon Instancing パッケージについて
+## MToon atlas パッケージについて
 
-**@xrift/mtoon-instancing** (`packages/mtoon-instancing/`) は複数の MToon マテリアルをインスタンシング化するための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
+**@xrift/mtoon-atlas** (`packages/mtoon-atlas/`) はアトラス化したテクスチャを使ってMToonと同等の表現をするための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
 
 ### 主な機能
 
-- **MToonInstancingMaterial**: MToonNodeMaterial を拡張したクラス
+- **MToonAtlasMaterial**: MToonMaterial を拡張したクラス
   - 全19種類の数値パラメータを自動サンプリング（ParameterTexture から）
   - 8種類のテクスチャマップを自動設定（AtlasedTextureSet から）
 - **スロット属性管理**: 頂点属性経由でマテリアルスロットをインスタンスごとに指定
 - **SkinnedMesh 対応**: InstancedMesh 不要でスキニングアニメーションと互換
 
-### ファイル構成
-
-- `src/index.ts`: `MToonInstancingMaterial` クラス実装
-- `src/types.ts`: 型定義
-  - `ParameterTextureDescriptor`: パラメータテクスチャ情報（19パラメータ）
-  - `AtlasedTextureSet`: アトラス化テクスチャセット（8種類）
-  - `MaterialSlotAttributeConfig`: スロット属性メタデータ
-  - `ParameterSemanticId`: パラメータセマンティクス ID（19種）
-  - `DEFAULT_PARAMETER_LAYOUT`: デフォルトレイアウト定義
-
 ### API 利用例
 
 ```typescript
-import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+import { MToonatlasMaterial } from '@xrift/mtoon-atlas'
 
-const material = new MToonInstancingMaterial()
+const material = new MToonatlasMaterial()
 material.setParameterTexture({
   texture: packedParameterTexture,
   slotCount: 10,
@@ -518,20 +506,20 @@ material.setParameterTexture({
 })
 ```
 
-### MToon Instancing クイックリンク
+### MToon Atlas クイックリンク
 
 ```bash
 # ビルド
-pnpm -F mtoon-instancing run build
+pnpm -F mtoon-atlas run build
 
 # ウォッチ
-pnpm -F mtoon-instancing run dev
+pnpm -F mtoon-atlas run dev
 
 # テスト
-pnpm -F mtoon-instancing run test
+pnpm -F mtoon-atlas run test
 
 # ドキュメント
-cat packages/mtoon-instancing/README.md
+cat packages/mtoon-atlas/README.md
 ```
 
 ### 対応パラメータ

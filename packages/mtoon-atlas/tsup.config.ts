@@ -9,4 +9,12 @@ export default defineConfig({
   splitting: false,
   shims: true,
   outDir: 'dist',
+  esbuildOptions(options) {
+    // シェーダーファイルをテキストアセットとして処理
+    options.loader = {
+      ...options.loader,
+      '.vert': 'text',
+      '.frag': 'text',
+    }
+  },
 })

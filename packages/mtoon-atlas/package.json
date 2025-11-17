@@ -1,7 +1,7 @@
 {
-  "name": "@xrift/mtoon-instancing",
+  "name": "@xrift/mtoon-atlas",
   "version": "0.1.0",
-  "description": "MToon shader instancing optimization for three-vrm",
+  "description": "アトラス化したテクスチャのためのMToonMaterial",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

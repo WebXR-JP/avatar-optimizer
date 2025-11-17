@@ -24,12 +24,12 @@ import {
   Vector4,
 } from 'three'
 import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
-import { MToonInstancingMaterial } from '@xrift/mtoon-instancing'
+import { MToonInstancingMaterial } from '../../../mtoon-atlas/dist'
 import type {
   ParameterTextureDescriptor,
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
-} from '@xrift/mtoon-instancing'
+} from '../../../mtoon-atlas/dist'
 import { err, ok, Result } from 'neverthrow'
 import type {
   CombineError,
