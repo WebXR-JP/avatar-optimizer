@@ -51,24 +51,16 @@ export interface TextureSlotInfo
 }
 
 /**
- * テクスチャ処理などの内部処理のエラー型
+ * Material最適化関連のエラー型
+ *
+ * optimizeModelMaterials などの Material 処理で発生するエラー
  */
-export type ProcessingError =
-  | { type: 'PROCESSING_FAILED'; message: string }
-
-/**
-
- * optimizeVRM 関数のエラー型
-
- * 型安全なエラーハンドリング用
-
- */
-
-export type OptimizationError =
-  | { type: 'INVALID_FILE_TYPE'; message: string }
-  | { type: 'LOAD_FAILED'; message: string }
-  | { type: 'DOCUMENT_PARSE_FAILED'; message: string }
-  | { type: 'TEXTURE_EXTRACTION_FAILED'; message: string }
-  | { type: 'UNKNOWN_ERROR'; message: string }
-  | { type: 'UNSUPPORTED_VRM_VERSION'; message: string }
-  | ProcessingError
+export type MaterialOptimizationError =
+  | { type: 'NO_MATERIALS_FOUND'; message: string }
+  | { type: 'INVALID_MATERIAL_TYPE'; message: string }
+  | { type: 'ATLAS_GENERATION_FAILED'; message: string; cause?: unknown }
+  | { type: 'UV_REMAPPING_FAILED'; message: string; cause?: unknown }
+  | { type: 'GEOMETRY_PROCESSING_FAILED'; message: string; cause?: unknown }
+  | { type: 'TEXTURE_PROCESSING_FAILED'; message: string; cause?: unknown }
+  | { type: 'PACKING_FAILED'; message: string; cause?: unknown }
+  | { type: 'MATERIAL_COMBINE_FAILED'; message: string; cause?: unknown }

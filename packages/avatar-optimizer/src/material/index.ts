@@ -19,6 +19,7 @@ import { err, ok, Result } from 'neverthrow'
 import { composeImagesToAtlas, ImageMatrixPair } from './image'
 import { applyPlacementsToGeometries } from './uv'
 import { combineMToonMaterials } from './combine'
+import type { MaterialOptimizationError } from '../types'
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials, createParameterTexture } from './combine'
@@ -48,7 +49,7 @@ export async function optimizeModelMaterials(
         reducedDrawCalls: number
       }
     },
-    Error
+    MaterialOptimizationError
   >
 >
 {
@@ -72,7 +73,15 @@ export async function optimizeModelMaterials(
       materials.push(mesh.material as MToonNodeMaterial)
     }
   }
+  console.log(materials)
   materials = Array.from(new Set(materials)) // 重複排除
+  if (materials.length === 0)
+  {
+    return err({
+      type: 'NO_MATERIALS_FOUND',
+      message: 'MToonNodeMaterial not found.',
+    })
+  }
 
   // テクスチャ組み合わせパターンを抽出してマッピングを構築
   const patternMappings = buildPatternMaterialMappings(materials)
@@ -101,7 +110,11 @@ export async function optimizeModelMaterials(
 
   if (atlasesResult.isErr())
   {
-    return err(atlasesResult.error)
+    return err({
+      type: 'ATLAS_GENERATION_FAILED',
+      message: atlasesResult.error.message,
+      cause: atlasesResult.error,
+    })
   }
 
   const atlasMap = atlasesResult.value
@@ -121,17 +134,23 @@ export async function optimizeModelMaterials(
   const applyResult = applyPlacementsToGeometries(rootNode, materialPlacementMap)
   if (applyResult.isErr())
   {
-    return err(applyResult.error)
+    return err({
+      type: 'UV_REMAPPING_FAILED',
+      message: applyResult.error.message,
+      cause: applyResult.error,
+    })
   }
 
   // マテリアル結合処理：複数のMToonNodeMaterialを統合してドローコール数を削減
   const combineResult = combineMToonMaterials(rootNode)
   if (combineResult.isErr())
   {
-    // マテリアル結合失敗時は警告として処理を継続
-    // テクスチャアトラス化は完了しているため、全体の最適化は成功とみなす
-    console.warn('Material combining failed:', combineResult.error.message)
-    return ok({})
+    const combineError = combineResult.error
+    return err({
+      type: 'MATERIAL_COMBINE_FAILED',
+      message: `Material combine failed: ${combineError.type} - ${combineError.message}`,
+      cause: combineError,
+    })
   }
 
   const { mesh: combinedMesh, statistics } = combineResult.value
@@ -238,11 +257,14 @@ function hasSize(
 export async function generateAtlasImages(
   materials: MToonNodeMaterial[],
   placements: OffsetScale[]
-): Promise<Result<AtlasImageMap, Error>>
+): Promise<Result<AtlasImageMap, MaterialOptimizationError>>
 {
   if (materials.length !== placements.length)
   {
-    return err(new Error('Materials and packing infos length mismatch'))
+    return err({
+      type: 'INVALID_MATERIAL_TYPE',
+      message: 'Materials and packing infos length mismatch',
+    })
   }
 
   const atlasMap: Partial<AtlasImageMap> = {}
@@ -273,7 +295,11 @@ export async function generateAtlasImages(
 
     if (atlasResult.isErr())
     {
-      return err(atlasResult.error)
+      return err({
+        type: 'ATLAS_GENERATION_FAILED',
+        message: `Failed to generate atlas for slot ${slot}: ${atlasResult.error.message}`,
+        cause: atlasResult.error,
+      })
     }
 
     atlasMap[slot] = atlasResult.value
@@ -295,11 +321,14 @@ async function generateAtlasImagesFromPatterns(
   materials: MToonNodeMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[]
-): Promise<Result<AtlasImageMap, Error>>
+): Promise<Result<AtlasImageMap, MaterialOptimizationError>>
 {
   if (patternMappings.length !== patternPlacements.length)
   {
-    return err(new Error('Pattern mappings and placements length mismatch'))
+    return err({
+      type: 'INVALID_MATERIAL_TYPE',
+      message: 'Pattern mappings and placements length mismatch',
+    })
   }
 
   const atlasMap: Partial<AtlasImageMap> = {}
@@ -335,7 +364,11 @@ async function generateAtlasImagesFromPatterns(
 
     if (atlasResult.isErr())
     {
-      return err(atlasResult.error)
+      return err({
+        type: 'ATLAS_GENERATION_FAILED',
+        message: `Failed to generate atlas for slot ${slot}: ${atlasResult.error.message}`,
+        cause: atlasResult.error,
+      })
     }
 
     atlasMap[slot] = atlasResult.value

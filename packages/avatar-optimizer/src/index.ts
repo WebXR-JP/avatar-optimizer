@@ -3,7 +3,7 @@
  */
 
 // Material module (Three.js MToonMaterial support)
-export { optimizeModelMaterials as setAtlasTexturesToObjectsWithCorrectUV, generateAtlasImages } from './material/index'
+export { optimizeModelMaterials, generateAtlasImages } from './material/index'
 export type { AtlasImageMap } from './material/index'
 
 // Material types
@@ -25,6 +25,5 @@ export type {
   ThreeVRMDocument,
   VRMStatistics,
   TextureSlotInfo,
-  ProcessingError,
-  OptimizationError,
+  MaterialOptimizationError,
 } from './types'
