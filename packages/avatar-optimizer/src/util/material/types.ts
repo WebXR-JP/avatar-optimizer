@@ -4,17 +4,13 @@
  */
 
 import { Matrix3, Vector2 } from "three"
-import { OffsetScale } from "../types"
+import { OffsetScale } from "../../types"
 
 /**
  * テクスチャパッキングの結果
  */
-export interface PackingResult
+export interface PackingLayouts
 {
-  /** アトラスの幅 */
-  atlasWidth: number
-  /** アトラスの高さ */
-  atlasHeight: number
   /** パックされたテクスチャ情報 */
   packed: OffsetScale[]
 }
@@ -99,17 +95,6 @@ export interface AtlasResult
 }
 
 /**
- * エラー型定義
- */
-export type AtlasError =
-  | { type: 'INVALID_TEXTURE'; message: string }
-  | { type: 'PACKING_FAILED'; message: string }
-  | { type: 'CANVAS_ERROR'; message: string }
-  | { type: 'DOCUMENT_ERROR'; message: string }
-  | { type: 'UV_MAPPING_FAILED'; message: string }
-  | { type: 'UNKNOWN_ERROR'; message: string }
-
-/**
  * マテリアル結合のオプション
  */
 export interface CombineMaterialOptions
@@ -128,7 +113,7 @@ export interface CombineMaterialOptions
 export interface CombinedMeshResult
 {
   /** 結合されたメッシュ */
-  mesh: any // Mesh型（Three.js依存を避けるためany）
+  mesh: any  // Mesh型（Three.js依存を避けるためany）
   /** 使用されたMToonInstancingMaterial */
   material: any // MToonInstancingMaterial型
   /** 統計情報 */
@@ -141,13 +126,3 @@ export interface CombinedMeshResult
     reducedDrawCalls: number
   }
 }
-
-/**
- * マテリアル結合のエラー型
- */
-export type CombineError =
-  | { type: 'NO_MATERIALS_FOUND'; message: string }
-  | { type: 'PARAMETER_TEXTURE_FAILED'; message: string }
-  | { type: 'ATLAS_GENERATION_FAILED'; message: string }
-  | { type: 'GEOMETRY_MERGE_FAILED'; message: string }
-  | { type: 'UNKNOWN_ERROR'; message: string }

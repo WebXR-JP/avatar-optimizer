@@ -20,7 +20,7 @@ import
   OneFactor,
   AddEquation,
 } from 'three'
-import { OffsetScale } from '../types'
+import { OffsetScale, OptimizationError } from '../../types'
 import { ImageMatrixPair } from './types'
 
 /** 合成時のオプション */
@@ -28,7 +28,6 @@ export interface ComposeImageOptions
 {
   width: number
   height: number
-  backgroundColor?: Color | null
 }
 
 /**
@@ -43,28 +42,21 @@ export interface ComposeImageOptions
 export function composeImagesToAtlas(
   layers: ImageMatrixPair[],
   options: ComposeImageOptions,
-): Result<Texture, Error>
+): Result<Texture, OptimizationError>
 {
-  const { width, height, backgroundColor } = options
+  const { width, height } = options
 
   if (width <= 0 || height <= 0)
   {
-    return err(new Error('Atlas width and height must be positive'))
+    return err({ type: 'INVALID_PARAMETER', message: 'width, heightは正の値にしてください' })
   }
 
   // 1. WebGL レンダラー・シーン・カメラをセットアップ
   const renderer = createRenderer()
   const scene = new Scene()
 
-  // 背景色を設定（指定がない場合は透明）
-  if (backgroundColor !== null && backgroundColor !== undefined)
-  {
-    scene.background = backgroundColor
-  } else
-  {
-    // null または undefined の場合は背景なし（透明）
-    scene.background = null
-  }
+  // 背景色を設定（黒）
+  scene.background = new Color(0, 0, 0)
 
   // 平行投影カメラ: ピクセルパーフェクトな座標系
   const camera = new OrthographicCamera(0, 1, 1, 0, 0.1, 1000)
@@ -76,16 +68,8 @@ export function composeImagesToAtlas(
   // 3. 各レイヤーをシーンに追加
   for (const layer of layers)
   {
-    try
-    {
-      const mesh = createLayerMesh(layer)
-      scene.add(mesh)
-    } catch (error)
-    {
-      renderer.dispose()
-      renderTarget.dispose()
-      return err(new Error(`Failed to create layer mesh: ${String(error)}`))
-    }
+    const mesh = createLayerMesh(layer)
+    scene.add(mesh)
   }
 
   // 4. WebGLRenderTarget に描画

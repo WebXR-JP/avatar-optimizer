@@ -54,7 +54,8 @@
       "Bash(pnpm -F mtoon-atlas run build)",
       "Bash(pnpm -F mtoon-atlas run test)",
       "Bash(npx vitest:*)",
-      "Bash(pnpm -F mtoon-atlas run test -- --reporter=verbose)"
+      "Bash(pnpm -F mtoon-atlas run test -- --reporter=verbose)",
+      "Bash(pnpm add:*)"
     ],
     "deny": [
       "Read(credentials/)"

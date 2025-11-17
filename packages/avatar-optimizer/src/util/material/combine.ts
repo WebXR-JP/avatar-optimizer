@@ -1,7 +1,7 @@
 /**
  * MToonマテリアル結合モジュール
  *
- * 複数のMToonNodeMaterialを単一のMToonInstancingMaterialに結合し、
+ * 複数のMToonMaterialを単一のMToonInstancingMaterialに結合し、
  * ドローコールを削減します。
  *
  * 主な処理:
@@ -12,31 +12,34 @@
  */
 
 import
-  {
-    BufferGeometry,
-    Color,
-    DataTexture,
-    Float32BufferAttribute,
-    FloatType,
-    Mesh,
-    Object3D,
-    RGBAFormat,
-    Vector3,
-    Vector4,
-  } from 'three'
-import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
+{
+  BufferGeometry,
+  Color,
+  DataTexture,
+  Float32BufferAttribute,
+  FloatType,
+  Mesh,
+  Object3D,
+  RGBAFormat,
+  Vector3,
+  Vector4,
+} from 'three'
+import { MToonMaterial } from '@pixiv/three-vrm'
 import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import type {
   ParameterTextureDescriptor,
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
+  ParameterSemanticId,
 } from '@xrift/mtoon-atlas'
 import { err, ok, Result } from 'neverthrow'
 import type {
-  CombineError,
   CombinedMeshResult,
   CombineMaterialOptions,
 } from './types'
+import type { OptimizationError } from '../../types'
+import { createParameterTexture } from '../texture'
+import { ParameterLayout } from '../../types'
 
 /**
  * デフォルトオプション
@@ -48,69 +51,7 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 }
 
 /**
- * MToonパラメータのセマンティクスID
- * mtoon-atlas の DEFAULT_PARAMETER_LAYOUT に対応
- */
-type ParameterSemanticId =
-  | 'baseColor'
-  | 'shadeColor'
-  | 'emissiveColor'
-  | 'emissiveIntensity'
-  | 'shadingShift'
-  | 'shadingShiftTextureScale'
-  | 'shadingToony'
-  | 'rimLightingMix'
-  | 'matcapColor'
-  | 'outlineWidth'
-  | 'outlineColor'
-  | 'outlineLightingMix'
-  | 'parametricRimColor'
-  | 'parametricRimLift'
-  | 'parametricRimFresnelPower'
-  | 'uvAnimationScrollX'
-  | 'uvAnimationScrollY'
-  | 'uvAnimationRotation'
-  | 'normalScale'
-
-/**
- * パラメータのパッキングレイアウト定義
- * mtoon-atlas の DEFAULT_PARAMETER_LAYOUT と同じ構造
- */
-interface ParameterLayout
-{
-  id: ParameterSemanticId
-  texel: number
-  channels: readonly ('r' | 'g' | 'b' | 'a')[]
-}
-
-/**
- * デフォルトパラメータレイアウト
- * mtoon-atlas/src/types.ts の DEFAULT_PARAMETER_LAYOUT と同一
- */
-const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
-  { id: 'baseColor', texel: 0, channels: ['r', 'g', 'b'] },
-  { id: 'shadingShift', texel: 0, channels: ['a'] },
-  { id: 'shadeColor', texel: 1, channels: ['r', 'g', 'b'] },
-  { id: 'shadingShiftTextureScale', texel: 1, channels: ['a'] },
-  { id: 'emissiveColor', texel: 2, channels: ['r', 'g', 'b'] },
-  { id: 'emissiveIntensity', texel: 2, channels: ['a'] },
-  { id: 'matcapColor', texel: 3, channels: ['r', 'g', 'b'] },
-  { id: 'outlineWidth', texel: 3, channels: ['a'] },
-  { id: 'outlineColor', texel: 4, channels: ['r', 'g', 'b'] },
-  { id: 'outlineLightingMix', texel: 4, channels: ['a'] },
-  { id: 'parametricRimColor', texel: 5, channels: ['r', 'g', 'b'] },
-  { id: 'parametricRimLift', texel: 5, channels: ['a'] },
-  { id: 'parametricRimFresnelPower', texel: 6, channels: ['r'] },
-  { id: 'shadingToony', texel: 6, channels: ['g'] },
-  { id: 'rimLightingMix', texel: 6, channels: ['b'] },
-  { id: 'uvAnimationRotation', texel: 6, channels: ['a'] },
-  { id: 'normalScale', texel: 7, channels: ['r', 'g'] },
-  { id: 'uvAnimationScrollX', texel: 7, channels: ['b'] },
-  { id: 'uvAnimationScrollY', texel: 7, channels: ['a'] },
-] as const
-
-/**
- * 複数のMToonNodeMaterialを単一のMToonInstancingMaterialに結合
+ * 複数のMToonMaterialを単一のMToonInstancingMaterialに結合
  *
  * @param rootNode - 最適化対象のルートノード
  * @param options - 結合オプション
@@ -119,7 +60,7 @@ const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
 export function combineMToonMaterials(
   rootNode: Object3D,
   options: CombineMaterialOptions = {}
-): Result<CombinedMeshResult, CombineError>
+): Result<CombinedMeshResult, OptimizationError>
 {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
@@ -141,21 +82,21 @@ export function combineMToonMaterials(
     })
   }
 
-  // MToonNodeMaterialのみを抽出（重複排除）
-  let materials: MToonNodeMaterial[] = []
+  // MToonMaterialのみを抽出（重複排除）
+  let materials: MToonMaterial[] = []
   for (const mesh of meshes)
   {
     if (Array.isArray(mesh.material))
     {
       materials.push(
         ...(mesh.material.filter(
-          (m) => m instanceof MToonNodeMaterial
-        ) as MToonNodeMaterial[])
+          (m) => m instanceof MToonMaterial
+        ) as MToonMaterial[])
       )
     }
-    else if (mesh.material instanceof MToonNodeMaterial)
+    else if (mesh.material instanceof MToonMaterial)
     {
-      materials.push(mesh.material as MToonNodeMaterial)
+      materials.push(mesh.material as MToonMaterial)
     }
   }
   materials = Array.from(new Set(materials))
@@ -164,7 +105,7 @@ export function combineMToonMaterials(
   {
     return err({
       type: 'NO_MATERIALS_FOUND',
-      message: 'No MToonNodeMaterial found in the scene',
+      message: 'No MToonMaterial found in the scene',
     })
   }
 
@@ -181,8 +122,8 @@ export function combineMToonMaterials(
 
   // 3. マテリアルとメッシュのマッピング
   // 各マテリアルに対応するメッシュを集める
-  const materialToMeshes = new Map<MToonNodeMaterial, Mesh[]>()
-  const materialSlotIndex = new Map<MToonNodeMaterial, number>()
+  const materialToMeshes = new Map<MToonMaterial, Mesh[]>()
+  const materialSlotIndex = new Map<MToonMaterial, number>()
 
   // マテリアルをスロットインデックスにマッピング
   materials.forEach((mat, index) =>
@@ -193,20 +134,20 @@ export function combineMToonMaterials(
   // メッシュをマテリアルごとにグループ化
   for (const mesh of meshes)
   {
-    let material: MToonNodeMaterial | null = null
+    let material: MToonMaterial | null = null
 
     if (Array.isArray(mesh.material))
     {
       // 複数マテリアルの場合は最初のMToonを対象
       const mtoonMaterial = mesh.material.find(
-        (m) => m instanceof MToonNodeMaterial
+        (m) => m instanceof MToonMaterial
       )
-      if (mtoonMaterial instanceof MToonNodeMaterial)
+      if (mtoonMaterial instanceof MToonMaterial)
       {
         material = mtoonMaterial
       }
     }
-    else if (mesh.material instanceof MToonNodeMaterial)
+    else if (mesh.material instanceof MToonMaterial)
     {
       material = mesh.material
     }
@@ -285,169 +226,6 @@ export function combineMToonMaterials(
 }
 
 /**
- * マテリアル配列からパラメータテクスチャを生成
- *
- * DEFAULT_PARAMETER_LAYOUTに従って19種のパラメータをRGBAテクセルにパック
- * テクスチャフォーマット: slotCount x texelsPerSlot (RGBA32F)
- *
- * @param materials - MToonNodeMaterial配列
- * @param texelsPerSlot - スロットあたりのテクセル数（デフォルト: 8）
- * @returns DataTexture
- */
-export function createParameterTexture(
-  materials: MToonNodeMaterial[],
-  texelsPerSlot: number = 8
-): Result<DataTexture, CombineError>
-{
-  if (materials.length === 0)
-  {
-    return err({
-      type: 'PARAMETER_TEXTURE_FAILED',
-      message: 'No materials to pack',
-    })
-  }
-
-  const slotCount = materials.length
-  const width = texelsPerSlot
-  const height = slotCount
-
-  // RGBA32F テクスチャデータ（Float32Array）
-  const data = new Float32Array(width * height * 4)
-
-  // 各マテリアル（スロット）について処理
-  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++)
-  {
-    const material = materials[slotIndex]
-
-    // 各パラメータをレイアウトに従ってパック
-    for (const layout of PARAMETER_LAYOUT)
-    {
-      const value = extractParameterValue(material, layout.id)
-      packParameterValue(data, slotIndex, layout, value, texelsPerSlot)
-    }
-  }
-
-  // DataTextureを作成
-  const texture = new DataTexture(data, width, height, RGBAFormat, FloatType)
-  texture.needsUpdate = true
-
-  return ok(texture)
-}
-
-/**
- * MToonNodeMaterialからパラメータ値を抽出
- *
- * @param material - MToonNodeMaterial
- * @param semanticId - パラメータのセマンティクスID
- * @returns パラメータ値（Vector3, Vector4, number のいずれか）
- */
-function extractParameterValue(
-  material: MToonNodeMaterial,
-  semanticId: ParameterSemanticId
-): Vector3 | Vector4 | number
-{
-  switch (semanticId)
-  {
-    case 'baseColor':
-      return colorToVector3(material.color ?? new Color(1, 1, 1))
-    case 'shadeColor':
-      return colorToVector3(material.shadeColorFactor ?? new Color(0, 0, 0))
-    case 'emissiveColor':
-      return colorToVector3(material.emissive ?? new Color(0, 0, 0))
-    case 'emissiveIntensity':
-      return material.emissiveIntensity ?? 0
-    case 'shadingShift':
-      return material.shadingShiftFactor ?? 0
-    case 'shadingShiftTextureScale':
-      return material.shadingShiftTextureScale ?? 1
-    case 'shadingToony':
-      return material.shadingToonyFactor ?? 0.9
-    case 'rimLightingMix':
-      return material.rimLightingMixFactor ?? 1
-    case 'matcapColor':
-      return colorToVector3(material.matcapFactor ?? new Color(1, 1, 1))
-    case 'outlineWidth':
-      return material.outlineWidthFactor ?? 0
-    case 'outlineColor':
-      return colorToVector3(material.outlineColorFactor ?? new Color(0, 0, 0))
-    case 'outlineLightingMix':
-      return material.outlineLightingMixFactor ?? 1
-    case 'parametricRimColor':
-      return colorToVector3(
-        material.parametricRimColorFactor ?? new Color(0, 0, 0)
-      )
-    case 'parametricRimLift':
-      return material.parametricRimLiftFactor ?? 0
-    case 'parametricRimFresnelPower':
-      return material.parametricRimFresnelPowerFactor ?? 5
-    case 'uvAnimationScrollX':
-      return 0 // TODO: MToonNodeMaterialのプロパティ確認
-    case 'uvAnimationScrollY':
-      return 0 // TODO: MToonNodeMaterialのプロパティ確認
-    case 'uvAnimationRotation':
-      return 0 // TODO: MToonNodeMaterialのプロパティ確認
-    case 'normalScale':
-      return new Vector4(1, 1, 0, 0) // x, y のみ使用
-    default:
-      return 0
-  }
-}
-
-/**
- * Three.js Color を Vector3 に変換
- */
-function colorToVector3(color: Color): Vector3
-{
-  return new Vector3(color.r, color.g, color.b)
-}
-
-/**
- * パラメータ値をテクスチャデータにパック
- *
- * @param data - テクスチャデータ配列
- * @param slotIndex - スロットインデックス
- * @param layout - パラメータレイアウト
- * @param value - パラメータ値
- * @param texelsPerSlot - スロットあたりのテクセル数
- */
-function packParameterValue(
-  data: Float32Array,
-  slotIndex: number,
-  layout: ParameterLayout,
-  value: Vector3 | Vector4 | number,
-  texelsPerSlot: number
-): void
-{
-  const texelIndex = layout.texel
-  const pixelIndex = slotIndex * texelsPerSlot + texelIndex
-  const baseOffset = pixelIndex * 4
-
-  // 値を配列化
-  let values: number[]
-  if (typeof value === 'number')
-  {
-    values = [value]
-  }
-  else if ('w' in value)
-  {
-    values = [value.x, value.y, value.z, value.w]
-  }
-  else
-  {
-    values = [value.x, value.y, value.z]
-  }
-
-  // チャンネルにパック
-  for (let i = 0; i < layout.channels.length; i++)
-  {
-    const channel = layout.channels[i]
-    const channelOffset =
-      channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3
-    data[baseOffset + channelOffset] = values[i] ?? 0
-  }
-}
-
-/**
  * MToonInstancingMaterialを作成
  *
  * 代表マテリアルのアトラス化されたテクスチャを使用
@@ -461,7 +239,7 @@ function packParameterValue(
  * @returns MToonInstancingMaterial
  */
 function createMToonInstancingMaterial(
-  representativeMaterial: MToonNodeMaterial,
+  representativeMaterial: MToonMaterial,
   parameterTexture: DataTexture,
   slotCount: number,
   texelsPerSlot: number,
@@ -544,7 +322,7 @@ function mergeGeometriesWithSlotAttribute(
   meshes: Mesh[],
   materialSlotMap: Map<Mesh, number>,
   slotAttributeName: string
-): Result<BufferGeometry, CombineError>
+): Result<BufferGeometry, OptimizationError>
 {
   if (meshes.length === 0)
   {

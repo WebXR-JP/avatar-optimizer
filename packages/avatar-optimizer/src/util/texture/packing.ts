@@ -10,10 +10,11 @@
 
 import { Packer, MaxRectsBssf } from 'rectpack-ts'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
-import type { PackingResult } from '../material/types'
+import type { PackingLayouts } from '../material/types'
 import { Vector2 } from 'three';
 import { Rectangle } from 'rectpack-ts/dist/src/geometry';
 
+const ATLAS_SIZE = 2048 // ←相対値しか返さないので割となんでもいい
 const SCALE_SEARCH_EPSILON = 0.0001
 
 /**
@@ -38,9 +39,7 @@ const SCALE_SEARCH_EPSILON = 0.0001
  */
 export function packTexturesWithMaxRects(
   sizes: Array<{ width: number; height: number }>,
-  atlasWidth: number,
-  atlasHeight: number,
-): PackingResult
+): PackingLayouts
 {
   if (sizes.length === 0)
   {
@@ -58,7 +57,7 @@ export function packTexturesWithMaxRects(
   })
 
   // アトラスを単一のビンとして追加
-  packer.addBin(atlasWidth, atlasHeight)
+  packer.addBin(ATLAS_SIZE, ATLAS_SIZE)
 
   // 各テクスチャをパッカーに追加（インデックスを rid として保存）
   sizes.forEach((size, index) =>
@@ -106,8 +105,6 @@ export function packTexturesWithMaxRects(
   }
 
   return {
-    atlasWidth: bin.width,
-    atlasHeight: bin.height,
     packed,
   }
 }
@@ -126,10 +123,8 @@ export function packTexturesWithMaxRects(
  * @throws テクスチャが 1x1 ピクセルまで縮小されても収まらない場合
  */
 export async function packTexturesWithAutoScaling(
-  sizes: Array<{ width: number; height: number }>,
-  atlasWidth: number,
-  atlasHeight: number,
-): Promise<PackingResult>
+  sizes: Array<{ width: number; height: number }>
+): Promise<PackingLayouts>
 {
   if (sizes.length === 0)
   {
@@ -139,7 +134,7 @@ export async function packTexturesWithAutoScaling(
   const attemptPack = (scale: number) =>
   {
     const scaledSizes = scaleTextureSizes(sizes, scale)
-    return packTexturesWithMaxRects(scaledSizes, atlasWidth, atlasHeight)
+    return packTexturesWithMaxRects(scaledSizes)
   }
 
   // まずは等倍でトライし、成功すればそのまま返す
@@ -154,7 +149,7 @@ export async function packTexturesWithAutoScaling(
   const minScaleLimit = computeMinScaleLimit(sizes)
   let lastFailedScale = 1
   let lastSuccessScale: number | null = null
-  let lastSuccessResult: PackingResult | null = null
+  let lastSuccessResult: PackingLayouts | null = null
 
   // まずは成功するスケールを見つけるまで指数的に縮小
   let currentScale = 0.5
@@ -275,9 +270,7 @@ function computeMinScaleLimit(sizes: Array<{ width: number; height: number }>): 
  */
 export async function packTextures(
   sizes: Array<{ width: number; height: number }>,
-  atlasWidth: number,
-  atlasHeight: number,
-): Promise<PackingResult>
+): Promise<PackingLayouts>
 {
-  return packTexturesWithAutoScaling(sizes, atlasWidth, atlasHeight)
+  return packTexturesWithAutoScaling(sizes)
 }

@@ -50,6 +50,9 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    * TODO: 完全な型定義を追加
    */
   declare public uniforms: {
+    // Three.js 標準 Uniform (UniformsLib から継承)
+    [key: string]: THREE.IUniform<any>
+  } & {
     // パラメータテクスチャ関連
     uParameterTexture: THREE.IUniform<THREE.Texture | null>
     uParameterTextureSize: THREE.IUniform<THREE.Vector2>
@@ -64,9 +67,6 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
     matcapTexture: THREE.IUniform<THREE.Texture | null>
     rimMultiplyTexture: THREE.IUniform<THREE.Texture | null>
     uvAnimationMaskTexture: THREE.IUniform<THREE.Texture | null>
-
-    // Three.js 標準 Uniform (UniformsLib から継承)
-    [key: string]: THREE.IUniform<any>
   }
 
   /**
@@ -136,7 +136,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
         uvAnimationMaskTextureUvTransform: { value: new THREE.Matrix3() },
         normalMapUvTransform: { value: new THREE.Matrix3() },
       },
-    ])
+    ]) as typeof this.uniforms
 
     // パラメータ適用
     if (parameters) {
@@ -303,7 +303,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @param deltaTime フレーム経過時間（秒）
    */
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
     // UV アニメーション更新
     if (this.uniforms.uvAnimationScrollXOffset && this.uniforms.uvAnimationScrollYOffset && this.uniforms.uvAnimationRotationPhase) {
       // パラメータテクスチャから UV アニメーション値を取得して、オフセットを加算
@@ -311,8 +311,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
       if (paramTexture) {
         // TODO: パラメータテクスチャからサンプリングした値でアニメーション計算
         // 現在は単純な時間ベースの更新のみ
-        // フレームレート非依存にするため、deltaTime を使用
-        // 実装例: scrollX += uvAnimationScrollX * deltaTime
+        // フレームレート非依存にするため、_deltaTime を使用
+        // 実装例: scrollX += uvAnimationScrollX * _deltaTime
       }
     }
   }

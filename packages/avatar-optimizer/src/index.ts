@@ -7,15 +7,14 @@ export { optimizeModel } from './avatar-optimizer'
 
 // Material types
 export type {
-  PackingResult,
+  PackingLayouts as PackingResult,
   TextureImageData,
   SlotAtlasImage,
   MaterialPlacement,
   AtlasBuildResult,
   UVMapping,
   AtlasResult,
-  AtlasError,
-} from './material/types'
+} from './util/material/types'
 
 // Root types
 export type {
