@@ -32,9 +32,9 @@ importers:
       '@pixiv/three-vrm-materials-mtoon':
         specifier: ^3.4.4
         version: 3.4.4(three@0.181.1)
-      '@xrift/mtoon-instancing':
+      '@xrift/mtoon-atlas':
         specifier: workspace:*
-        version: link:../mtoon-instancing
+        version: link:../mtoon-atlas
       canvas:
         specifier: ^3.2.0
         version: 3.2.0
@@ -200,7 +200,7 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2(@types/node@24.10.0)(tsx@4.20.6)
 
-  packages/mtoon-instancing:
+  packages/mtoon-atlas:
     devDependencies:
       '@pixiv/three-vrm':
         specifier: ^3.4.4
@@ -211,6 +211,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.1
+      esbuild-raw-plugin:
+        specifier: ^0.3.1
+        version: 0.3.1
       three:
         specifier: ^0.181.1
         version: 0.181.1
@@ -1901,6 +1904,9 @@ packages:
   es-to-primitive@1.3.0:
     resolution: {integrity: sha512-w+5mJ3GuFL+NjVtJlvydShqE1eN3h3PbI7/5LAsYJP/2qtuMXjfL2LpHSRqo4b4eSF5K/DH1JXKUAHSB2UW50g==}
     engines: {node: '>= 0.4'}
+
+  esbuild-raw-plugin@0.3.1:
+    resolution: {integrity: sha512-fb3CNfsttboRuNVeDKqSbsP/77Gz5T0bxgyOfIDhCUmIipBYA7P+R1vyiX56u1zPZW7dtTgPm+XQ/DNqiDeVYw==}
 
   esbuild@0.21.5:
     resolution: {integrity: sha512-mg3OPMV4hXywwpoDxu3Qda5xCKQi+vCTZq8S9J/EpkhB2HzKXq4SNFZE3+NK93JYxc8VMSep+lOUSC/RVKaBqw==}
@@ -5500,6 +5506,8 @@ snapshots:
       is-callable: 1.2.7
       is-date-object: 1.1.0
       is-symbol: 1.1.1
+
+  esbuild-raw-plugin@0.3.1: {}
 
   esbuild@0.21.5:
     optionalDependencies:

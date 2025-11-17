@@ -11,18 +11,19 @@
  * 4. MToonInstancingMaterialを作成
  */
 
-import {
-  BufferGeometry,
-  Color,
-  DataTexture,
-  Float32BufferAttribute,
-  FloatType,
-  Mesh,
-  Object3D,
-  RGBAFormat,
-  Vector3,
-  Vector4,
-} from 'three'
+import
+  {
+    BufferGeometry,
+    Color,
+    DataTexture,
+    Float32BufferAttribute,
+    FloatType,
+    Mesh,
+    Object3D,
+    RGBAFormat,
+    Vector3,
+    Vector4,
+  } from 'three'
 import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
 import { MToonInstancingMaterial } from '../../../mtoon-atlas/dist'
 import type {
@@ -48,7 +49,7 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 
 /**
  * MToonパラメータのセマンティクスID
- * mtoon-instancing の DEFAULT_PARAMETER_LAYOUT に対応
+ * mtoon-atlas の DEFAULT_PARAMETER_LAYOUT に対応
  */
 type ParameterSemanticId =
   | 'baseColor'
@@ -73,7 +74,7 @@ type ParameterSemanticId =
 
 /**
  * パラメータのパッキングレイアウト定義
- * mtoon-instancing の DEFAULT_PARAMETER_LAYOUT と同じ構造
+ * mtoon-atlas の DEFAULT_PARAMETER_LAYOUT と同じ構造
  */
 interface ParameterLayout
 {
@@ -84,7 +85,7 @@ interface ParameterLayout
 
 /**
  * デフォルトパラメータレイアウト
- * mtoon-instancing/src/types.ts の DEFAULT_PARAMETER_LAYOUT と同一
+ * mtoon-atlas/src/types.ts の DEFAULT_PARAMETER_LAYOUT と同一
  */
 const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
   { id: 'baseColor', texel: 0, channels: ['r', 'g', 'b'] },

@@ -71,7 +71,7 @@
     "@loaders.gl/polyfills": "^4.3.4",
     "@pixiv/three-vrm": "^3.4.4",
     "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
-    "@xrift/mtoon-instancing": "workspace:*",
+    "@xrift/mtoon-atlas": "workspace:*",
     "canvas": "^3.2.0",
     "commander": "^14.0.2",
     "jimp": "^1.6.0",

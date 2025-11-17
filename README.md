@@ -1,13 +1,13 @@
 # @xrift/avatar-optimizer
 
-XRift用アバターモデル最適化ライブラリ。
+XRift 用アバターモデル最適化ライブラリ。
 
 > ⚠️ **警告**: このプロジェクトは **開発進行中** です。実装の完成度は約 70-75% で、テスト失敗やビルドエラーがあります。本番環境での使用はお控えください。詳細は[実装状況](#実装状況)セクションを参照してください。
 
 ## 機能
 
-- **テクスチャアトラス化**: 各マテリアルのテクスチャをアトラス化して1枚にする
-- **Three.jsベース**: Three.js上で各編集を行う
+- **テクスチャアトラス化**: 各マテリアルのテクスチャをアトラス化して 1 枚にする
+- **Three.js ベース**: Three.js 上で各編集を行う
 
 ## プロジェクト構成
 
@@ -26,7 +26,7 @@ packages/
 │   ├── dist/                     # ビルド出力 (ESM/型定義)
 │   └── package.json
 │
-├── mtoon-instancing/             # MToon インスタンシング マテリアル
+├── mtoon-atlas/             # MToon インスタンシング マテリアル
 │   ├── src/
 │   │   ├── index.ts              # MToonInstancingMaterial クラス
 │   │   └── types.ts              # 型定義 (ParameterTextureDescriptor など)
@@ -51,53 +51,56 @@ packages/
 
 ### パッケージ別の完成度
 
-| パッケージ | 完成度 | 状態 |
-|----------|--------|------|
-| **avatar-optimizer** | 80% | 主要機能実装済み、テスト2件失敗 |
-| **mtoon-instancing** | ~~95%~~ | ~~本体完成、シェーダーグラフ拡張待ち~~ 作り直しが必要 |
-| **debug-viewer** | 60% | ビルドエラーで実行不可 |
+| パッケージ           | 完成度  | 状態                                                  |
+| -------------------- | ------- | ----------------------------------------------------- |
+| **avatar-optimizer** | 80%     | 主要機能実装済み、テスト 2 件失敗                     |
+| **mtoon-atlas**      | ~~95%~~ | ~~本体完成、シェーダーグラフ拡張待ち~~ 作り直しが必要 |
+| **debug-viewer**     | 60%     | ビルドエラーで実行不可                                |
 
 ### ✅ 実装済みの主要機能
 
 **avatar-optimizer:**
+
 - `optimizeModelMaterials()` - Three.js マテリアル最適化（完全実装）
-- `combineMToonMaterials()` - マテリアル結合処理（724行）
-- `createParameterTexture()` - パラメータテクスチャ生成（19パラメータ対応）
+- `combineMToonMaterials()` - マテリアル結合処理（724 行）
+- `createParameterTexture()` - パラメータテクスチャ生成（19 パラメータ対応）
 - `packTextures()` - MaxRects テクスチャパッキング
 - `composeImagesToAtlas()` - WebGL オフスクリーン描画によるアトラス合成
 - `applyPlacementsToGeometries()` - UV 座標再マッピング
 
-**mtoon-instancing:**
-- **NodeMaterialがWebXRで使えないことが発覚したので現状白紙**
-- ~~`MToonInstancingMaterial` クラス（380行、完全実装）~~
+**mtoon-atlas:**
+
+- **NodeMaterial が WebXR で使えないことが発覚したので現状白紙**
+- ~~`MToonInstancingMaterial` クラス（380 行、完全実装）~~
 - ~~パラメータテクスチャの自動サンプリング~~
 - ~~アトラステクスチャの自動設定~~
 - ~~スロット属性管理~~
 
 **debug-viewer:**
+
 - VRM ファイル読み込み機能
 - 3D レンダリング表示
 - テクスチャビューア
 
 ### ❌ 未実装・進行中の機能
 
-| 機能 | 状態 |
-|------|------|
-| `calculateVRMStatistics()` | 未実装（型定義のみ） |
-| UV アニメーション scroll パラメータ | 部分実装（TODO コメント） |
-| SkinnedMesh 完全対応 | 部分実装（スキニング情報が破棄） |
-| debug-viewer ビルド | 失敗中（TypeScript エラー 6件） |
+| 機能                                | 状態                             |
+| ----------------------------------- | -------------------------------- |
+| `calculateVRMStatistics()`          | 未実装（型定義のみ）             |
+| UV アニメーション scroll パラメータ | 部分実装（TODO コメント）        |
+| SkinnedMesh 完全対応                | 部分実装（スキニング情報が破棄） |
+| debug-viewer ビルド                 | 失敗中（TypeScript エラー 6 件） |
 
 ### 🧪 テスト状況
 
-- **成功**: 28/36件 (78%)
-- **失敗**: 3件（UV 変換関連）
-- **mtoon-instancing**: 3/3 成功 ✓
+- **成功**: 28/36 件 (78%)
+- **失敗**: 3 件（UV 変換関連）
+- **mtoon-atlas**: 3/3 成功 ✓
 
 ### 🏗️ ビルド状況
 
 - `avatar-optimizer`: ✓ 成功
-- `mtoon-instancing`: ✓ 成功
+- `mtoon-atlas`: ✓ 成功
 - `debug-viewer`: ✗ 失敗（TypeScript コンパイルエラー）
 
 ---
@@ -116,7 +119,6 @@ Three.js オブジェクトのマテリアルを最適化します。複数の M
 #### 戻り値
 
 - `ResultAsync<OptimizedMaterialResult, MaterialOptimizationError>`: 最適化結果を返す
-
 
 ## 開発
 
@@ -160,14 +162,14 @@ pnpm -F avatar-optimizer run dev
 # avatar-optimizer のテスト
 pnpm -F avatar-optimizer run test
 
-# mtoon-instancing のビルド
-pnpm -F mtoon-instancing run build
+# mtoon-atlas のビルド
+pnpm -F mtoon-atlas run build
 
-# mtoon-instancing の開発モード（ウォッチ）
-pnpm -F mtoon-instancing run dev
+# mtoon-atlas の開発モード（ウォッチ）
+pnpm -F mtoon-atlas run dev
 
-# mtoon-instancing のテスト
-pnpm -F mtoon-instancing run test
+# mtoon-atlas のテスト
+pnpm -F mtoon-atlas run test
 
 # debug-viewer のビルド
 pnpm -F debug-viewer run build
