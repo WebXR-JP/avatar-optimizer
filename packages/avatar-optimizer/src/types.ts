@@ -1,5 +1,19 @@
 import type { VRM } from '@pixiv/three-vrm'
+import { Texture, TypedArray, Vector2 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+
+/**
+ * Three.jsのImageに相当するUnion型
+ * Three.js自体には含まれていないので自分で定義している
+ */
+export type ThreeImageType =
+  HTMLImageElement
+  | HTMLCanvasElement
+  | HTMLVideoElement
+  | ImageBitmap
+  | OffscreenCanvas
+  | ImageData
+  | { data: TypedArray; width: number; height: number; };
 
 export interface OptimizationOptions
 {
@@ -16,17 +30,6 @@ export interface ThreeVRMDocument
 {
   gltf: GLTF
   vrm: VRM
-}
-
-export interface VRMStatistics
-{
-  polygonCount: number
-  textureCount: number
-  materialCount: number
-  boneCount: number
-  meshCount: number
-  fileSizeMB: number
-  vramEstimateMB: number
 }
 
 /**
@@ -51,11 +54,75 @@ export interface TextureSlotInfo
 }
 
 /**
- * Material最適化関連のエラー型
- *
- * optimizeModelMaterials などの Material 処理で発生するエラー
+ * テクスチャスロット名の型
  */
-export type MaterialOptimizationError =
+export const MTOON_TEXTURE_SLOTS = [
+  'map',
+  'normalMap',
+  'emissiveMap',
+  'shadeMultiplyTexture',
+  'shadingShiftTexture',
+  'matcapTexture',
+  'rimMultiplyTexture',
+  'outlineWidthMultiplyTexture',
+  'uvAnimationMaskTexture',
+] as const
+export type MToonTextureSlot = typeof MTOON_TEXTURE_SLOTS[number];
+
+/**
+ * テクスチャスロット名をキーにしたアトラス画像マップの型
+ */
+export type AtlasImageMap = Record<MToonTextureSlot, Texture>
+
+/**
+ * テクスチャ組み合わせパターン
+ * 各スロットに設定されているテクスチャのImage参照を保持
+ */
+export interface TextureCombinationPattern
+{
+  /** 各スロットのImage参照（nullの場合はテクスチャなし） */
+  slots: Map<MToonTextureSlot, ThreeImageType | null>
+}
+
+/**
+ * 組み合わせパターンとマテリアルのマッピング情報
+ */
+export interface PatternMaterialMapping
+{
+    /** 一意な組み合わせパターン */
+    pattern: TextureCombinationPattern
+    /** このパターンを使用するマテリアルのインデックス配列 */
+    materialIndices: number[]
+    /** パッキング用のテクスチャディスクリプタ */
+    textureDescriptor: AtlasTextureDescriptor
+}
+
+/**
+ * アトラス化対象となる1枚のテクスチャ
+ */
+export interface AtlasTextureDescriptor
+{
+  /** 画像の幅（ピクセル） */
+  width: number
+  /** 画像の高さ（ピクセル） */
+  height: number
+}
+
+/**
+ * 主にUVで使用するオフセットとスケール情報
+ */
+export interface OffsetScale
+{
+  offset: Vector2,
+  scale: Vector2,
+}
+
+/**
+ * 最適化関連のエラー型 (全体)
+ *
+ * optimizeModel などの 全体最適化処理で発生するエラー
+ */
+export type OptimizationError =
   | { type: 'NO_MATERIALS_FOUND'; message: string }
   | { type: 'INVALID_MATERIAL_TYPE'; message: string }
   | { type: 'ATLAS_GENERATION_FAILED'; message: string; cause?: unknown }

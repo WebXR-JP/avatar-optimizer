@@ -2,13 +2,11 @@
  * @xrift/avatar-optimizer - avatar optimization library for XRift
  */
 
-// Material module (Three.js MToonMaterial support)
-export { optimizeModelMaterials, generateAtlasImages } from './material/index'
-export type { AtlasImageMap } from './material/index'
+// メイン処理のエクスポート
+export { optimizeModel } from './avatar-optimizer'
 
 // Material types
 export type {
-  AtlasTextureDescriptor,
   PackingResult,
   TextureImageData,
   SlotAtlasImage,
@@ -23,7 +21,7 @@ export type {
 export type {
   OptimizationOptions,
   ThreeVRMDocument,
-  VRMStatistics,
   TextureSlotInfo,
-  MaterialOptimizationError,
+  OptimizationError,
+  AtlasTextureDescriptor
 } from './types'

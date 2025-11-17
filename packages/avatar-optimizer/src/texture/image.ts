@@ -20,14 +20,8 @@ import
   OneFactor,
   AddEquation,
 } from 'three'
-import { OffsetScale } from './types'
-
-/** Image + UV変換行列のペア */
-export interface ImageMatrixPair
-{
-  image: Texture
-  uvTransform: OffsetScale
-}
+import { OffsetScale } from '../types'
+import { ImageMatrixPair } from './types'
 
 /** 合成時のオプション */
 export interface ComposeImageOptions
@@ -63,9 +57,11 @@ export function composeImagesToAtlas(
   const scene = new Scene()
 
   // 背景色を設定（指定がない場合は透明）
-  if (backgroundColor !== null && backgroundColor !== undefined) {
+  if (backgroundColor !== null && backgroundColor !== undefined)
+  {
     scene.background = backgroundColor
-  } else {
+  } else
+  {
     // null または undefined の場合は背景なし（透明）
     scene.background = null
   }

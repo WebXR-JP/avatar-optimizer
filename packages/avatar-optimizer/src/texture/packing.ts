@@ -10,7 +10,7 @@
 
 import { Packer, MaxRectsBssf } from 'rectpack-ts'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
-import type { PackingResult } from './types'
+import type { PackingResult } from '../material/types'
 import { Vector2 } from 'three';
 import { Rectangle } from 'rectpack-ts/dist/src/geometry';
 

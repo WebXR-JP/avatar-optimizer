@@ -25,12 +25,12 @@ import
     Vector4,
   } from 'three'
 import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
-import { MToonInstancingMaterial } from '../../../mtoon-atlas/dist'
+import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import type {
   ParameterTextureDescriptor,
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
-} from '../../../mtoon-atlas/dist'
+} from '@xrift/mtoon-atlas'
 import { err, ok, Result } from 'neverthrow'
 import type {
   CombineError,
@@ -466,7 +466,7 @@ function createMToonInstancingMaterial(
   slotCount: number,
   texelsPerSlot: number,
   slotAttributeName: string
-): MToonInstancingMaterial
+): MToonAtlasMaterial
 {
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
@@ -521,7 +521,7 @@ function createMToonInstancingMaterial(
   }
 
   // MToonInstancingMaterialを作成
-  const material = new MToonInstancingMaterial({
+  const material = new MToonAtlasMaterial({
     parameterTexture: parameterTextureDescriptor,
     slotAttribute,
   })

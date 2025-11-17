@@ -6,11 +6,13 @@
  */
 
 import { BufferGeometry, Mesh, Object3D, Vector2 } from 'three'
-import type { OffsetScale } from './types'
 import { ok, err, Result } from 'neverthrow'
 import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes';
+import { OffsetScale } from '../types';
+import { MToonMaterial } from '@pixiv/three-vrm';
 
-function wrapUV(uv: Vector2) {
+function wrapUV(uv: Vector2)
+{
   return new Vector2(
     uv.x - Math.floor(uv.x),
     uv.y - Math.floor(uv.y)
@@ -103,7 +105,7 @@ export function remapGeometryUVs(
  */
 export function applyPlacementsToGeometries(
   rootNode: Object3D,
-  materialPlacementMap: Map<MToonNodeMaterial, OffsetScale>,
+  materialPlacementMap: Map<MToonMaterial, OffsetScale>,
 ): Result<void, Error>
 {
   try
@@ -113,19 +115,19 @@ export function applyPlacementsToGeometries(
       if (!(obj instanceof Mesh)) return
       if (!(obj.geometry instanceof BufferGeometry)) return
 
-      let material: MToonNodeMaterial | null = null
+      let material: MToonMaterial | null = null
 
       if (Array.isArray(obj.material))
       {
         // Outline付きMToonの場合はOutline用に複数マテリアルになっている
         // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
         material = obj.material[0];
-      } else if (obj.material instanceof MToonNodeMaterial)
+      } else if (obj.material instanceof MToonMaterial)
       {
         material = obj.material
       }
 
-      if (!(material instanceof MToonNodeMaterial))
+      if (!(material instanceof MToonMaterial))
       {
         return
       }

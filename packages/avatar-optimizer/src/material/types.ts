@@ -4,26 +4,7 @@
  */
 
 import { Matrix3, Vector2 } from "three"
-
-/**
- * アトラス化対象となる1枚のテクスチャ
- */
-export interface AtlasTextureDescriptor
-{
-  /** 画像の幅（ピクセル） */
-  width: number
-  /** 画像の高さ（ピクセル） */
-  height: number
-}
-
-/**
- * 主にUVで使用するオフセットとスケール情報
- */
-export interface OffsetScale
-{
-  offset: Vector2,
-  scale: Vector2,
-}
+import { OffsetScale } from "../types"
 
 /**
  * テクスチャパッキングの結果
@@ -115,43 +96,6 @@ export interface AtlasResult
     textureCount: number
     packingEfficiency: number
   }
-}
-
-/**
- * テクスチャスロット名の型
- */
-export type TextureSlot =
-  | 'map'
-  | 'normalMap'
-  | 'emissiveMap'
-  | 'shadeMultiplyTexture'
-  | 'shadingShiftTexture'
-  | 'matcapTexture'
-  | 'rimMultiplyTexture'
-  | 'outlineWidthMultiplyTexture'
-  | 'uvAnimationMaskTexture'
-
-/**
- * テクスチャ組み合わせパターン
- * 各スロットに設定されているテクスチャのImage参照を保持
- */
-export interface TextureCombinationPattern
-{
-  /** 各スロットのImage参照（nullの場合はテクスチャなし） */
-  slots: Map<TextureSlot, any | null>
-}
-
-/**
- * 組み合わせパターンとマテリアルのマッピング情報
- */
-export interface PatternMaterialMapping
-{
-  /** 一意な組み合わせパターン */
-  pattern: TextureCombinationPattern
-  /** このパターンを使用するマテリアルのインデックス配列 */
-  materialIndices: number[]
-  /** パッキング用のテクスチャディスクリプタ */
-  textureDescriptor: AtlasTextureDescriptor
 }
 
 /**
