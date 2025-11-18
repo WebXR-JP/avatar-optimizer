@@ -14,15 +14,11 @@
 import
 {
   BufferGeometry,
-  Color,
   DataTexture,
   Float32BufferAttribute,
-  FloatType,
   Mesh,
   Object3D,
-  RGBAFormat,
   Vector3,
-  Vector4,
 } from 'three'
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
@@ -30,16 +26,16 @@ import type {
   ParameterTextureDescriptor,
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
-  ParameterSemanticId,
 } from '@xrift/mtoon-atlas'
-import { err, ok, Result } from 'neverthrow'
+import { err, ok, Result, safeTry } from 'neverthrow'
 import type {
   CombinedMeshResult,
   CombineMaterialOptions,
 } from './types'
 import type { OptimizationError } from '../../types'
 import { createParameterTexture } from '../texture'
-import { ParameterLayout } from '../../types'
+import { getMToonMaterialsWithMeshesFromObject3D } from '.'
+import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
 
 /**
  * デフォルトオプション
@@ -52,176 +48,87 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 
 /**
  * 複数のMToonMaterialを単一のMToonInstancingMaterialに結合
+ * Meshには元のマテリアル識別用の頂点アトリビュートを埋め込む
  *
- * @param rootNode - 最適化対象のルートノード
+ * @param materialMeshMap - 最適化対象のマテリアルと、それを利用するMeshの組のデータ
  * @param options - 結合オプション
  * @returns 結合されたメッシュと統計情報
  */
 export function combineMToonMaterials(
-  rootNode: Object3D,
+  materialMeshMap: Map<MToonMaterial, Mesh[]>,
   options: CombineMaterialOptions = {}
 ): Result<CombinedMeshResult, OptimizationError>
 {
-  const opts = { ...DEFAULT_OPTIONS, ...options }
-
-  // 1. マテリアル収集
-  const meshes: Mesh[] = []
-  rootNode.traverse((obj) =>
+  return safeTry(function* ()
   {
-    if (obj instanceof Mesh)
+    const opts = { ...DEFAULT_OPTIONS, ...options }
+
+    const materials = Array.from(materialMeshMap.keys())
+
+    // 2. パラメータテクスチャ生成
+    const parameterTexture = yield* createParameterTexture(materials, opts.texelsPerSlot)
+
+    // 3. マテリアルとメッシュのマッピング
+    // 各マテリアルに対応するメッシュを集める
+    const materialSlotIndex = new Map<MToonMaterial, number>()
+
+    // マテリアルをスロットインデックスにマッピング
+    materials.forEach((mat, index) =>
     {
-      meshes.push(obj)
-    }
-  })
-
-  if (meshes.length === 0)
-  {
-    return err({
-      type: 'NO_MATERIALS_FOUND',
-      message: 'No meshes found in the scene',
+      materialSlotIndex.set(mat, index)
     })
-  }
 
-  // MToonMaterialのみを抽出（重複排除）
-  let materials: MToonMaterial[] = []
-  for (const mesh of meshes)
-  {
-    if (Array.isArray(mesh.material))
+    // 4. ジオメトリ結合用マップの構築
+    const meshToSlotIndex = new Map<Mesh, number>()
+    const meshesForMerge: Mesh[] = []
+
+    for (const [material, meshList] of materialMeshMap)
     {
-      materials.push(
-        ...(mesh.material.filter(
-          (m) => m instanceof MToonMaterial
-        ) as MToonMaterial[])
-      )
-    }
-    else if (mesh.material instanceof MToonMaterial)
-    {
-      materials.push(mesh.material as MToonMaterial)
-    }
-  }
-  materials = Array.from(new Set(materials))
-
-  if (materials.length === 0)
-  {
-    return err({
-      type: 'NO_MATERIALS_FOUND',
-      message: 'No MToonMaterial found in the scene',
-    })
-  }
-
-  // 2. パラメータテクスチャ生成
-  const paramTexResult = createParameterTexture(materials, opts.texelsPerSlot)
-  if (paramTexResult.isErr())
-  {
-    return err({
-      type: 'PARAMETER_TEXTURE_FAILED',
-      message: paramTexResult.error.message,
-    })
-  }
-  const parameterTexture = paramTexResult.value
-
-  // 3. マテリアルとメッシュのマッピング
-  // 各マテリアルに対応するメッシュを集める
-  const materialToMeshes = new Map<MToonMaterial, Mesh[]>()
-  const materialSlotIndex = new Map<MToonMaterial, number>()
-
-  // マテリアルをスロットインデックスにマッピング
-  materials.forEach((mat, index) =>
-  {
-    materialSlotIndex.set(mat, index)
-  })
-
-  // メッシュをマテリアルごとにグループ化
-  for (const mesh of meshes)
-  {
-    let material: MToonMaterial | null = null
-
-    if (Array.isArray(mesh.material))
-    {
-      // 複数マテリアルの場合は最初のMToonを対象
-      const mtoonMaterial = mesh.material.find(
-        (m) => m instanceof MToonMaterial
-      )
-      if (mtoonMaterial instanceof MToonMaterial)
+      const slotIndex = materialSlotIndex.get(material) ?? 0
+      for (const mesh of meshList)
       {
-        material = mtoonMaterial
+        meshToSlotIndex.set(mesh, slotIndex)
+        meshesForMerge.push(mesh)
       }
     }
-    else if (mesh.material instanceof MToonMaterial)
+
+    if (meshesForMerge.length === 0)
     {
-      material = mesh.material
+      return err({
+        type: 'ASSET_ERROR',
+        message: 'マージ対象のメッシュがありません',
+      })
     }
 
-    if (material && materialSlotIndex.has(material))
-    {
-      if (!materialToMeshes.has(material))
-      {
-        materialToMeshes.set(material, [])
-      }
-      materialToMeshes.get(material)!.push(mesh)
-    }
-  }
+    // 5. マテリアルスロットアトリビュートを追加してジオメトリ結合
+    const mergedGeometry = yield* mergeGeometriesWithSlotAttribute(
+      meshesForMerge,
+      meshToSlotIndex,
+      opts.slotAttributeName
+    )
 
-  // 4. ジオメトリ結合用マップの構築
-  const meshToSlotIndex = new Map<Mesh, number>()
-  const meshesForMerge: Mesh[] = []
+    // 6. MToonInstancingMaterialの作成
+    const instancingMaterial = createMToonInstancingMaterial(
+      materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
+      parameterTexture,
+      materials.length, // スロット数
+      opts.texelsPerSlot, // テクセル数
+      opts.slotAttributeName
+    )
 
-  for (const [material, meshList] of materialToMeshes.entries())
-  {
-    const slotIndex = materialSlotIndex.get(material) ?? 0
-    for (const mesh of meshList)
-    {
-      meshToSlotIndex.set(mesh, slotIndex)
-      meshesForMerge.push(mesh)
-    }
-  }
+    // 7. 結合メッシュの作成
+    const combinedMesh = new Mesh(mergedGeometry, instancingMaterial)
+    combinedMesh.name = 'CombinedMToonMesh'
 
-  if (meshesForMerge.length === 0)
-  {
-    return err({
-      type: 'GEOMETRY_MERGE_FAILED',
-      message: 'No meshes to merge',
+    return ok({
+      mesh: combinedMesh,
+      material: instancingMaterial,
+      statistics: {
+        originalMeshCount: meshesForMerge.length,
+        originalMaterialCount: materials.length,
+        reducedDrawCalls: materials.length - 1, // 元のドローコール数 - 1（統合後）
+      },
     })
-  }
-
-  // 5. ジオメトリ結合
-  const mergeResult = mergeGeometriesWithSlotAttribute(
-    meshesForMerge,
-    meshToSlotIndex,
-    opts.slotAttributeName
-  )
-
-  if (mergeResult.isErr())
-  {
-    return err({
-      type: 'GEOMETRY_MERGE_FAILED',
-      message: mergeResult.error.message,
-    })
-  }
-
-  const mergedGeometry = mergeResult.value
-
-  // 6. MToonInstancingMaterialの作成
-  const instancingMaterial = createMToonInstancingMaterial(
-    materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
-    parameterTexture,
-    materials.length, // スロット数
-    opts.texelsPerSlot, // テクセル数
-    opts.slotAttributeName
-  )
-
-  // 7. 結合メッシュの作成
-  const combinedMesh = new Mesh(mergedGeometry, instancingMaterial)
-  combinedMesh.name = 'CombinedMToonMesh'
-
-  return ok({
-    mesh: combinedMesh,
-    material: instancingMaterial,
-    statistics: {
-      originalMeshCount: meshes.length,
-      originalMaterialCount: materials.length,
-      reducedDrawCalls: materials.length - 1, // 元のドローコール数 - 1（統合後）
-    },
   })
 }
 
@@ -305,198 +212,4 @@ function createMToonInstancingMaterial(
   })
 
   return material
-}
-
-/**
- * ジオメトリを結合してスロット属性を追加
- *
- * スキニング情報は一旦捨てて通常のMeshとして結合します。
- * TODO: SkinnedMeshの完全対応
- *
- * @param meshes - 結合対象のメッシュ配列
- * @param materialSlotMap - メッシュ→スロットインデックスのマップ
- * @param slotAttributeName - スロット属性名
- * @returns 結合されたBufferGeometry
- */
-function mergeGeometriesWithSlotAttribute(
-  meshes: Mesh[],
-  materialSlotMap: Map<Mesh, number>,
-  slotAttributeName: string
-): Result<BufferGeometry, OptimizationError>
-{
-  if (meshes.length === 0)
-  {
-    return err({
-      type: 'GEOMETRY_MERGE_FAILED',
-      message: 'No meshes to merge',
-    })
-  }
-
-  const mergedGeometry = new BufferGeometry()
-
-  // 各属性名ごとのデータ配列を集める
-  const attributeData = new Map<string, Float32Array[]>()
-  const slotData: number[] = []
-
-  let totalVertices = 0
-
-  // 1. 各メッシュから属性データを収集
-  for (const mesh of meshes)
-  {
-    const geometry = mesh.geometry
-    if (!(geometry instanceof BufferGeometry))
-    {
-      continue
-    }
-
-    const slotIndex = materialSlotMap.get(mesh) ?? 0
-    const vertexCount = geometry.attributes.position?.count ?? 0
-
-    if (vertexCount === 0)
-    {
-      continue
-    }
-
-    // 各属性を収集
-    for (const attrName in geometry.attributes)
-    {
-      const attr = geometry.attributes[attrName]
-      if (!attr)
-      {
-        continue
-      }
-
-      if (!attributeData.has(attrName))
-      {
-        attributeData.set(attrName, [])
-      }
-
-      // ワールド座標変換を適用してクローン
-      let clonedArray: Float32Array
-      if (attrName === 'position')
-      {
-        // 位置属性はワールド座標に変換
-        clonedArray = new Float32Array(attr.count * attr.itemSize)
-        for (let i = 0; i < attr.count; i++)
-        {
-          const v = new Vector3(attr.getX(i), attr.getY(i), attr.getZ(i))
-          v.applyMatrix4(mesh.matrixWorld)
-          clonedArray[i * 3] = v.x
-          clonedArray[i * 3 + 1] = v.y
-          clonedArray[i * 3 + 2] = v.z
-        }
-      }
-      else if (attrName === 'normal')
-      {
-        // 法線属性は回転のみ適用
-        clonedArray = new Float32Array(attr.count * attr.itemSize)
-        const normalMatrix = mesh.normalMatrix
-        for (let i = 0; i < attr.count; i++)
-        {
-          const v = new Vector3(attr.getX(i), attr.getY(i), attr.getZ(i))
-          v.applyMatrix3(normalMatrix).normalize()
-          clonedArray[i * 3] = v.x
-          clonedArray[i * 3 + 1] = v.y
-          clonedArray[i * 3 + 2] = v.z
-        }
-      }
-      else
-      {
-        // その他の属性はそのままコピー
-        clonedArray = new Float32Array(attr.array)
-      }
-
-      attributeData.get(attrName)!.push(clonedArray)
-    }
-
-    // スロットインデックスを頂点数分追加
-    for (let i = 0; i < vertexCount; i++)
-    {
-      slotData.push(slotIndex)
-    }
-
-    totalVertices += vertexCount
-  }
-
-  // 2. 属性データを結合
-  for (const [attrName, arrays] of attributeData.entries())
-  {
-    if (arrays.length === 0)
-    {
-      continue
-    }
-
-    const firstArray = arrays[0]
-    const itemSize =
-      firstArray.length /
-      (meshes[0].geometry.attributes[attrName]?.count ?? 1)
-
-    // 全配列を連結
-    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
-    const mergedArray = new Float32Array(totalLength)
-
-    let offset = 0
-    for (const arr of arrays)
-    {
-      mergedArray.set(arr, offset)
-      offset += arr.length
-    }
-
-    mergedGeometry.setAttribute(
-      attrName,
-      new Float32BufferAttribute(mergedArray, itemSize)
-    )
-  }
-
-  // 3. スロット属性を追加
-  const slotArray = new Float32Array(slotData)
-  mergedGeometry.setAttribute(
-    slotAttributeName,
-    new Float32BufferAttribute(slotArray, 1)
-  )
-
-  // 4. インデックスを結合
-  const indices: number[] = []
-  let vertexOffset = 0
-
-  for (const mesh of meshes)
-  {
-    const geometry = mesh.geometry
-    if (!(geometry instanceof BufferGeometry))
-    {
-      continue
-    }
-
-    const vertexCount = geometry.attributes.position?.count ?? 0
-    if (vertexCount === 0)
-    {
-      continue
-    }
-
-    if (geometry.index)
-    {
-      // インデックスバッファがある場合
-      for (let i = 0; i < geometry.index.count; i++)
-      {
-        indices.push(geometry.index.getX(i) + vertexOffset)
-      }
-    }
-    else
-    {
-      // インデックスバッファがない場合は順番に生成
-      for (let i = 0; i < vertexCount; i++)
-      {
-        indices.push(vertexOffset + i)
-      }
-    }
-
-    vertexOffset += vertexCount
-  }
-
-  if (indices.length > 0)
-  {
-    mergedGeometry.setIndex(indices)
-  }
-
-  return ok(mergedGeometry)
 }

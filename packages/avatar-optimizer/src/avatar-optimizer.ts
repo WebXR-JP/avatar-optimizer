@@ -1,6 +1,6 @@
 import { ok, ResultAsync, safeTry } from "neverthrow"
 import { Object3D } from "three"
-import { assignAtlasTexturesToMaterial, CombinedMeshResult, combineMToonMaterials, getMToonMaterialsFromObject3D } from "./util/material"
+import { assignAtlasTexturesToMaterial, CombinedMeshResult, combineMToonMaterials as combineMeshAndMaterial, getMToonMaterialsWithMeshesFromObject3D } from "./util/material"
 import { OffsetScale, OptimizationError } from "./types"
 import { MToonMaterial } from "@pixiv/three-vrm"
 import { buildPatternMaterialMappings, pack } from "./process/packing"
@@ -25,7 +25,8 @@ export function optimizeModel(
   return safeTry(async function* ()
   {
     // モデルのマテリアル集計
-    const materials = yield* getMToonMaterialsFromObject3D(rootNode)
+    const materialMeshMap = yield* getMToonMaterialsWithMeshesFromObject3D(rootNode)
+    const materials = Array.from(materialMeshMap.keys())
 
     // マテリアルで使われてるテクスチャの組のパターンを集計
     const patternMappings = buildPatternMaterialMappings(materials)
@@ -53,10 +54,12 @@ export function optimizeModel(
       }
     })
 
+    // アトラス画像の配置に合わせてUVを移動する
     yield* applyPlacementsToGeometries(rootNode, materialPlacementMap)
 
-    // マテリアル結合処理：複数のMToonNodeMaterialを統合してドローコール数を削減
-    const combineResult = yield* combineMToonMaterials(rootNode)
+    // 複数のMToonNodeMaterialを統合してドローコール数を削減
+    // このとき頂点アトリビュートに元のマテリアル識別用の情報を追加する
+    const combineResult = yield* combineMeshAndMaterial(materialMeshMap)
 
     return ok(combineResult)
   })

@@ -5,17 +5,14 @@
  * そしてマテリアル単位の UV 変換行列を生成する責務を持つ。
  */
 
-import { MToonNodeMaterial } from '@pixiv/three-vrm-materials-mtoon/nodes'
-import { AtlasImageMap, AtlasTextureDescriptor, MTOON_TEXTURE_SLOTS, MToonTextureSlot, OptimizationError, PatternMaterialMapping, TextureCombinationPattern, ThreeImageType } from '../../types';
+import { AtlasImageMap, OptimizationError } from '../../types';
 import { MToonMaterial } from '@pixiv/three-vrm';
-import { Mesh, Object3D, Texture } from 'three';
+import { Mesh, Object3D } from 'three';
 import { err, ok, Result } from 'neverthrow';
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials } from './combine'
 export type { CombineMaterialOptions, CombinedMeshResult } from './types'
-
-
 
 /**
  * アトラス化したテクスチャ群をマテリアルにアサインする
@@ -41,12 +38,14 @@ export function assignAtlasTexturesToMaterial(
 
 /**
  * Three.jsのノードを再帰的に探索してMeshを検索し
- * マテリアルを収集して返す (重複なし)
+ * マテリアルとそれに対応するメッシュのMapを返す
  *
  * @param rootNode 探索を開始するNode
- * @returns 発見した全てのマテリアル
+ * @returns マテリアルをキー、メッシュの配列を値とするMap
  */
-export function getMToonMaterialsFromObject3D(rootNode: Object3D): Result<MToonMaterial[], OptimizationError>
+export function getMToonMaterialsWithMeshesFromObject3D(
+  rootNode: Object3D,
+): Result<Map<MToonMaterial, Mesh[]>, OptimizationError>
 {
   const meshes: Mesh[] = []
   rootNode.traverse(obj =>
@@ -57,26 +56,40 @@ export function getMToonMaterialsFromObject3D(rootNode: Object3D): Result<MToonM
     }
   })
 
-  let materials: MToonMaterial[] = []
+  const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+
   for (const mesh of meshes)
   {
     if (Array.isArray(mesh.material))
     {
-      materials.push(...(mesh.material.filter((m) => m instanceof MToonMaterial) as MToonMaterial[]))
+      // thee-vrmで読み込んだモデルのMToonにおいてMaterialがArrayになるのはOutlineMeshのみ
+      // このとき1番目と2番目のマテリアルパラメータは全く同じなので1番目だけ取る
+      if (mesh.material.length === 0) continue
+      if (!(mesh.material[0] instanceof MToonMaterial)) continue
+      const material = mesh.material[0] as MToonMaterial
+      if (!materialMeshMap.has(material))
+      {
+        materialMeshMap.set(material, [])
+      }
+      materialMeshMap.get(material)!.push(mesh)
     } else if (mesh.material instanceof MToonMaterial)
     {
-      materials.push(mesh.material as MToonMaterial)
+      const material = mesh.material as MToonMaterial
+      if (!materialMeshMap.has(material))
+      {
+        materialMeshMap.set(material, [])
+      }
+      materialMeshMap.get(material)!.push(mesh)
     }
   }
 
-  materials = Array.from(new Set(materials)) // 重複排除
-  if (materials.length === 0)
+  if (materialMeshMap.size === 0)
   {
     return err({
       type: 'ASSET_ERROR',
-      message: 'MToonMaterial not found.',
+      message: 'MToonMaterialがありません',
     })
   }
 
-  return ok(materials)
+  return ok(materialMeshMap)
 }

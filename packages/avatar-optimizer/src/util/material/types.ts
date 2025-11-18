@@ -3,8 +3,9 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-import { Matrix3, Vector2 } from "three"
+import { Matrix3, Mesh, Vector2 } from "three"
 import { OffsetScale } from "../../types"
+import { MToonAtlasMaterial } from "@xrift/mtoon-atlas"
 
 /**
  * テクスチャパッキングの結果
@@ -113,9 +114,9 @@ export interface CombineMaterialOptions
 export interface CombinedMeshResult
 {
   /** 結合されたメッシュ */
-  mesh: any  // Mesh型（Three.js依存を避けるためany）
-  /** 使用されたMToonInstancingMaterial */
-  material: any // MToonInstancingMaterial型
+  mesh: Mesh
+  /** 使用されたMToonAtlasMaterial */
+  material: MToonAtlasMaterial
   /** 統計情報 */
   statistics: {
     /** 元のメッシュ数 */

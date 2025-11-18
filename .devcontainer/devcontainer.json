@@ -40,7 +40,8 @@
 				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode",
 				"eamodio.gitlens",
-				"Anthropic.claude-code"
+				"Anthropic.claude-code",
+				"slevesque.shader"
 			],
 			"settings": {
 				"editor.formatOnSave": true,

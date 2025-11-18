@@ -164,4 +164,3 @@ export type OptimizationError = { type: 'ASSET_ERROR', message: string; }
   | { type: 'INTERNAL_ERROR', message: string; }
   | { type: 'NO_MATERIALS_FOUND', message: string; }
   | { type: 'PARAMETER_TEXTURE_FAILED', message: string; }
-  | { type: 'GEOMETRY_MERGE_FAILED', message: string; }
