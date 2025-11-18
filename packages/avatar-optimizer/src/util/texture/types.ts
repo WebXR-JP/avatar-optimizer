@@ -1,9 +1,8 @@
-import { Texture } from "three"
-import { AtlasTextureDescriptor, MToonTextureSlot, OffsetScale } from "../../types"
+import { Texture } from 'three'
+import { OffsetScale } from '../../types'
 
 /** Image + UV変換行列のペア */
-export interface ImageMatrixPair
-{
+export interface ImageMatrixPair {
   image: Texture
   uvTransform: OffsetScale
 }

@@ -1,31 +1,29 @@
 import { err, ok, Result } from 'neverthrow'
-import
-{
-  Texture,
-  WebGLRenderer,
-  Scene,
-  OrthographicCamera,
-  Mesh,
-  PlaneGeometry,
-  MeshBasicMaterial,
-  WebGLRenderTarget,
-  Color,
-  DataTexture,
-  LinearFilter,
-  RGBAFormat,
-  UnsignedByteType,
-  DoubleSide,
-  RepeatWrapping,
-  CustomBlending,
-  OneFactor,
+import {
   AddEquation,
+  Color,
+  CustomBlending,
+  DataTexture,
+  DoubleSide,
+  LinearFilter,
+  Mesh,
+  MeshBasicMaterial,
+  OneFactor,
+  OrthographicCamera,
+  PlaneGeometry,
+  RepeatWrapping,
+  RGBAFormat,
+  Scene,
+  Texture,
+  UnsignedByteType,
+  WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three'
-import { OffsetScale, OptimizationError } from '../../types'
+import { OptimizationError } from '../../types'
 import { ImageMatrixPair } from './types'
 
 /** 合成時のオプション */
-export interface ComposeImageOptions
-{
+export interface ComposeImageOptions {
   width: number
   height: number
 }
@@ -42,13 +40,14 @@ export interface ComposeImageOptions
 export function composeImagesToAtlas(
   layers: ImageMatrixPair[],
   options: ComposeImageOptions,
-): Result<Texture, OptimizationError>
-{
+): Result<Texture, OptimizationError> {
   const { width, height } = options
 
-  if (width <= 0 || height <= 0)
-  {
-    return err({ type: 'INVALID_PARAMETER', message: 'width, heightは正の値にしてください' })
+  if (width <= 0 || height <= 0) {
+    return err({
+      type: 'INVALID_PARAMETER',
+      message: 'width, heightは正の値にしてください',
+    })
   }
 
   // 1. WebGL レンダラー・シーン・カメラをセットアップ
@@ -66,8 +65,7 @@ export function composeImagesToAtlas(
   const renderTarget = new WebGLRenderTarget(width, height)
 
   // 3. 各レイヤーをシーンに追加
-  for (const layer of layers)
-  {
+  for (const layer of layers) {
     const mesh = createLayerMesh(layer)
     scene.add(mesh)
   }
@@ -88,32 +86,29 @@ export function composeImagesToAtlas(
     width,
     height,
     RGBAFormat,
-    UnsignedByteType
-  );
+    UnsignedByteType,
+  )
 
-  tex.needsUpdate = true;
+  tex.needsUpdate = true
 
   // 必要に応じて
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearFilter;
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = RepeatWrapping;
+  tex.magFilter = LinearFilter
+  tex.minFilter = LinearFilter
+  tex.wrapS = RepeatWrapping
+  tex.wrapT = RepeatWrapping
 
   // 6. リソース解放
-  scene.traverse((obj) =>
-  {
-    if (obj instanceof Mesh)
-    {
+  scene.traverse((obj) => {
+    if (obj instanceof Mesh) {
       obj.geometry.dispose()
-      if (obj.material instanceof MeshBasicMaterial)
-      {
+      if (obj.material instanceof MeshBasicMaterial) {
         obj.material.dispose()
       }
     }
   })
   renderer.dispose()
   renderTarget.dispose()
-  layers.forEach(layer => layer.image.dispose())
+  layers.forEach((layer) => layer.image.dispose())
 
   return ok(tex)
 }
@@ -121,8 +116,7 @@ export function composeImagesToAtlas(
 /**
  * WebGL レンダラーを作成する（オフスクリーン描画用）
  */
-function createRenderer(): WebGLRenderer
-{
+function createRenderer(): WebGLRenderer {
   const canvas = new OffscreenCanvas(1, 1) // ダミーキャンバス
   const renderer = new WebGLRenderer({
     canvas: canvas as unknown as HTMLCanvasElement,
@@ -138,10 +132,7 @@ function createRenderer(): WebGLRenderer
  * @param layer - テクスチャと UV 変換行列
  * @returns メッシュオブジェクト
  */
-function createLayerMesh(
-  layer: ImageMatrixPair,
-): Mesh
-{
+function createLayerMesh(layer: ImageMatrixPair): Mesh {
   const texture = layer.image
   const uvTransform = layer.uvTransform
 
@@ -173,4 +164,3 @@ function createLayerMesh(
 
   return mesh
 }
-

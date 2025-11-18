@@ -1,5 +1,5 @@
 import type { VRM } from '@pixiv/three-vrm'
-import { ParameterSemanticId } from '@xrift/mtoon-atlas';
+import { ParameterSemanticId } from '@xrift/mtoon-atlas'
 import { Texture, TypedArray, Vector2 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
@@ -8,16 +8,15 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
  * Three.js自体には含まれていないので自分で定義している
  */
 export type ThreeImageType =
-  HTMLImageElement
+  | HTMLImageElement
   | HTMLCanvasElement
   | HTMLVideoElement
   | ImageBitmap
   | OffscreenCanvas
   | ImageData
-  | { data: TypedArray; width: number; height: number; };
+  | { data: TypedArray; width: number; height: number }
 
-export interface OptimizationOptions
-{
+export interface OptimizationOptions {
   compressTextures: boolean
   maxTextureSize: number
   reduceMeshes: boolean
@@ -27,8 +26,7 @@ export interface OptimizationOptions
 /**
  * three-vrm / GLTFLoader で読み込んだ VRM ドキュメント
  */
-export interface ThreeVRMDocument
-{
+export interface ThreeVRMDocument {
   gltf: GLTF
   vrm: VRM
 }
@@ -37,8 +35,7 @@ export interface ThreeVRMDocument
  * テクスチャスロットの情報
  * マテリアルごとにどのテクスチャがどのスロットで使用されているかを記録
  */
-export interface TextureSlotInfo
-{
+export interface TextureSlotInfo {
   slot: 'baseColor'
   /** 当該スロットで使用されているテクスチャのリスト */
   textures: Array<{
@@ -68,7 +65,7 @@ export const MTOON_TEXTURE_SLOTS = [
   'outlineWidthMultiplyTexture',
   'uvAnimationMaskTexture',
 ] as const
-export type MToonTextureSlot = typeof MTOON_TEXTURE_SLOTS[number];
+export type MToonTextureSlot = (typeof MTOON_TEXTURE_SLOTS)[number]
 
 /**
  * テクスチャスロット名をキーにしたアトラス画像マップの型
@@ -79,8 +76,7 @@ export type AtlasImageMap = Record<MToonTextureSlot, Texture>
  * テクスチャ組み合わせパターン
  * 各スロットに設定されているテクスチャのImage参照を保持
  */
-export interface TextureCombinationPattern
-{
+export interface TextureCombinationPattern {
   /** 各スロットのImage参照（nullの場合はテクスチャなし） */
   slots: Map<MToonTextureSlot, ThreeImageType | null>
 }
@@ -88,8 +84,7 @@ export interface TextureCombinationPattern
 /**
  * 組み合わせパターンとマテリアルのマッピング情報
  */
-export interface PatternMaterialMapping
-{
+export interface PatternMaterialMapping {
   /** 一意な組み合わせパターン */
   pattern: TextureCombinationPattern
   /** このパターンを使用するマテリアルのインデックス配列 */
@@ -101,8 +96,7 @@ export interface PatternMaterialMapping
 /**
  * アトラス化対象となる1枚のテクスチャ
  */
-export interface AtlasTextureDescriptor
-{
+export interface AtlasTextureDescriptor {
   /** 画像の幅（ピクセル） */
   width: number
   /** 画像の高さ（ピクセル） */
@@ -112,18 +106,16 @@ export interface AtlasTextureDescriptor
 /**
  * 主にUVで使用するオフセットとスケール情報
  */
-export interface OffsetScale
-{
-  offset: Vector2,
-  scale: Vector2,
+export interface OffsetScale {
+  offset: Vector2
+  scale: Vector2
 }
 
 /**
  * パラメータのパッキングレイアウト定義
  * mtoon-atlas の DEFAULT_PARAMETER_LAYOUT と同じ構造
  */
-export interface ParameterLayout
-{
+export interface ParameterLayout {
   id: ParameterSemanticId
   texel: number
   channels: readonly ('r' | 'g' | 'b' | 'a')[]
@@ -158,9 +150,10 @@ export const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
 /**
  * エラー型 (全体)
  */
-export type OptimizationError = { type: 'ASSET_ERROR', message: string; }
-  | { type: 'INVALID_OPERATION', message: string; }
-  | { type: 'INVALID_PARAMETER', message: string; }
-  | { type: 'INTERNAL_ERROR', message: string; }
-  | { type: 'NO_MATERIALS_FOUND', message: string; }
-  | { type: 'PARAMETER_TEXTURE_FAILED', message: string; }
+export type OptimizationError =
+  | { type: 'ASSET_ERROR'; message: string }
+  | { type: 'INVALID_OPERATION'; message: string }
+  | { type: 'INVALID_PARAMETER'; message: string }
+  | { type: 'INTERNAL_ERROR'; message: string }
+  | { type: 'NO_MATERIALS_FOUND'; message: string }
+  | { type: 'PARAMETER_TEXTURE_FAILED'; message: string }

@@ -1,8 +1,8 @@
-import { MToonMaterial } from "@pixiv/three-vrm-materials-mtoon";
-import { Result } from "neverthrow";
-import { BufferGeometry, Mesh, Object3D } from "three";
-import { OffsetScale, OptimizationError } from "../types";
-import { remapGeometryUVs } from "../util/mesh/uv";
+import { MToonMaterial } from '@pixiv/three-vrm-materials-mtoon'
+import { Result } from 'neverthrow'
+import { BufferGeometry, Mesh, Object3D } from 'three'
+import { OffsetScale, OptimizationError } from '../types'
+import { remapGeometryUVs } from '../util/mesh/uv'
 
 /**
  * GLTF/VRM フロー前提で 1 Mesh = 1 Material のみをサポートし、(ただし Outline付きMToonは例外的に複数マテリアルを許容)
@@ -17,23 +17,19 @@ import { remapGeometryUVs } from "../util/mesh/uv";
 export function applyPlacementsToGeometries(
   rootNode: Object3D,
   materialPlacementMap: Map<MToonMaterial, OffsetScale>,
-): Result<void[], OptimizationError>
-{
+): Result<void[], OptimizationError> {
   const targets = new Map<BufferGeometry, OffsetScale>()
-  rootNode.traverse((obj) =>
-  {
+  rootNode.traverse((obj) => {
     if (!(obj instanceof Mesh)) return
     if (!(obj.geometry instanceof BufferGeometry)) return
 
     let material: MToonMaterial | null = null
 
-    if (Array.isArray(obj.material))
-    {
+    if (Array.isArray(obj.material)) {
       // Outline付きMToonの場合はOutline用に複数マテリアルになっている
       // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
-      material = obj.material[0];
-    } else if (obj.material instanceof MToonMaterial)
-    {
+      material = obj.material[0]
+    } else if (obj.material instanceof MToonMaterial) {
       material = obj.material
     }
 
@@ -51,6 +47,8 @@ export function applyPlacementsToGeometries(
     targets.set(obj.geometry, placement)
   })
 
-  const results = [...targets].map(target => remapGeometryUVs(target[0], target[1]))
+  const results = [...targets].map((target) =>
+    remapGeometryUVs(target[0], target[1]),
+  )
   return Result.combine(results)
 }

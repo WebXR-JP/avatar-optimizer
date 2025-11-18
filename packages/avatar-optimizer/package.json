@@ -18,14 +18,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm lint:fix && pnpm typecheck && tsup",
     "dev": "tsup --watch",
     "prepublishOnly": "npm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "manual:loaders-gl": "tsx __tests__/manual/loaders-gl.manual.ts"
+    "manual:loaders-gl": "tsx __tests__/manual/loaders-gl.manual.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "vrm",

@@ -5,16 +5,12 @@
  * モデルの UV 座標も同じ量だけ移動させる
  */
 
+import { err, ok, Result } from 'neverthrow'
 import { BufferGeometry, Vector2 } from 'three'
-import { ok, err, Result } from 'neverthrow'
-import { OffsetScale, OptimizationError } from '../../types';
+import { OffsetScale, OptimizationError } from '../../types'
 
-function wrapUV(uv: Vector2)
-{
-  return new Vector2(
-    uv.x - Math.floor(uv.x),
-    uv.y - Math.floor(uv.y)
-  );
+function wrapUV(uv: Vector2) {
+  return new Vector2(uv.x - Math.floor(uv.x), uv.y - Math.floor(uv.y))
 }
 
 /**
@@ -36,10 +32,8 @@ function applyUVTransform(
   translateV: number,
   startIndex: number = 0,
   endIndex: number = uvArray.length,
-): void
-{
-  for (let i = startIndex; i < endIndex; i += 2)
-  {
+): void {
+  for (let i = startIndex; i < endIndex; i += 2) {
     const oldU = uvArray[i]
     const oldV = uvArray[i + 1]
 
@@ -65,25 +59,38 @@ function applyUVTransform(
 export function remapGeometryUVs(
   geometry: BufferGeometry,
   uvTransform: OffsetScale,
-): Result<void, OptimizationError>
-{
+): Result<void, OptimizationError> {
   // uv 属性を取得
   const uvAttribute = geometry.getAttribute('uv')
-  if (!uvAttribute)
-  {
-    return err({ type: 'ASSET_ERROR', message: 'UVアトリビュートが存在しません' })
+  if (!uvAttribute) {
+    return err({
+      type: 'ASSET_ERROR',
+      message: 'UVアトリビュートが存在しません',
+    })
   }
 
   // UV データを取得
   const uvArray = uvAttribute.array as Float32Array
-  if (!uvArray) return err({ type: 'ASSET_ERROR', message: 'UVアトリビュート配列が存在しません' })
-  if (uvAttribute.itemSize !== 2)
-  {
-    return err({ type: 'ASSET_ERROR', message: 'UVアトリビュートの要素数が2ではありません' })
+  if (!uvArray)
+    return err({
+      type: 'ASSET_ERROR',
+      message: 'UVアトリビュート配列が存在しません',
+    })
+  if (uvAttribute.itemSize !== 2) {
+    return err({
+      type: 'ASSET_ERROR',
+      message: 'UVアトリビュートの要素数が2ではありません',
+    })
   }
 
   // 全頂点の UV を変換
-  applyUVTransform(uvArray, uvTransform.scale.x, uvTransform.scale.y, uvTransform.offset.x, uvTransform.offset.y)
+  applyUVTransform(
+    uvArray,
+    uvTransform.scale.x,
+    uvTransform.scale.y,
+    uvTransform.offset.x,
+    uvTransform.offset.y,
+  )
 
   // 属性を更新
   uvAttribute.needsUpdate = true

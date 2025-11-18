@@ -1,10 +1,25 @@
-import { err, ok, Result } from "neverthrow"
-import { AtlasImageMap, AtlasTextureDescriptor, MTOON_TEXTURE_SLOTS, OffsetScale, OptimizationError, PARAMETER_LAYOUT, ParameterLayout, PatternMaterialMapping } from "../../types"
-import { MToonMaterial } from "@pixiv/three-vrm"
-import { ImageMatrixPair } from "./types"
-import { composeImagesToAtlas } from "./composite"
-import { Color, DataTexture, FloatType, RGBAFormat, Vector3, Vector4 } from "three"
-import { ParameterSemanticId } from "@xrift/mtoon-atlas"
+import { MToonMaterial } from '@pixiv/three-vrm'
+import { ParameterSemanticId } from '@xrift/mtoon-atlas'
+import { err, ok, Result, safeTry } from 'neverthrow'
+import {
+  Color,
+  DataTexture,
+  FloatType,
+  RGBAFormat,
+  Vector3,
+  Vector4,
+} from 'three'
+import {
+  AtlasImageMap,
+  AtlasTextureDescriptor,
+  MTOON_TEXTURE_SLOTS,
+  OffsetScale,
+  OptimizationError,
+  PARAMETER_LAYOUT,
+  ParameterLayout,
+} from '../../types'
+import { composeImagesToAtlas } from './composite'
+import { ImageMatrixPair } from './types'
 
 /**
  * null 要素を有効なテクスチャの平均寸法で埋める
@@ -14,17 +29,15 @@ import { ParameterSemanticId } from "@xrift/mtoon-atlas"
  * @returns 全て有効な値で埋められたテクスチャ配列
  */
 export function fillNullTexturesWithAverageDimensions(
-  textures: Array<AtlasTextureDescriptor | null>
-): AtlasTextureDescriptor[]
-{
+  textures: Array<AtlasTextureDescriptor | null>,
+): AtlasTextureDescriptor[] {
   // 有効なテクスチャの寸法を収集
   const validTextures = textures.filter(
-    (t): t is AtlasTextureDescriptor => t !== null
+    (t): t is AtlasTextureDescriptor => t !== null,
   )
 
   // 有効なテクスチャがない場合のフォールバック
-  if (validTextures.length === 0)
-  {
+  if (validTextures.length === 0) {
     return textures.map((t) => t ?? { width: 512, height: 512 })
   }
 
@@ -38,8 +51,8 @@ export function fillNullTexturesWithAverageDimensions(
   const roundedWidth = roundToNearestPowerOfTwo(avgWidth)
   const roundedHeight = roundToNearestPowerOfTwo(avgHeight)
 
-  return textures.map((t) =>
-    t ?? { width: roundedWidth, height: roundedHeight }
+  return textures.map(
+    (t) => t ?? { width: roundedWidth, height: roundedHeight },
   )
 }
 
@@ -50,8 +63,7 @@ export function fillNullTexturesWithAverageDimensions(
  * @param value - 丸める値
  * @returns 最も近い 2 の n 乗
  */
-function roundToNearestPowerOfTwo(value: number): number
-{
+function roundToNearestPowerOfTwo(value: number): number {
   if (value <= 0) return 512 // デフォルト値
 
   // 下の 2 の n 乗
@@ -63,7 +75,6 @@ function roundToNearestPowerOfTwo(value: number): number
   return value - lower < upper - value ? lower : upper
 }
 
-
 /**
  * 各チャンネル(例: MainTex, BumpMap)ごとのアトラス画像を生成する
  * 現状はMToonMaterialのみ対応
@@ -72,60 +83,45 @@ function roundToNearestPowerOfTwo(value: number): number
  * @param placements - マテリアルごとのパッキング情報配列
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
-export async function generateAtlasImages(
+export function generateAtlasImages(
   materials: MToonMaterial[],
-  placements: OffsetScale[]
-): Promise<Result<AtlasImageMap, OptimizationError>>
-{
-  if (materials.length !== placements.length)
-  {
-    return err({
-      type: 'INVALID_PARAMETER',
-      message: 'Materials and packing infos length mismatch',
-    })
-  }
-
-  const atlasMap: Partial<AtlasImageMap> = {}
-
-  for (const slot of MTOON_TEXTURE_SLOTS)
-  {
-    const layers: ImageMatrixPair[] = []
-
-    for (let i = 0; i < materials.length; i++)
-    {
-      const mat = materials[i]
-      const placement = placements[i]
-
-      const texture = mat[slot]
-      if (texture)
-      {
-        layers.push({
-          image: texture,
-          uvTransform: placement,
-        })
-      }
-    }
-
-    const atlasResult = composeImagesToAtlas(layers, {
-      width: 2048,
-      height: 2048,
-    })
-
-    if (atlasResult.isErr())
-    {
+  placements: OffsetScale[],
+): Result<AtlasImageMap, OptimizationError> {
+  return safeTry(function* () {
+    if (materials.length !== placements.length) {
       return err({
-        type: 'ATLAS_GENERATION_FAILED',
-        message: `Failed to generate atlas for slot ${slot}: ${atlasResult.error.message}`,
-        cause: atlasResult.error,
+        type: 'INVALID_PARAMETER',
+        message: 'Materials and packing infos length mismatch',
       })
     }
 
-    atlasMap[slot] = atlasResult.value
-  }
+    const atlasMap: Partial<AtlasImageMap> = {}
 
-  return ok(atlasMap as AtlasImageMap)
+    for (const slot of MTOON_TEXTURE_SLOTS) {
+      const layers: ImageMatrixPair[] = []
+
+      for (let i = 0; i < materials.length; i++) {
+        const mat = materials[i]
+        const placement = placements[i]
+
+        const texture = mat[slot]
+        if (texture) {
+          layers.push({
+            image: texture,
+            uvTransform: placement,
+          })
+        }
+      }
+
+      atlasMap[slot] = yield* composeImagesToAtlas(layers, {
+        width: 2048,
+        height: 2048,
+      })
+    }
+
+    return ok(atlasMap as AtlasImageMap)
+  })
 }
-
 
 /**
  * マテリアル配列からパラメータテクスチャを生成
@@ -139,11 +135,9 @@ export async function generateAtlasImages(
  */
 export function createParameterTexture(
   materials: MToonMaterial[],
-  texelsPerSlot: number = 8
-): Result<DataTexture, OptimizationError>
-{
-  if (materials.length === 0)
-  {
+  texelsPerSlot: number = 8,
+): Result<DataTexture, OptimizationError> {
+  if (materials.length === 0) {
     return err({
       type: 'PARAMETER_TEXTURE_FAILED',
       message: 'No materials to pack',
@@ -158,13 +152,11 @@ export function createParameterTexture(
   const data = new Float32Array(width * height * 4)
 
   // 各マテリアル（スロット）について処理
-  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++)
-  {
+  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
     const material = materials[slotIndex]
 
     // 各パラメータをレイアウトに従ってパック
-    for (const layout of PARAMETER_LAYOUT)
-    {
+    for (const layout of PARAMETER_LAYOUT) {
       const value = extractParameterValue(material, layout.id)
       packParameterValue(data, slotIndex, layout, value, texelsPerSlot)
     }
@@ -176,7 +168,6 @@ export function createParameterTexture(
 
   return ok(texture)
 }
-
 
 /**
  * パラメータ値をテクスチャデータにパック
@@ -192,38 +183,30 @@ function packParameterValue(
   slotIndex: number,
   layout: ParameterLayout,
   value: Vector3 | Vector4 | number,
-  texelsPerSlot: number
-): void
-{
+  texelsPerSlot: number,
+): void {
   const texelIndex = layout.texel
   const pixelIndex = slotIndex * texelsPerSlot + texelIndex
   const baseOffset = pixelIndex * 4
 
   // 値を配列化
   let values: number[]
-  if (typeof value === 'number')
-  {
+  if (typeof value === 'number') {
     values = [value]
-  }
-  else if ('w' in value)
-  {
+  } else if ('w' in value) {
     values = [value.x, value.y, value.z, value.w]
-  }
-  else
-  {
+  } else {
     values = [value.x, value.y, value.z]
   }
 
   // チャンネルにパック
-  for (let i = 0; i < layout.channels.length; i++)
-  {
+  for (let i = 0; i < layout.channels.length; i++) {
     const channel = layout.channels[i]
     const channelOffset =
       channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3
     data[baseOffset + channelOffset] = values[i] ?? 0
   }
 }
-
 
 /**
  * MToonMaterialからパラメータ値を抽出
@@ -234,11 +217,9 @@ function packParameterValue(
  */
 function extractParameterValue(
   material: MToonMaterial,
-  semanticId: ParameterSemanticId
-): Vector3 | Vector4 | number
-{
-  switch (semanticId)
-  {
+  semanticId: ParameterSemanticId,
+): Vector3 | Vector4 | number {
+  switch (semanticId) {
     case 'baseColor':
       return colorToVector3(material.color ?? new Color(1, 1, 1))
     case 'shadeColor':
@@ -265,7 +246,7 @@ function extractParameterValue(
       return material.outlineLightingMixFactor ?? 1
     case 'parametricRimColor':
       return colorToVector3(
-        material.parametricRimColorFactor ?? new Color(0, 0, 0)
+        material.parametricRimColorFactor ?? new Color(0, 0, 0),
       )
     case 'parametricRimLift':
       return material.parametricRimLiftFactor ?? 0
@@ -287,21 +268,6 @@ function extractParameterValue(
 /**
  * Three.js Color を Vector3 に変換
  */
-function colorToVector3(color: Color): Vector3
-{
+function colorToVector3(color: Color): Vector3 {
   return new Vector3(color.r, color.g, color.b)
-}
-
-function correctTexturesForPack()
-{
-  // テクスチャ組み合わせパターンを抽出してマッピングを構築
-  const patternMappings = buildPatternMaterialMappings(materials)
-
-  // パターンごとのテクスチャディスクリプタを収集
-  const textureDescriptors = patternMappings.map(m => m.textureDescriptor)
-
-  // width/heightが0のものを有効なテクスチャの平均値で埋める
-  const texturesToPack = fillNullTexturesWithAverageDimensions(
-    textureDescriptors.map(d => (d.width > 0 && d.height > 0) ? d : null)
-  )
 }

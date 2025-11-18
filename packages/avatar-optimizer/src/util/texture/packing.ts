@@ -8,11 +8,11 @@
  * 複数の変種を提供し、高品質なテクスチャレイアウトを生成します。
  */
 
-import { Packer, MaxRectsBssf } from 'rectpack-ts'
+import { MaxRectsBssf, Packer } from 'rectpack-ts'
+import { Rectangle } from 'rectpack-ts/dist/src/geometry'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
+import { Vector2 } from 'three'
 import type { PackingLayouts } from '../material/types'
-import { Vector2 } from 'three';
-import { Rectangle } from 'rectpack-ts/dist/src/geometry';
 
 const ATLAS_SIZE = 2048 // ←相対値しか返さないので割となんでもいい
 const SCALE_SEARCH_EPSILON = 0.0001
@@ -39,10 +39,8 @@ const SCALE_SEARCH_EPSILON = 0.0001
  */
 export function packTexturesWithMaxRects(
   sizes: Array<{ width: number; height: number }>,
-): PackingLayouts
-{
-  if (sizes.length === 0)
-  {
+): PackingLayouts {
+  if (sizes.length === 0) {
     throw new Error('No textures to pack')
   }
 
@@ -60,8 +58,7 @@ export function packTexturesWithMaxRects(
   packer.addBin(ATLAS_SIZE, ATLAS_SIZE)
 
   // 各テクスチャをパッカーに追加（インデックスを rid として保存）
-  sizes.forEach((size, index) =>
-  {
+  sizes.forEach((size, index) => {
     packer.addRect(size.width, size.height, String(index))
   })
 
@@ -70,8 +67,7 @@ export function packTexturesWithMaxRects(
 
   // パッキング結果を取得
   const bins = packer.binList()
-  if (bins.length === 0)
-  {
+  if (bins.length === 0) {
     throw new Error('Packing failed: No bins were created')
   }
 
@@ -89,16 +85,14 @@ export function packTexturesWithMaxRects(
   packed.sort((a, b) => Number(a.rid) - Number(b.rid))
 
   // すべてのテクスチャがパッキングされたか確認
-  if (packed.length !== sizes.length)
-  {
+  if (packed.length !== sizes.length) {
     throw new Error(
       `Packing failed: ${packed.length}/${sizes.length} textures packed. Textures do not fit in atlas.`,
     )
   }
 
   // 複数のビンが使用されていないか確認
-  if (bins.length > 1)
-  {
+  if (bins.length > 1) {
     throw new Error(
       `Packing failed: ${bins.length} bins required, but expected single bin. Textures do not fit in atlas.`,
     )
@@ -123,26 +117,21 @@ export function packTexturesWithMaxRects(
  * @throws テクスチャが 1x1 ピクセルまで縮小されても収まらない場合
  */
 export async function packTexturesWithAutoScaling(
-  sizes: Array<{ width: number; height: number }>
-): Promise<PackingLayouts>
-{
-  if (sizes.length === 0)
-  {
+  sizes: Array<{ width: number; height: number }>,
+): Promise<PackingLayouts> {
+  if (sizes.length === 0) {
     throw new Error('No textures to pack')
   }
 
-  const attemptPack = (scale: number) =>
-  {
+  const attemptPack = (scale: number) => {
     const scaledSizes = scaleTextureSizes(sizes, scale)
     return packTexturesWithMaxRects(scaledSizes)
   }
 
   // まずは等倍でトライし、成功すればそのまま返す
-  try
-  {
+  try {
     return attemptPack(1)
-  } catch
-  {
+  } catch {
     // 続行してスケールを絞り込む
   }
 
@@ -153,77 +142,64 @@ export async function packTexturesWithAutoScaling(
 
   // まずは成功するスケールを見つけるまで指数的に縮小
   let currentScale = 0.5
-  for (let attempt = 0; attempt < 32; attempt++)
-  {
-    if (currentScale < minScaleLimit)
-    {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    if (currentScale < minScaleLimit) {
       currentScale = minScaleLimit
     }
 
-    try
-    {
+    try {
       const result = attemptPack(currentScale)
       lastSuccessScale = currentScale
       lastSuccessResult = result
       break
-    } catch
-    {
+    } catch {
       lastFailedScale = currentScale
-      if (currentScale <= minScaleLimit)
-      {
+      if (currentScale <= minScaleLimit) {
         throw new Error(
-          `Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.`,
+          'Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.',
         )
       }
       currentScale *= 0.5
     }
   }
 
-  if (lastSuccessScale === null || lastSuccessResult === null)
-  {
+  if (lastSuccessScale === null || lastSuccessResult === null) {
     throw new Error(
-      `Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.`,
+      'Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.',
     )
   }
 
   // 高速に見つかった成功スケールがそのまま最適な場合は返す
-  if (lastFailedScale <= lastSuccessScale)
-  {
+  if (lastFailedScale <= lastSuccessScale) {
     return lastSuccessResult
   }
 
   // 失敗（大きい）スケールと成功（小さい）スケールの間で二分探索
   let low = lastSuccessScale
   let high = lastFailedScale
-  for (let i = 0; i < 25; i++)
-  {
-    if (Math.abs(high - low) < SCALE_SEARCH_EPSILON)
-    {
+  for (let i = 0; i < 25; i++) {
+    if (Math.abs(high - low) < SCALE_SEARCH_EPSILON) {
       break
     }
 
     const mid = (low + high) / 2
-    if (mid === low || mid === high)
-    {
+    if (mid === low || mid === high) {
       break
     }
 
-    try
-    {
+    try {
       const result = attemptPack(mid)
       lastSuccessScale = mid
       lastSuccessResult = result
       low = mid
-    } catch
-    {
+    } catch {
       high = mid
     }
   }
 
-  if (lastSuccessResult === null)
-  {
+  if (lastSuccessResult === null) {
     throw new Error(
-      `Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.`,
+      'Failed to pack textures using MaxRects algorithm. Could not fit textures even after scaling down to 1x1 pixels.',
     )
   }
 
@@ -233,24 +209,24 @@ export async function packTexturesWithAutoScaling(
 function scaleTextureSizes(
   originalSizes: Array<{ width: number; height: number }>,
   scaleMultiplier: number,
-): Array<{ width: number; height: number }>
-{
+): Array<{ width: number; height: number }> {
   return originalSizes.map((size) => ({
     width: Math.max(1, Math.floor(size.width * scaleMultiplier)),
     height: Math.max(1, Math.floor(size.height * scaleMultiplier)),
   }))
 }
 
-function computeMinScaleLimit(sizes: Array<{ width: number; height: number }>): number
-{
-  if (sizes.length === 0)
-  {
+function computeMinScaleLimit(
+  sizes: Array<{ width: number; height: number }>,
+): number {
+  if (sizes.length === 0) {
     return 1
   }
 
-  const maxDimension = Math.max(...sizes.map((size) => Math.max(size.width, size.height)))
-  if (maxDimension <= 0)
-  {
+  const maxDimension = Math.max(
+    ...sizes.map((size) => Math.max(size.width, size.height)),
+  )
+  if (maxDimension <= 0) {
     return 1
   }
   return 1 / maxDimension
@@ -270,7 +246,6 @@ function computeMinScaleLimit(sizes: Array<{ width: number; height: number }>): 
  */
 export async function packTextures(
   sizes: Array<{ width: number; height: number }>,
-): Promise<PackingLayouts>
-{
+): Promise<PackingLayouts> {
   return packTexturesWithAutoScaling(sizes)
 }

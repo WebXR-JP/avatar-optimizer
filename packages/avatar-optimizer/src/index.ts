@@ -7,20 +7,20 @@ export { optimizeModel } from './avatar-optimizer'
 
 // Material types
 export type {
-  PackingLayouts as PackingResult,
-  TextureImageData,
-  SlotAtlasImage,
-  MaterialPlacement,
   AtlasBuildResult,
-  UVMapping,
   AtlasResult,
+  MaterialPlacement,
+  PackingLayouts as PackingResult,
+  SlotAtlasImage,
+  TextureImageData,
+  UVMapping,
 } from './util/material/types'
 
 // Root types
 export type {
-  OptimizationOptions,
-  ThreeVRMDocument,
-  TextureSlotInfo,
+  AtlasTextureDescriptor,
   OptimizationError,
-  AtlasTextureDescriptor
+  OptimizationOptions,
+  TextureSlotInfo,
+  ThreeVRMDocument,
 } from './types'

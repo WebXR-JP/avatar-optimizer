@@ -3,15 +3,14 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-import { Matrix3, Mesh, Vector2 } from "three"
-import { OffsetScale } from "../../types"
-import { MToonAtlasMaterial } from "@xrift/mtoon-atlas"
+import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
+import { Matrix3, Mesh } from 'three'
+import { OffsetScale } from '../../types'
 
 /**
  * テクスチャパッキングの結果
  */
-export interface PackingLayouts
-{
+export interface PackingLayouts {
   /** パックされたテクスチャ情報 */
   packed: OffsetScale[]
 }
@@ -19,8 +18,7 @@ export interface PackingLayouts
 /**
  * テクスチャ画像データ
  */
-export interface TextureImageData
-{
+export interface TextureImageData {
   width: number
   height: number
   data: Uint8ClampedArray
@@ -29,8 +27,7 @@ export interface TextureImageData
 /**
  * スロットごとに生成されたアトラス画像
  */
-export interface SlotAtlasImage
-{
+export interface SlotAtlasImage {
   /** アトラス PNG などのバイナリバッファ */
   atlasImage: Uint8Array
   /** アトラス幅 */
@@ -43,8 +40,7 @@ export interface SlotAtlasImage
  * マテリアル単位で適用する UV 変換行列
  * 3x3 行列を一次元配列で保持 (列優先/行優先は利用側と合意)
  */
-export interface MaterialPlacement
-{
+export interface MaterialPlacement {
   /** 3x3 変換行列（9 要素） */
   uvTransform: Matrix3
 }
@@ -52,8 +48,7 @@ export interface MaterialPlacement
 /**
  * アトラス生成結果（ドキュメント非依存のメタデータのみ）
  */
-export interface AtlasBuildResult
-{
+export interface AtlasBuildResult {
   /** スロットごとに生成されたアトラス画像 */
   atlases: SlotAtlasImage[]
   /** 各マテリアルに適用する UV 変換行列 */
@@ -63,8 +58,7 @@ export interface AtlasBuildResult
 /**
  * UV座標マッピング情報
  */
-export interface UVMapping
-{
+export interface UVMapping {
   /** プリミティティブのインデックス */
   primitiveIndex: number
   /** マテリアルのテクスチャスロット */
@@ -80,10 +74,9 @@ export interface UVMapping
 /**
  * テクスチャアトラス化の結果
  */
-export interface AtlasResult
-{
+export interface AtlasResult {
   /** アトラス化されたドキュメント */
-  document: any // Document 型（避けるため any）
+  document: Document
   /** UV座標マッピング情報 */
   mapping: UVMapping[]
   /** アトラス画像のメタデータ */
@@ -98,8 +91,7 @@ export interface AtlasResult
 /**
  * マテリアル結合のオプション
  */
-export interface CombineMaterialOptions
-{
+export interface CombineMaterialOptions {
   /** アトラスサイズ（デフォルト: 2048） */
   atlasSize?: number
   /** スロット属性名（デフォルト: 'mtoonMaterialSlot'） */
@@ -111,8 +103,7 @@ export interface CombineMaterialOptions
 /**
  * マテリアル結合の結果
  */
-export interface CombinedMeshResult
-{
+export interface CombinedMeshResult {
   /** 結合されたメッシュ */
   mesh: Mesh
   /** 使用されたMToonAtlasMaterial */
