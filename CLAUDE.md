@@ -26,16 +26,30 @@
 packages/
 ├── avatar-optimizer/              # メインライブラリ (VRM最適化 + テクスチャアトラス)
 │   ├── src/
-│   │   ├── core/                 # 最適化ロジック
-│   │   ├── texture-atlas/        # 旧 texture-atlas 機能の統合モジュール
-│   │   ├── vrm/                  # VRM 読み込み/エクスポート層
-│   │   ├── index.ts              # ライブラリエクスポート管理
-│   │   └── types.ts              # 型定義集約
-│   ├── tests/                    # Vitest 自動テスト
-│   │   ├── *.test.ts             # 最適化/アトラス/アダプタ検証
-│   │   └── texture-atlas/        # アトラス関連の治具
-│   ├── docs/                     # 仕様メモや VRM マッピング資料
-│   ├── dist/                     # ビルド出力 (ESM/型定義)
+│   │   ├── process/              # 最適化プロセス
+│   │   │   ├── gen-atlas.ts       # テクスチャアトラス生成
+│   │   │   ├── packing.ts         # パッキングアルゴリズム
+│   │   │   └── set-uv.ts          # UV リマッピング
+│   │   ├── util/                 # ユーティリティ
+│   │   │   ├── material/          # マテリアル処理
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── combine.ts
+│   │   │   │   └── types.ts
+│   │   │   ├── mesh/              # メッシュ処理
+│   │   │   │   ├── merge-mesh.ts
+│   │   │   │   ├── uv.ts
+│   │   │   │   └── deleter.ts
+│   │   │   └── texture/           # テクスチャ処理
+│   │   │       ├── index.ts
+│   │   │       ├── composite.ts
+│   │   │       ├── packing.ts
+│   │   │       └── types.ts
+│   │   ├── avatar-optimizer.ts    # メイン API 実装
+│   │   ├── index.ts               # ライブラリエクスポート管理
+│   │   └── types.ts               # 型定義集約
+│   ├── tests/                     # Vitest 自動テスト
+│   │   ├── *.test.ts              # 最適化/アトラス/アダプタ検証
+│   ├── dist/                      # ビルド出力 (ESM/型定義)
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── vitest.config.ts
@@ -51,22 +65,31 @@ packages/
 │   ├── tsup.config.ts
 │   └── README.md
 │
-└── debug-viewer/                 # VRM 表示用の簡易デバッグビューア
+└── debug-viewer/                 # VRM ビューア (React + Three.js)
     ├── src/
-    │   ├── viewer/               # Three.js + three-vrm 実装
-    │   ├── utils/                # レンダリングユーティリティ
-    │   ├── index.ts              # エントリーポイント
-    │   └── types.ts              # 型定義集約
-    ├── __tests__/
-    │   ├── fixtures/             # テスト用 VRM サンプル (git追跡)
-    │   ├── input/                # 手動確認用入力ファイル (.gitignore)
-    │   ├── output/               # manual スクリプト出力 (.gitignore)
-    │   └── manual/               # viewer.manual.ts
-    ├── dist/                     # ビルド出力
+    │   ├── components/            # React コンポーネント
+    │   │   ├── VRMCanvas.tsx
+    │   │   ├── VRMScene.tsx
+    │   │   ├── VRMViewer.tsx
+    │   │   ├── Viewport3D.tsx
+    │   │   ├── TextureViewer.tsx
+    │   │   ├── TexturePreviewScene.tsx
+    │   │   └── index.ts
+    │   ├── hooks/                 # React カスタムフック
+    │   │   ├── useVRMLoader.ts     # VRM 読み込み処理
+    │   │   ├── useVRMScene.ts      # VRM シーン管理
+    │   │   ├── useTextureReplacement.ts
+    │   │   └── index.ts
+    │   ├── assets/                # 静的アセット
+    │   ├── App.tsx                # アプリケーションエントリー
+    │   ├── main.tsx               # React マウントポイント
+    │   └── index.css / App.css    # スタイル定義
+    ├── dist/                      # ビルド出力
     ├── package.json
     ├── tsconfig.json
     ├── vitest.config.ts
-    └── tsup.config.ts
+    ├── vite.config.ts
+    └── index.html
 
 pnpm-workspace.yaml               # workspace 設定
 package.json                       # ルート package.json (scripts 集約)
@@ -135,51 +158,14 @@ pnpm -F debug-viewer run test
 
 テクスチャアトラス機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されたため、個別パッケージ向けのコマンドは不要です。`pnpm -F avatar-optimizer run test` がアトラス関連テストも実行します。
 
-## 重要な開発ルール
+## 開発ルール
 
-1. **React 依存なし**: このライブラリは React に依存しない純粋なユーティリティライブラリです
-3. **モジュール形式**: 名前付きエクスポートを使用 (ESM形式をサポート)
-5. **テスト**: `packages/avatar-optimizer/tests/` や `packages/debug-viewer/tests/` で純粋関数のテストを記述
+2. **モジュール形式**: 名前付きエクスポートを使用 (ESM 形式をサポート)
+3. **テスト**: `packages/avatar-optimizer/tests/` や `packages/debug-viewer/tests/` で純粋関数のテストを記述
 
 ## AI 支援開発のためのコーディング規約
 
 これらの規約は AI コード生成と自己修正向けに最適化されています。AI の誤りを防ぐため複雑性を制約しながらコード品質を維持します。
-
-### テスト駆動開発 (最重要)
-
-**コード実装と共にテストを生成します。** テストは自己修正を可能にする実行可能な仕様として機能します。**すべての関数にテストが必要というわけではなく、カバレッジを指標として適切なテスト範囲を決定します。** 重要なロジック、エラーハンドリング、エッジケースを優先的にテストしてください：
-
-```typescript
-// ❌ 悪い例: テストなしのコード
-export function calculateDistance(a: Vector3, b: Vector3): number {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
-}
-
-// ✅ 良い例: テスト付きのコード
-export function calculateDistance(a: Vector3, b: Vector3): number {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
-}
-
-// tests/utils.test.ts 内
-describe('calculateDistance', () => {
-  it('should calculate distance between two points', () => {
-    const result = calculateDistance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 })
-    expect(result).toBeCloseTo(5)
-  })
-})
-```
-
-**純粋関数 (ロジック検証用)**: 重要なビジネスロジックや複雑な計算は `packages/avatar-optimizer/tests/` や `packages/debug-viewer/__tests__/` で実行する Vitest テストでカバレッジを確保
-
-**手動確認が必要な機能**: テクスチャアトラス化、メッシュ処理、ジオメトリ最適化など視覚的な確認が重要な場合、ブラウザベースのツールで検証します。
-
-`packages/avatar-optimizer/tests/*.test.ts` でロジックを Vitest から実行し、ビジュアル検証はブラウザで行います。
-
-**テスト Fixture フォルダ**:
-
-| フォルダ    | パス                                             | 内容                        | Git 追跡 | 用途               |
-| ----------- | ------------------------------------------------ | --------------------------- | -------- | ------------------ |
-| `fixtures/` | `packages/debug-viewer/__tests__/fixtures/`      | 小さなテスト用 VRM サンプル | ✅ 必須  | CI/CD やテストで使用 |
 
 ### 自己説明的なコード
 
@@ -265,90 +251,24 @@ async function optimizeVRMDocument(
 ### 例外処理のベストプラクティス (neverthrow による Result 型に統一)
 
 エラーハンドリングは `neverthrow` のパターンに統一し、条件判定を簡潔にします。
-
-#### 1. 同期関数またはバリデーション：Result 型
-
-同期関数や純粋なバリデーション処理では `neverthrow` の `Result` 型を使用します：
+内部で例外または Result が発生するパターンでは同期、非同期を問わず原則として Result または ResultAsync を使用する。
+基本的に safeTry を使用し yeild\*でエラーの場合都度 Result を返却
 
 ```typescript
 import { ok, err, Result } from 'neverthrow'
 
-// 同期的なバリデーション：Result 型を返す
-function validateFile(file: File): Result<void, ValidationError> {
-  if (!file) {
-    return err({
-      type: 'INVALID_FILE_TYPE' as const,
-      message: 'File is required',
-    })
-  }
-  if (file.type !== 'model/gltf-binary') {
-    return err({
-      type: 'INVALID_FILE_TYPE' as const,
-      message: 'Expected VRM binary file',
-    })
-  }
-  return ok(undefined)
-}
-
-// 使用
-const validationResult = validateFile(file)
-if (validationResult.isErr()) {
-  console.error(validationResult.error.message)
-  return
-}
-```
-
-#### 2. 非同期関数：ResultAsync（外部向け・内部向け統一）
-
-すべての非同期関数は `ResultAsync` を使用し、エラーハンドリングを型安全に組み立てます。これにより条件判定が統一され、`Promise + throw` の複雑性を排除できます：
-
-```typescript
-import { ResultAsync, ok, err } from 'neverthrow'
-
-// Public API でも内部向けでも ResultAsync を使用
-export function optimizeVRM(
-  file: File,
-  options: OptimizationOptions,
-): ResultAsync<File, OptimizationError> {
-  // ファイル型の同期バリデーション
-  const validationResult = validateFileSync(file)
-  if (validationResult.isErr()) {
-    return ResultAsync.fromSomePromise(Promise.reject(validationResult.error))
-  }
-
-  // 非同期処理をチェーン
-  return ResultAsync.fromPromise(file.arrayBuffer(), (error) => ({
-    type: 'LOAD_FAILED' as const,
-    message: `Failed to read file: ${String(error)}`,
-  }))
-    .andThen((arrayBuffer) =>
-      ResultAsync.fromPromise(loadDocument(arrayBuffer), (error) => ({
-        type: 'DOCUMENT_PARSE_FAILED' as const,
-        message: String(error),
-      })),
-    )
-    .map((document) => processFile(document))
-}
-
-// 内部向けヘルパー
-function _processTextureAsync(
-  texture: Texture,
-): ResultAsync<Texture, ProcessingError> {
-  return ResultAsync.fromPromise(compressTexture(texture), (error) => ({
-    type: 'PROCESSING_FAILED' as const,
-    message: String(error),
-  }))
-}
-
-// チェーン例
-_processTextureAsync(texture)
-  .map((t) => optimizeTexture(t))
-  .andThen((t) => _validateTextureAsync(t))
-  .mapErr((err) => {
-    // 最終的なエラーハンドリング（ロギングなど）
-    console.error(`Error: ${err.message}`)
-    return err
+function someFileProcessingFunc(file: File): Result<ProcessedFile, SomeError> {
+  return safeTry(function* () {
+    if (!file) {
+      return err({
+        type: 'SOME_ERROR_TYPE',
+        message: 'File is required',
+      })
+    }
+    const processedFile = yield* someSubProcessFuncThatReturnResult(file)
+    return ok(processedFile)
   })
+}
 ```
 
 呼び出し側では統一されたパターンで処理します：
@@ -371,21 +291,14 @@ const optimizedFile = result.value
 
 **エラー型の定義** (src/types.ts):
 
+大まかな括りで type を指定する。だいたいパッケージあたり 1 つくらいでいい
+
 ```typescript
 export type OptimizationError =
-  | { type: 'INVALID_FILE_TYPE'; message: string }
-  | { type: 'LOAD_FAILED'; message: string }
-  | { type: 'DOCUMENT_PARSE_FAILED'; message: string }
-  | { type: 'TEXTURE_EXTRACTION_FAILED'; message: string }
-  | { type: 'UNKNOWN_ERROR'; message: string }
-
-export type ValidationError =
-  | { type: 'INVALID_FILE_TYPE'; message: string }
-  | { type: 'VALIDATION_FAILED'; message: string }
-
-export type ProcessingError =
-  | { type: 'PROCESSING_FAILED'; message: string }
-  | OptimizationError
+  | { type: 'ASSET_ERROR'; message: string }
+  | { type: 'INVALID_OPERATION'; message: string }
+  | { type: 'INVALID_PARAMETER'; message: string }
+  | { type: 'INTERNAL_ERROR'; message: string }
 ```
 
 **使い分けの原則**:
@@ -424,13 +337,6 @@ export async function optimizeVRM(
   return _serializeDocument(optimized)
 }
 
-export async function calculateVRMStatistics(
-  file: File,
-): Promise<VRMStatistics> {
-  const document = await _loadVRMDocument(file)
-  return _computeStats(document)
-}
-
 // index.ts (メインエクスポート)
 export { optimizeVRM, calculateVRMStatistics }
 export type { OptimizationOptions, VRMStatistics }
@@ -457,12 +363,6 @@ export type { OptimizationOptions, VRMStatistics }
 
 ピア依存関係を安装するユーザーに対して同じバージョンを強制してください。
 
-**neverthrow の使用対象**:
-
-- ✅ 同期関数の戻り値（Result 型）
-- ✅ 内部向けの複雑な非同期処理（ResultAsync 型）
-- ❌ 外部向けの非同期関数（Promise + throw を使用）
-
 ## Texture-atlas モジュールについて
 
 テクスチャアトラス化機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されています。
@@ -473,17 +373,15 @@ export type { OptimizationOptions, VRMStatistics }
 - `uv-remapping.ts`: UV 書き換え + padding 処理
 - `types.ts`: `atlasBuildResult` などの型定義
 
-ユニットテストは `packages/avatar-optimizer/tests/atlas.test.ts` や `packages/avatar-optimizer/tests/uv-remap.test.ts` にまとまっています。追加の治具は `packages/avatar-optimizer/tests/texture-atlas/` に配置して管理してください。
-
 ## MToon atlas パッケージについて
 
-**@xrift/mtoon-atlas** (`packages/mtoon-atlas/`) はアトラス化したテクスチャを使ってMToonと同等の表現をするための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
+**@xrift/mtoon-atlas** (`packages/mtoon-atlas/`) はアトラス化したテクスチャを使って MToon と同等の表現をするための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
 
 ### 主な機能
 
 - **MToonAtlasMaterial**: MToonMaterial を拡張したクラス
-  - 全19種類の数値パラメータを自動サンプリング（ParameterTexture から）
-  - 8種類のテクスチャマップを自動設定（AtlasedTextureSet から）
+  - 全 19 種類の数値パラメータを自動サンプリング（ParameterTexture から）
+  - 8 種類のテクスチャマップを自動設定（AtlasedTextureSet から）
 - **スロット属性管理**: 頂点属性経由でマテリアルスロットをインスタンスごとに指定
 - **SkinnedMesh 対応**: InstancedMesh 不要でスキニングアニメーションと互換
 
@@ -502,7 +400,7 @@ material.setParameterTexture({
     normal: atlasNormalTexture,
     shade: atlasShadeTexture,
     // 他のテクスチャ...
-  }
+  },
 })
 ```
 
@@ -524,15 +422,7 @@ cat packages/mtoon-atlas/README.md
 
 ### 対応パラメータ
 
-| カテゴリ | パラメータ | テクセル | チャンネル |
-|---------|-----------|---------|----------|
-| 基本カラー | baseColor, shadeColor, emissiveColor, emissiveIntensity | 0-2 | RGB/A |
-| シェーディング | shadingShift, shadingToony, shadingShiftTextureScale | 0-1 | RGB/A |
-| リムライティング | rimLightingMix, parametricRimColor/Lift/FresnelPower | 5-6 | RGB/A |
-| Matcap | matcapColor | 3 | RGB |
-| アウトライン | outlineWidth/Color/LightingMix | 3-4 | RGB/A |
-| UV アニメーション | uvAnimationScrollX/Y/Rotation | 6-7 | RGB/A |
-| ノーマルマップ | normalScale | 7 | RG |
+パッケージ内の README を参照すること
 
 ---
 
