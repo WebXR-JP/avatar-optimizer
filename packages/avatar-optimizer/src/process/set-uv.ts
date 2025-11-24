@@ -17,19 +17,23 @@ import { remapGeometryUVs } from '../util/mesh/uv'
 export function applyPlacementsToGeometries(
   rootNode: Object3D,
   materialPlacementMap: Map<MToonMaterial, OffsetScale>,
-): Result<void[], OptimizationError> {
+): Result<void[], OptimizationError>
+{
   const targets = new Map<BufferGeometry, OffsetScale>()
-  rootNode.traverse((obj) => {
+  rootNode.traverse((obj) =>
+  {
     if (!(obj instanceof Mesh)) return
     if (!(obj.geometry instanceof BufferGeometry)) return
 
     let material: MToonMaterial | null = null
 
-    if (Array.isArray(obj.material)) {
+    if (Array.isArray(obj.material))
+    {
       // Outline付きMToonの場合はOutline用に複数マテリアルになっている
       // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
       material = obj.material[0]
-    } else if (obj.material instanceof MToonMaterial) {
+    } else if (obj.material instanceof MToonMaterial)
+    {
       material = obj.material
     }
 

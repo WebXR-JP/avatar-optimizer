@@ -9,8 +9,17 @@ import { err, ok, Result } from 'neverthrow'
 import { BufferGeometry, Vector2 } from 'three'
 import { OffsetScale, OptimizationError } from '../../types'
 
-function wrapUV(uv: Vector2) {
-  return new Vector2(uv.x - Math.floor(uv.x), uv.y - Math.floor(uv.y))
+function wrapUV(uv: Vector2)
+{
+  let x = uv.x
+  let y = uv.y
+
+  // 0-1の範囲外の場合のみラップする
+  // 1.0 はそのまま 1.0 として扱う（テクスチャの端）
+  if (x < 0 || x > 1) x = x - Math.floor(x)
+  if (y < 0 || y > 1) y = y - Math.floor(y)
+
+  return new Vector2(x, y)
 }
 
 /**
@@ -32,8 +41,10 @@ function applyUVTransform(
   translateV: number,
   startIndex: number = 0,
   endIndex: number = uvArray.length,
-): void {
-  for (let i = startIndex; i < endIndex; i += 2) {
+): void
+{
+  for (let i = startIndex; i < endIndex; i += 2)
+  {
     const oldU = uvArray[i]
     const oldV = uvArray[i + 1]
 
@@ -59,10 +70,12 @@ function applyUVTransform(
 export function remapGeometryUVs(
   geometry: BufferGeometry,
   uvTransform: OffsetScale,
-): Result<void, OptimizationError> {
+): Result<void, OptimizationError>
+{
   // uv 属性を取得
   const uvAttribute = geometry.getAttribute('uv')
-  if (!uvAttribute) {
+  if (!uvAttribute)
+  {
     return err({
       type: 'ASSET_ERROR',
       message: 'UVアトリビュートが存在しません',
@@ -76,7 +89,8 @@ export function remapGeometryUVs(
       type: 'ASSET_ERROR',
       message: 'UVアトリビュート配列が存在しません',
     })
-  if (uvAttribute.itemSize !== 2) {
+  if (uvAttribute.itemSize !== 2)
+  {
     return err({
       type: 'ASSET_ERROR',
       message: 'UVアトリビュートの要素数が2ではありません',
