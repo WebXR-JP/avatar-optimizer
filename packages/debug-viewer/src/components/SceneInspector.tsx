@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton } from '@mui/material';
+import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button } from '@mui/material';
 import { ExpandLess, ExpandMore } from '@mui/icons-material';
 import * as THREE from 'three';
 import { VRM } from '@pixiv/three-vrm';
+
 
 interface SceneInspectorProps
 {
@@ -110,6 +111,15 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
       <Typography variant="caption" display="block" gutterBottom sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
         UUID: {object.uuid}
       </Typography>
+
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={() => console.log(object)}
+        sx={{ mt: 1, mb: 1 }}
+      >
+        Log to Console
+      </Button>
 
       <Divider sx={{ my: 2 }} />
 

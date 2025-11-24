@@ -207,7 +207,58 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       this.uniforms.uTexelsPerSlot.value = 8
     }
 
+    this._updateDefines()
+
     return this
+  }
+
+  /**
+   * Definesを更新
+   */
+  private _updateDefines(): void
+  {
+    if (!this.defines) return
+
+    const uniforms = this.uniforms
+
+    const setDefine = (name: string, condition: boolean) =>
+    {
+      if (condition)
+      {
+        this.defines![name] = ''
+      } else
+      {
+        delete this.defines![name]
+      }
+    }
+
+    setDefine('USE_MAP', !!uniforms.map.value)
+    setDefine('USE_SHADEMULTIPLYTEXTURE', !!uniforms.shadeMultiplyTexture.value)
+    setDefine('USE_SHADINGSHIFTTEXTURE', !!uniforms.shadingShiftTexture.value)
+    setDefine('USE_NORMALMAP', !!uniforms.normalMap.value)
+    setDefine('USE_EMISSIVEMAP', !!uniforms.emissiveMap.value)
+    setDefine('USE_MATCAPTEXTURE', !!uniforms.matcapTexture.value)
+    setDefine('USE_RIMMULTIPLYTEXTURE', !!uniforms.rimMultiplyTexture.value)
+    setDefine('USE_UVANIMATIONMASKTEXTURE', !!uniforms.uvAnimationMaskTexture.value)
+
+    // UVを使用するかどうか
+    // テクスチャを使用する場合、またはUVアニメーションが有効な場合に有効化
+    const useUv =
+      !!uniforms.map.value ||
+      !!uniforms.shadeMultiplyTexture.value ||
+      !!uniforms.shadingShiftTexture.value ||
+      !!uniforms.normalMap.value ||
+      !!uniforms.emissiveMap.value ||
+      !!uniforms.matcapTexture.value ||
+      !!uniforms.rimMultiplyTexture.value ||
+      !!uniforms.uvAnimationMaskTexture.value ||
+      this.uniforms.uvAnimationScrollXOffset.value !== 0.0 ||
+      this.uniforms.uvAnimationScrollYOffset.value !== 0.0 ||
+      this.uniforms.uvAnimationRotationPhase.value !== 0.0
+
+    setDefine('MTOON_USE_UV', useUv)
+
+    this.needsUpdate = true
   }
 
   /**
