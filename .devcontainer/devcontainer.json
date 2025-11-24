@@ -11,12 +11,15 @@
 		}
 	},
 	"mounts": [
-		"source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-		"source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+		// 履歴や設定が保存されるディレクトリをマウント
+		"source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached",
+		// 認証情報が保存されるファイルをマウント
+		"source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind,consistency=cached",
 		"source=codex-config-${devcontainerId},target=/home/node/.codex,type=volume",
 		"source=gemini-cli-config-${devcontainerId},target=/home/node/.gemini,type=volume",
 		"source=opencode-config-${devcontainerId},target=/home/node/.opencode,type=volume",
-		"source=pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume"
+		"source=pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume",
+		"source=${localWorkspaceFolder}/../react-three-fiber,target=/workspaces/avatar-optimizer/react-three-fiber,type=bind"
 	],
 	"containerEnv": {
 		"NODE_OPTIONS": "--max-old-space-size=4096",
