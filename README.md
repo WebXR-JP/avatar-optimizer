@@ -61,7 +61,7 @@ packages/
 
 **avatar-optimizer:**
 
-- `optimizeModelMaterials()` - Three.js マテリアル最適化（完全実装）
+- `optimizeModel()` - Three.js マテリアル最適化（完全実装）
 - `combineMToonMaterials()` - マテリアル結合処理（724 行）
 - `createParameterTexture()` - パラメータテクスチャ生成（19 パラメータ対応）
 - `packTextures()` - MaxRects テクスチャパッキング
@@ -107,7 +107,7 @@ packages/
 
 ## API
 
-### `optimizeModelMaterials(objects: Object3D[], options?: OptimizationOptions): ResultAsync<OptimizedMaterialResult, MaterialOptimizationError>`
+### `optimizeModel(objects: Object3D[], options?: OptimizationOptions): ResultAsync<OptimizedMaterialResult, MaterialOptimizationError>`
 
 Three.js オブジェクトのマテリアルを最適化します。複数の MToonNodeMaterial をテクスチャパッキング・アトラス化し、MToonInstancingMaterial に統合します。
 
