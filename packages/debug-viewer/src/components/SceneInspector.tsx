@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button } from '@mui/material';
-import { ExpandLess, ExpandMore } from '@mui/icons-material';
+import { ExpandLess, ExpandMore, GridOn } from '@mui/icons-material';
 import * as THREE from 'three';
 import { VRM } from '@pixiv/three-vrm';
+import { UVPreviewDialog } from './UVPreviewDialog';
 
 
 interface SceneInspectorProps
@@ -100,6 +101,8 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
     return (obj as THREE.Mesh).isMesh;
   };
 
+  const [uvPreviewOpen, setUvPreviewOpen] = useState(false);
+
   return (
     <Box sx={{ p: 2, color: 'black' }}>
       <Typography variant="h6" gutterBottom color="inherit">
@@ -120,6 +123,25 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
       >
         Log to Console
       </Button>
+
+      {isMesh(object) && (
+        <>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<GridOn />}
+            onClick={() => setUvPreviewOpen(true)}
+            sx={{ mt: 1, mb: 1, ml: 1 }}
+          >
+            Show UV
+          </Button>
+          <UVPreviewDialog
+            open={uvPreviewOpen}
+            onClose={() => setUvPreviewOpen(false)}
+            mesh={object}
+          />
+        </>
+      )}
 
       <Divider sx={{ my: 2 }} />
 
