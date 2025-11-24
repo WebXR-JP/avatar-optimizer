@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VRM } from '@pixiv/three-vrm'
-import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
+import { optimizeModel } from '@xrift/avatar-optimizer'
 import { loadVRM, loadVRMFromFile } from '../hooks'
 import VRMCanvas from './VRMCanvas'
 import './VRMViewer.css'
@@ -71,7 +71,7 @@ function VRMViewer() {
     setError(null)
 
     try {
-      await optimizeModelMaterials(vrm.scene)
+      await optimizeModel(vrm.scene)
     } catch (err) {
       console.error(err)
       setError(`Optimization failed: ${String(err)}`)

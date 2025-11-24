@@ -1,10 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react'
 import type { VRM } from '@pixiv/three-vrm'
-import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
+import { optimizeModel } from '@xrift/avatar-optimizer'
 import VRMCanvas from './VRMCanvas'
 import './Viewport3D.css'
 
-interface Viewport3DProps {
+interface Viewport3DProps
+{
   vrm: VRM | null
   isLoading: boolean
   error: string | null
@@ -22,25 +23,31 @@ function Viewport3D({
   error,
   onFileChange,
   onError,
-}: Viewport3DProps) {
+}: Viewport3DProps)
+{
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
 
-  const handleButtonClick = useCallback(() => {
+  const handleButtonClick = useCallback(() =>
+  {
     fileInputRef.current?.click()
   }, [])
 
-  const handleOptimizeClick = useCallback(async () => {
+  const handleOptimizeClick = useCallback(async () =>
+  {
     if (!vrm) return
 
     setIsOptimizing(true)
     onError('')
 
-    try {
-      await optimizeModelMaterials(vrm.scene)
-    } catch (err) {
+    try
+    {
+      await optimizeModel(vrm.scene)
+    } catch (err)
+    {
       onError(`Optimization failed: ${String(err)}`)
-    } finally {
+    } finally
+    {
       setIsOptimizing(false)
     }
   }, [vrm, onError])

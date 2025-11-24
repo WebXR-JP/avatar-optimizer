@@ -35,8 +35,8 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 }
 
 /**
- * 複数のMToonMaterialを単一のMToonInstancingMaterialに結合
- * Meshには元のマテリアル識別用の頂点アトリビュートを埋め込む
+ * 複数のMToonMaterialを単一のMToonAtlasMaterialに結合
+ * Meshは統合して元のマテリアル識別用の頂点アトリビュートを埋め込む
  *
  * @param materialMeshMap - 最適化対象のマテリアルと、それを利用するMeshの組のデータ
  * @param options - 結合オプション
@@ -45,8 +45,10 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 export function combineMToonMaterials(
   materialMeshMap: Map<MToonMaterial, Mesh[]>,
   options: CombineMaterialOptions = {},
-): Result<CombinedMeshResult, OptimizationError> {
-  return safeTry(function* () {
+): Result<CombinedMeshResult, OptimizationError>
+{
+  return safeTry(function* ()
+  {
     const opts = { ...DEFAULT_OPTIONS, ...options }
 
     const materials = Array.from(materialMeshMap.keys())
@@ -62,7 +64,8 @@ export function combineMToonMaterials(
     const materialSlotIndex = new Map<MToonMaterial, number>()
 
     // マテリアルをスロットインデックスにマッピング
-    materials.forEach((mat, index) => {
+    materials.forEach((mat, index) =>
+    {
       materialSlotIndex.set(mat, index)
     })
 
@@ -70,15 +73,18 @@ export function combineMToonMaterials(
     const meshToSlotIndex = new Map<Mesh, number>()
     const meshesForMerge: Mesh[] = []
 
-    for (const [material, meshList] of materialMeshMap) {
+    for (const [material, meshList] of materialMeshMap)
+    {
       const slotIndex = materialSlotIndex.get(material) ?? 0
-      for (const mesh of meshList) {
+      for (const mesh of meshList)
+      {
         meshToSlotIndex.set(mesh, slotIndex)
         meshesForMerge.push(mesh)
       }
     }
 
-    if (meshesForMerge.length === 0) {
+    if (meshesForMerge.length === 0)
+    {
       return err({
         type: 'ASSET_ERROR',
         message: 'マージ対象のメッシュがありません',
@@ -86,14 +92,15 @@ export function combineMToonMaterials(
     }
 
     // 5. マテリアルスロットアトリビュートを追加してジオメトリ結合
-    const mergedGeometry = yield* mergeGeometriesWithSlotAttribute(
+    const mergedGeometries = yield* mergeGeometriesWithSlotAttribute(
       meshesForMerge,
       meshToSlotIndex,
       opts.slotAttributeName,
     )
+    const mergedGeometry = mergedGeometries[0]
 
-    // 6. MToonInstancingMaterialの作成
-    const instancingMaterial = createMToonInstancingMaterial(
+    // 6. MToonAtlasMaterialの作成
+    const atlasMaterial = createMToonAtlasMaterial(
       materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
       parameterTexture,
       materials.length, // スロット数
@@ -102,12 +109,12 @@ export function combineMToonMaterials(
     )
 
     // 7. 結合メッシュの作成
-    const combinedMesh = new Mesh(mergedGeometry, instancingMaterial)
+    const combinedMesh = new Mesh(mergedGeometry, atlasMaterial)
     combinedMesh.name = 'CombinedMToonMesh'
 
     return ok({
       mesh: combinedMesh,
-      material: instancingMaterial,
+      material: atlasMaterial,
       statistics: {
         originalMeshCount: meshesForMerge.length,
         originalMaterialCount: materials.length,
@@ -130,39 +137,48 @@ export function combineMToonMaterials(
  * @param slotAttributeName - スロット属性名
  * @returns MToonInstancingMaterial
  */
-function createMToonInstancingMaterial(
+function createMToonAtlasMaterial(
   representativeMaterial: MToonMaterial,
   parameterTexture: DataTexture,
   slotCount: number,
   texelsPerSlot: number,
   slotAttributeName: string,
-): MToonAtlasMaterial {
+): MToonAtlasMaterial
+{
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
 
   // 代表マテリアルからアトラス化テクスチャを取得
-  if (representativeMaterial.map) {
+  if (representativeMaterial.map)
+  {
     atlasedTextures.baseColor = representativeMaterial.map
   }
-  if (representativeMaterial.shadeMultiplyTexture) {
+  if (representativeMaterial.shadeMultiplyTexture)
+  {
     atlasedTextures.shade = representativeMaterial.shadeMultiplyTexture
   }
-  if (representativeMaterial.shadingShiftTexture) {
+  if (representativeMaterial.shadingShiftTexture)
+  {
     atlasedTextures.shadingShift = representativeMaterial.shadingShiftTexture
   }
-  if (representativeMaterial.normalMap) {
+  if (representativeMaterial.normalMap)
+  {
     atlasedTextures.normal = representativeMaterial.normalMap
   }
-  if (representativeMaterial.emissiveMap) {
+  if (representativeMaterial.emissiveMap)
+  {
     atlasedTextures.emissive = representativeMaterial.emissiveMap
   }
-  if (representativeMaterial.matcapTexture) {
+  if (representativeMaterial.matcapTexture)
+  {
     atlasedTextures.matcap = representativeMaterial.matcapTexture
   }
-  if (representativeMaterial.rimMultiplyTexture) {
+  if (representativeMaterial.rimMultiplyTexture)
+  {
     atlasedTextures.rim = representativeMaterial.rimMultiplyTexture
   }
-  if (representativeMaterial.uvAnimationMaskTexture) {
+  if (representativeMaterial.uvAnimationMaskTexture)
+  {
     atlasedTextures.uvAnimationMask =
       representativeMaterial.uvAnimationMaskTexture
   }

@@ -3,10 +3,11 @@ import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
-import { optimizeModelMaterials } from '@xrift/avatar-optimizer'
+import { optimizeModel } from '@xrift/avatar-optimizer'
 import './VRMCanvas.css'
 
-interface VRMCanvasProps {
+interface VRMCanvasProps
+{
   vrm: VRM | null
   currentTab: number
   isLoading: boolean
@@ -23,12 +24,15 @@ interface VRMCanvasProps {
 /**
  * カメラアスペクト比を容器の実際のサイズに動的に調整するコンポーネント
  */
-function CameraAspectUpdater() {
+function CameraAspectUpdater()
+{
   const { camera, size } = useThree()
   const perspectiveCamera = camera as PerspectiveCamera
 
-  useEffect(() => {
-    if (perspectiveCamera.type === 'PerspectiveCamera') {
+  useEffect(() =>
+  {
+    if (perspectiveCamera.type === 'PerspectiveCamera')
+    {
       const aspect = size.width / size.height
       perspectiveCamera.aspect = aspect
       perspectiveCamera.updateProjectionMatrix()
@@ -56,11 +60,13 @@ function VRMCanvas({
   onExportGLTF,
   onReplaceTextures,
   isReplacingTextures,
-}: VRMCanvasProps) {
+}: VRMCanvasProps)
+{
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleButtonClick = useCallback(() => {
+  const handleButtonClick = useCallback(() =>
+  {
     fileInputRef.current?.click()
   }, [])
 

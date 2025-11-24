@@ -22,7 +22,8 @@ import type {
  *
  * パラメータテクスチャベースの統合 MToon マテリアル
  */
-export class MToonAtlasMaterial extends THREE.ShaderMaterial {
+export class MToonAtlasMaterial extends THREE.ShaderMaterial
+{
   /**
    * マテリアル識別フラグ
    */
@@ -74,7 +75,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @param parameters オプション
    */
-  constructor(parameters?: MToonAtlasOptions) {
+  constructor(parameters?: MToonAtlasOptions)
+  {
     super({
       vertexShader,
       fragmentShader,
@@ -83,6 +85,9 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
       fog: true,
       lights: true,
       clipping: true,
+      defines: {
+        THREE_VRM_THREE_REVISION: parseInt(THREE.REVISION).toString(),
+      },
     })
 
     // Uniform 初期化
@@ -139,26 +144,32 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
     ]) as typeof this.uniforms
 
     // パラメータ適用
-    if (parameters) {
+    if (parameters)
+    {
       // Uniform を設定
-      if (parameters.color !== undefined) {
+      if (parameters.color !== undefined)
+      {
         this.uniforms.litFactor.value.set(parameters.color)
       }
-      if (parameters.emissive !== undefined) {
+      if (parameters.emissive !== undefined)
+      {
         this.uniforms.emissive.value.set(parameters.emissive)
       }
-      if (parameters.emissiveIntensity !== undefined) {
+      if (parameters.emissiveIntensity !== undefined)
+      {
         this.uniforms.emissiveIntensity.value = parameters.emissiveIntensity
       }
     }
 
     // パラメータテクスチャ設定
-    if (parameters?.parameterTexture) {
+    if (parameters?.parameterTexture)
+    {
       this.setParameterTexture(parameters.parameterTexture)
     }
 
     // スロット属性設定
-    if (parameters?.slotAttribute) {
+    if (parameters?.slotAttribute)
+    {
       this.setSlotAttribute(parameters.slotAttribute)
     }
   }
@@ -169,10 +180,12 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    * @param descriptor パラメータテクスチャディスクリプタ
    * @returns this（チェーン可能）
    */
-  setParameterTexture(descriptor: ParameterTextureDescriptor | null): this {
+  setParameterTexture(descriptor: ParameterTextureDescriptor | null): this
+  {
     this._parameterTexture = descriptor ?? undefined
 
-    if (descriptor) {
+    if (descriptor)
+    {
       // パラメータテクスチャをセット
       this.uniforms.uParameterTexture.value = descriptor.texture
       this.uniforms.uParameterTextureSize.value.set(
@@ -182,10 +195,12 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
       this.uniforms.uTexelsPerSlot.value = descriptor.texelsPerSlot
 
       // atlasedTextures がある場合、自動的にテクスチャをマッピング
-      if (descriptor.atlasedTextures) {
+      if (descriptor.atlasedTextures)
+      {
         this._setAtlasedTextures(descriptor.atlasedTextures)
       }
-    } else {
+    } else
+    {
       // パラメータテクスチャをクリア
       this.uniforms.uParameterTexture.value = null
       this.uniforms.uParameterTextureSize.value.set(1, 1)
@@ -201,7 +216,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    * @param config スロット属性設定
    * @returns this（チェーン可能）
    */
-  setSlotAttribute(config: MaterialSlotAttributeConfig): this {
+  setSlotAttribute(config: MaterialSlotAttributeConfig): this
+  {
     this._slotAttribute = config
 
     // TODO: ジオメトリと連動するメタデータの更新（必要に応じて）
@@ -214,7 +230,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @returns パラメータテクスチャディスクリプタ
    */
-  get parameterTexture(): ParameterTextureDescriptor | undefined {
+  get parameterTexture(): ParameterTextureDescriptor | undefined
+  {
     return this._parameterTexture
   }
 
@@ -223,7 +240,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @returns スロット属性設定
    */
-  get slotAttribute(): MaterialSlotAttributeConfig {
+  get slotAttribute(): MaterialSlotAttributeConfig
+  {
     return this._slotAttribute
   }
 
@@ -233,30 +251,39 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    * @param atlases アトラス化テクスチャセット
    * @internal
    */
-  private _setAtlasedTextures(atlases: AtlasedTextureSet): void {
+  private _setAtlasedTextures(atlases: AtlasedTextureSet): void
+  {
     // 各テクスチャを uniforms に設定
-    if (atlases.baseColor) {
+    if (atlases.baseColor)
+    {
       this.uniforms.map.value = atlases.baseColor
     }
-    if (atlases.shade) {
+    if (atlases.shade)
+    {
       this.uniforms.shadeMultiplyTexture.value = atlases.shade
     }
-    if (atlases.shadingShift) {
+    if (atlases.shadingShift)
+    {
       this.uniforms.shadingShiftTexture.value = atlases.shadingShift
     }
-    if (atlases.normal) {
+    if (atlases.normal)
+    {
       this.uniforms.normalMap.value = atlases.normal
     }
-    if (atlases.emissive) {
+    if (atlases.emissive)
+    {
       this.uniforms.emissiveMap.value = atlases.emissive
     }
-    if (atlases.matcap) {
+    if (atlases.matcap)
+    {
       this.uniforms.matcapTexture.value = atlases.matcap
     }
-    if (atlases.rim) {
+    if (atlases.rim)
+    {
       this.uniforms.rimMultiplyTexture.value = atlases.rim
     }
-    if (atlases.uvAnimationMask) {
+    if (atlases.uvAnimationMask)
+    {
       this.uniforms.uvAnimationMaskTexture.value = atlases.uvAnimationMask
     }
   }
@@ -267,11 +294,13 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    * @param source ソースマテリアル
    * @returns this
    */
-  copy(source: this): this {
+  copy(source: this): this
+  {
     super.copy(source)
 
     // パラメータテクスチャのコピー
-    if (source._parameterTexture) {
+    if (source._parameterTexture)
+    {
       this._parameterTexture = { ...source._parameterTexture }
       this.setParameterTexture(this._parameterTexture)
     }
@@ -287,7 +316,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @returns クローンされたマテリアル
    */
-  clone(): this {
+  clone(): this
+  {
     const cloned = new MToonAtlasMaterial() as this
 
     // 親クラスのコピー（uniforms を含む）
@@ -303,12 +333,15 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial {
    *
    * @param deltaTime フレーム経過時間（秒）
    */
-  update(_deltaTime: number): void {
+  update(_deltaTime: number): void
+  {
     // UV アニメーション更新
-    if (this.uniforms.uvAnimationScrollXOffset && this.uniforms.uvAnimationScrollYOffset && this.uniforms.uvAnimationRotationPhase) {
+    if (this.uniforms.uvAnimationScrollXOffset && this.uniforms.uvAnimationScrollYOffset && this.uniforms.uvAnimationRotationPhase)
+    {
       // パラメータテクスチャから UV アニメーション値を取得して、オフセットを加算
       const paramTexture = this._parameterTexture
-      if (paramTexture) {
+      if (paramTexture)
+      {
         // TODO: パラメータテクスチャからサンプリングした値でアニメーション計算
         // 現在は単純な時間ベースの更新のみ
         // フレームレート非依存にするため、_deltaTime を使用

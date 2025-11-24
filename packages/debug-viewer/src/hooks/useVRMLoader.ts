@@ -1,8 +1,7 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { MToonMaterialLoaderPlugin, VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
+import { VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
 import { ResultAsync } from 'neverthrow'
 import type { GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
 
 export type VRMLoaderError =
   | { type: 'VRM_LOAD_FAILED'; message: string }
@@ -21,11 +20,7 @@ export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError>
     (async () =>
     {
       const loader = new GLTFLoader()
-      loader.register(parser => new VRMLoaderPlugin(parser, {
-        mtoonMaterialPlugin: new MToonMaterialLoaderPlugin(parser, {
-          materialType: MToonNodeMaterial
-        })
-      }))
+      loader.register(parser => new VRMLoaderPlugin(parser))
 
       const gltf = await loader.loadAsync(url)
       const vrm = gltf.userData.vrm as VRM | undefined
