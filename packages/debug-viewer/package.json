@@ -16,11 +16,12 @@
     "@mui/material": "^7.3.5",
     "@pixiv/three-vrm": "^3.4.4",
     "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "file:../../react-three-fiber/packages/fiber",
+    "@react-three/fiber": "^9.4.0",
     "@xrift/avatar-optimizer": "workspace:*",
     "neverthrow": "^8.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6",
     "three": "^0.181.1"
   },
   "devDependencies": {

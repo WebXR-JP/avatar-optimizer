@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Tabs, Tab } from '@mui/material'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { VRM } from '@pixiv/three-vrm'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
@@ -9,16 +10,44 @@ import './App.css'
 
 function App()
 {
-  const [currentTab, setCurrentTab] = useState(0)
+  const navigate = useNavigate()
+  const location = useLocation()
   const [vrm, setVRM] = useState<VRM | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [isReplacingTextures, setIsReplacingTextures] = useState(false)
 
+  // URLに基づいて現在のタブインデックスを決定
+  const getTabValue = (pathname: string) =>
+  {
+    if (pathname.startsWith('/textures')) return 1
+    if (pathname.startsWith('/inspector')) return 2
+    if (pathname.startsWith('/settings')) return 3
+    return 0
+  }
+
+  const currentTab = getTabValue(location.pathname)
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) =>
   {
-    setCurrentTab(newValue)
+    switch (newValue)
+    {
+      case 0:
+        navigate('/')
+        break
+      case 1:
+        navigate('/textures')
+        break
+      case 2:
+        navigate('/inspector')
+        break
+      case 3:
+        navigate('/settings')
+        break
+      default:
+        navigate('/')
+    }
   }
 
   // 起動時にデフォルト VRM を読み込み
@@ -88,7 +117,7 @@ function App()
     }
 
     const optimizationResult = result.value
-    if (optimizationResult.combinedMesh)
+    if (optimizationResult.mesh)
     {
       console.log('Optimization successful:', optimizationResult.statistics)
     }
@@ -213,60 +242,70 @@ function App()
           isReplacingTextures={isReplacingTextures}
         />
 
-        {/* Textures タブの場合はオーバーレイ */}
-        {currentTab === 1 && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'white',
-              overflow: 'auto',
-              zIndex: 10,
-            }}
-          >
-            <TextureViewer vrm={vrm} />
-          </Box>
-        )}
-
-        {/* Scene Inspector タブの場合はオーバーレイ */}
-        {currentTab === 2 && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'white',
-              overflow: 'hidden',
-              zIndex: 10,
-            }}
-          >
-            <SceneInspector vrm={vrm} />
-          </Box>
-        )}
-
-        {/* Settings タブの場合はオーバーレイ */}
-        {currentTab === 3 && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'white',
-              overflow: 'auto',
-              zIndex: 10,
-              p: 2,
-            }}
-          >
-            <p>Settings tab (coming soon)</p>
-          </Box>
-        )}
+        {/* Routes でオーバーレイを管理 */}
+        <Routes>
+          <Route path="/" element={null} />
+          <Route
+            path="/textures"
+            element={
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'white',
+                  overflow: 'auto',
+                  zIndex: 10,
+                }}
+              >
+                <TextureViewer vrm={vrm} />
+              </Box>
+            }
+          />
+          <Route
+            path="/inspector"
+            element={
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'white',
+                  overflow: 'hidden',
+                  zIndex: 10,
+                }}
+              >
+                <SceneInspector vrm={vrm} />
+              </Box>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'white',
+                  overflow: 'auto',
+                  zIndex: 10,
+                  p: 2,
+                }}
+              >
+                <p>Settings tab (coming soon)</p>
+              </Box>
+            }
+          />
+          {/* 未定義のパスはルートにリダイレクト */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Box>
     </Box>
   )
