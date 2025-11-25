@@ -57,6 +57,13 @@ packages/
 │
 ├── mtoon-atlas/             # MToon Atlas マテリアル
 │   ├── src/
+│   │   ├── shaders/
+│   │   │   ├── mtoon.frag
+│   │   │   └── mtoon.vert
+│   │   ├── MToonAtlasMaterial.ts
+│   │   ├── declarations.d.ts
+│   │   ├── index.ts
+│   │   └── types.ts
 │   ├── tests/                    # Vitest テスト
 │   ├── dist/                     # ビルド出力
 │   ├── package.json
@@ -74,6 +81,8 @@ packages/
     │   │   ├── Viewport3D.tsx
     │   │   ├── TextureViewer.tsx
     │   │   ├── TexturePreviewScene.tsx
+    │   │   ├── SceneInspector.tsx
+    │   │   ├── UVPreviewDialog.tsx
     │   │   └── index.ts
     │   ├── hooks/                 # React カスタムフック
     │   │   ├── useVRMLoader.ts     # VRM 読み込み処理
@@ -156,7 +165,7 @@ pnpm -F debug-viewer run dev
 pnpm -F debug-viewer run test
 ```
 
-テクスチャアトラス機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されたため、個別パッケージ向けのコマンドは不要です。`pnpm -F avatar-optimizer run test` がアトラス関連テストも実行します。
+テクスチャアトラス機能は `packages/avatar-optimizer/src/process/` および `packages/avatar-optimizer/src/util/texture/` に分散して実装されています。`pnpm -F avatar-optimizer run test` がアトラス関連テストも実行します。
 
 ## 開発ルール
 
@@ -363,15 +372,18 @@ export type { OptimizationOptions, VRMStatistics }
 
 ピア依存関係を安装するユーザーに対して同じバージョンを強制してください。
 
-## Texture-atlas モジュールについて
+## Texture-atlas 機能について
 
-テクスチャアトラス化機能は `packages/avatar-optimizer/src/texture-atlas/` に統合されています。
+ テクスチャアトラス化機能は以下のディレクトリに分散して実装されています。
 
-- `index.ts`: `buildTextureatlas` などメイン API をエクスポート
-- `packing.ts`: Bin packing/Island 配置アルゴリズム
-- `image.ts`: Jimp/canvas を用いた画像合成
-- `uv-remapping.ts`: UV 書き換え + padding 処理
-- `types.ts`: `atlasBuildResult` などの型定義
+ - `packages/avatar-optimizer/src/process/`:
+   - `gen-atlas.ts`: テクスチャアトラス生成のメインロジック
+   - `packing.ts`: パッキングの準備とパターン抽出
+   - `set-uv.ts`: UV リマッピング処理
+ - `packages/avatar-optimizer/src/util/texture/`:
+   - `composite.ts`: 画像合成処理
+   - `packing.ts`: Bin packing アルゴリズム
+   - `types.ts`: テクスチャ関連の型定義
 
 ## MToon atlas パッケージについて
 
