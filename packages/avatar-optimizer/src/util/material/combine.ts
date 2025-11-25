@@ -121,13 +121,22 @@ export function combineMToonMaterials(
       const skinnedMesh = new SkinnedMesh(mergedGeometry, atlasMaterial)
       skinnedMesh.name = 'CombinedMToonMesh'
 
-      // 最初のSkinnedMeshからskeletonとbindMatrixをコピー
-      if (firstSkinnedMesh.skeleton)
+      // 統合されたスケルトンを使用
+      if (mergedGeometry.userData.skeleton)
       {
-        skinnedMesh.bind(
-          firstSkinnedMesh.skeleton,
-          firstSkinnedMesh.bindMatrix,
-        )
+        const skeleton = mergedGeometry.userData.skeleton
+
+        // bindMatrixは単位行列（Identity）を使用する
+        // merge-mesh.tsで各メッシュのbindMatrixを適用済みのため、
+        // 頂点はすでにスケルトン空間（bindMatrix適用後の空間）にある
+        const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+        skinnedMesh.bind(skeleton, identityMatrix)
+      }
+      // フォールバック：最初のSkinnedMeshからskeletonをコピー（通常はここには来ない）
+      else if (firstSkinnedMesh.skeleton)
+      {
+        const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+        skinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
       }
 
       combinedMesh = skinnedMesh

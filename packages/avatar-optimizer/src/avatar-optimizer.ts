@@ -5,12 +5,13 @@ import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { OffsetScale, OptimizationError } from './types'
-import {
-  assignAtlasTexturesToMaterial,
-  CombinedMeshResult,
-  combineMToonMaterials as combineMeshAndMaterial,
-  getMToonMaterialsWithMeshesFromObject3D,
-} from './util/material'
+import
+  {
+    assignAtlasTexturesToMaterial,
+    CombinedMeshResult,
+    combineMToonMaterials as combineMeshAndMaterial,
+    getMToonMaterialsWithMeshesFromObject3D,
+  } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 
 /**
@@ -26,8 +27,10 @@ import { deleteMesh } from './util/mesh/deleter'
  */
 export function optimizeModel(
   rootNode: Object3D,
-): ResultAsync<CombinedMeshResult, OptimizationError> {
-  return safeTry(async function* () {
+): ResultAsync<CombinedMeshResult, OptimizationError>
+{
+  return safeTry(async function* ()
+  {
     // モデルのマテリアル集計
     const materialMeshMap =
       yield* getMToonMaterialsWithMeshesFromObject3D(rootNode)
@@ -48,9 +51,11 @@ export function optimizeModel(
 
     // アトラス画像をマテリアルにそれぞれアサインする
     const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
-    patternMappings.forEach((mapping, index) => {
+    patternMappings.forEach((mapping, index) =>
+    {
       const placement = packLayouts.packed[index]
-      for (const materialIndex of mapping.materialIndices) {
+      for (const materialIndex of mapping.materialIndices)
+      {
         const material = materials[materialIndex]
         assignAtlasTexturesToMaterial(material, atlasMap)
         materialPlacementMap.set(material, placement)
@@ -66,18 +71,24 @@ export function optimizeModel(
 
     // 元のrootNodeから既存のメッシュを削除
     const meshesToRemove: Mesh[] = []
-    for (const meshes of materialMeshMap.values()) {
+    for (const meshes of materialMeshMap.values())
+    {
       meshesToRemove.push(...meshes)
     }
+
+    // 最初のメッシュの親を取得（結合後のメッシュを同じ親に追加するため）
+    const firstMeshParent = meshesToRemove[0]?.parent || rootNode
+
     meshesToRemove.forEach((mesh) => mesh.parent?.remove(mesh))
 
     // バッファを削除
-    for (const mesh of meshesToRemove) {
+    for (const mesh of meshesToRemove)
+    {
       deleteMesh(mesh)
     }
 
-    // 統合されたメッシュをrootNodeに追加
-    rootNode.add(combineResult.mesh)
+    // 統合されたメッシュを元のメッシュと同じ親に追加
+    firstMeshParent.add(combineResult.mesh)
 
     return ok(combineResult)
   })
