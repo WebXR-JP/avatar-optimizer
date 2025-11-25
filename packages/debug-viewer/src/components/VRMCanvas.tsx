@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
+import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
 import { optimizeModel } from '@xrift/avatar-optimizer'
@@ -19,6 +20,8 @@ interface VRMCanvasProps
   onExportGLTF: () => void
   onReplaceTextures: () => Promise<void>
   isReplacingTextures: boolean
+  vrmAnimation: VRMAnimation | null
+  onPlayAnimation: () => Promise<void>
 }
 
 /**
@@ -60,6 +63,8 @@ function VRMCanvas({
   onExportGLTF,
   onReplaceTextures,
   isReplacingTextures,
+  vrmAnimation,
+  onPlayAnimation,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -92,7 +97,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -134,6 +139,13 @@ function VRMCanvas({
               disabled={!vrm || isReplacingTextures}
             >
               {isReplacingTextures ? 'Replacing...' : 'Replace Textures with UV'}
+            </button>
+            <button
+              className="vrm-canvas__play-animation-btn"
+              onClick={onPlayAnimation}
+              disabled={!vrm || !!vrmAnimation}
+            >
+              {vrmAnimation ? 'Playing Animation' : 'Play Animation'}
             </button>
             <input
               ref={fileInputRef}

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Box, Tabs, Tab } from '@mui/material'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { VRM } from '@pixiv/three-vrm'
+import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
-import { loadVRM, loadVRMFromFile, replaceVRMTextures } from './hooks'
+import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
 import { optimizeModel } from '@xrift/avatar-optimizer'
 import './App.css'
 
@@ -13,6 +14,7 @@ function App()
   const navigate = useNavigate()
   const location = useLocation()
   const [vrm, setVRM] = useState<VRM | null>(null)
+  const [vrmAnimation, setVRMAnimation] = useState<VRMAnimation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
@@ -217,6 +219,24 @@ function App()
     )
   }, [vrm])
 
+  const handlePlayAnimation = useCallback(async () =>
+  {
+    setIsLoading(true)
+    setError(null)
+
+    const result = await loadVRMAnimation('/vrma/VRMA_01.vrma')
+
+    if (result.isErr())
+    {
+      setError(result.error.message)
+      setIsLoading(false)
+      return
+    }
+
+    setVRMAnimation(result.value)
+    setIsLoading(false)
+  }, [])
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Tabs value={currentTab} onChange={handleTabChange}>
@@ -240,6 +260,8 @@ function App()
           onExportGLTF={handleExportGLTF}
           onReplaceTextures={handleReplaceTextures}
           isReplacingTextures={isReplacingTextures}
+          vrmAnimation={vrmAnimation}
+          onPlayAnimation={handlePlayAnimation}
         />
 
         {/* Routes でオーバーレイを管理 */}

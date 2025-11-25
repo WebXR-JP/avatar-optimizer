@@ -15,6 +15,7 @@
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@pixiv/three-vrm": "^3.4.4",
+    "@pixiv/three-vrm-animation": "^3.4.4",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@xrift/avatar-optimizer": "workspace:*",
