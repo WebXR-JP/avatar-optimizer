@@ -1,15 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { Texture } from 'three'
-import { pack, buildPatternMaterialMappings } from '../../src/process/packing'
-import { MTOON_TEXTURE_SLOTS } from '../../src/types'
+import { describe, expect, it } from 'vitest'
+import { buildPatternMaterialMappings, pack } from '../../src/process/packing'
 
-describe('packing', () =>
-{
-  describe('buildPatternMaterialMappings', () =>
-  {
-    it('should group materials with same texture pattern', () =>
-    {
+describe('packing', () => {
+  describe('buildPatternMaterialMappings', () => {
+    it('should group materials with same texture pattern', () => {
       const tex1 = new Texture()
       tex1.image = { width: 100, height: 100 }
       const tex2 = new Texture()
@@ -32,8 +28,7 @@ describe('packing', () =>
       expect(mappings[1].materialIndices).toEqual([2])
     })
 
-    it('should handle materials with no textures', () =>
-    {
+    it('should handle materials with no textures', () => {
       const mat1 = new MToonMaterial()
       const mat2 = new MToonMaterial()
 
@@ -46,10 +41,8 @@ describe('packing', () =>
     })
   })
 
-  describe('pack', () =>
-  {
-    it('should generate packing layouts for given mappings', async () =>
-    {
+  describe('pack', () => {
+    it('should generate packing layouts for given mappings', async () => {
       const tex1 = new Texture()
       tex1.image = { width: 512, height: 512 }
 
@@ -61,8 +54,7 @@ describe('packing', () =>
       const result = await pack(mappings)
 
       expect(result.isOk()).toBe(true)
-      if (result.isOk())
-      {
+      if (result.isOk()) {
         const layouts = result.value
         expect(layouts.packed).toHaveLength(1)
         expect(layouts.packed[0].scale.x).toBeGreaterThan(0)

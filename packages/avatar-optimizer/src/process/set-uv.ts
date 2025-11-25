@@ -1,4 +1,4 @@
-import { MToonMaterial } from '@pixiv/three-vrm-materials-mtoon'
+import { MToonMaterial } from '@pixiv/three-vrm'
 import { Result } from 'neverthrow'
 import { BufferGeometry, Mesh, Object3D } from 'three'
 import { OffsetScale, OptimizationError } from '../types'
@@ -17,30 +17,41 @@ import { remapGeometryUVs } from '../util/mesh/uv'
 export function applyPlacementsToGeometries(
   rootNode: Object3D,
   materialPlacementMap: Map<MToonMaterial, OffsetScale>,
-): Result<void[], OptimizationError>
-{
+): Result<void[], OptimizationError> {
   const targets = new Map<BufferGeometry, OffsetScale>()
-  rootNode.traverse((obj) =>
-  {
+  rootNode.traverse((obj) => {
     if (!(obj instanceof Mesh)) return
     if (!(obj.geometry instanceof BufferGeometry)) return
 
     let material: MToonMaterial | null = null
 
-    if (Array.isArray(obj.material))
-    {
+    if (Array.isArray(obj.material)) {
       // Outline付きMToonの場合はOutline用に複数マテリアルになっている
       // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
       material = obj.material[0]
-    } else if (obj.material instanceof MToonMaterial)
-    {
+    } else if (obj.material instanceof MToonMaterial) {
       material = obj.material
     }
 
-    if (!(material instanceof MToonMaterial)) return
+    if (!(material instanceof MToonMaterial)) {
+      // @ts-ignore
+      if (
+        obj.material?.isMToonMaterial ||
+        (Array.isArray(obj.material) && obj.material[0]?.isMToonMaterial)
+      ) {
+        console.warn(
+          'Found MToonMaterial-like object but instanceof failed. This indicates a dual package hazard.',
+          obj.material,
+        )
+      }
+      return
+    }
 
     const placement = materialPlacementMap.get(material)
-    if (!placement) return
+    if (!placement) {
+      console.warn('No placement found for material', material)
+      return
+    }
 
     // uvアトリビュートを共有している場合があるため、BufferGeometryをcloneすることで独立させている
     // 無駄にattribute bufferが長くなっている可能性があるため効率化したい

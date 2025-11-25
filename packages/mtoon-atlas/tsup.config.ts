@@ -10,5 +10,6 @@ export default defineConfig({
   splitting: false,
   shims: true,
   outDir: 'dist',
-  esbuildPlugins: [raw()]
+  esbuildPlugins: [raw()],
+  external: ['three', '@pixiv/three-vrm', '@pixiv/three-vrm-materials-mtoon']
 })

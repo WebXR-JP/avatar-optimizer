@@ -39,7 +39,10 @@
   "license": "MIT",
   "peerDependencies": {
     "@gltf-transform/core": "^4.0.0",
-    "@gltf-transform/extensions": "^4.0.0"
+    "@gltf-transform/extensions": "^4.0.0",
+    "@pixiv/three-vrm": "^3.4.4",
+    "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
+    "three": "^0.181.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -71,14 +74,11 @@
     "@loaders.gl/gltf": "^4.3.4",
     "@loaders.gl/images": "^4.3.4",
     "@loaders.gl/polyfills": "^4.3.4",
-    "@pixiv/three-vrm": "^3.4.4",
-    "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
     "@xrift/mtoon-atlas": "workspace:*",
     "canvas": "^3.2.0",
     "commander": "^14.0.2",
     "jimp": "^1.6.0",
     "neverthrow": "^8.2.0",
-    "rectpack-ts": "^0.0.2",
-    "three": "^0.181.1"
+    "rectpack-ts": "^0.0.2"
   }
 }

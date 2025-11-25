@@ -1,4 +1,4 @@
-import { MToonMaterial } from '@pixiv/three-vrm-materials-mtoon'
+import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import { OptimizationError } from '..'
 import {

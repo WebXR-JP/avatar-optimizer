@@ -18,5 +18,6 @@ export default defineConfig([
     minify: false,
     treeshake: true,
     outDir: 'dist',
+    external: ['three', '@pixiv/three-vrm', '@pixiv/three-vrm-materials-mtoon'],
   },
 ])
