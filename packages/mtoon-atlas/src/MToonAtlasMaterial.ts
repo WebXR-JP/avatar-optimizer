@@ -188,9 +188,11 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     {
       // パラメータテクスチャをセット
       this.uniforms.uParameterTexture.value = descriptor.texture
+      // シェーダーでは x = texelIndex, y = slotIndex として使用するため
+      // x = texelsPerSlot (テクスチャ幅), y = slotCount (テクスチャ高さ)
       this.uniforms.uParameterTextureSize.value.set(
-        descriptor.slotCount,
         descriptor.texelsPerSlot,
+        descriptor.slotCount,
       )
       this.uniforms.uTexelsPerSlot.value = descriptor.texelsPerSlot
 

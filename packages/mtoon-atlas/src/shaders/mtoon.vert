@@ -4,8 +4,8 @@ varying vec3 vViewPosition;
 
 // TODO: MToonAtlasMaterial - スロット属性
 // 頂点ごとのマテリアルスロットインデックス（パラメータテクスチャからパラメータを復元するために使用）
-// attribute float mtoonMaterialSlot;
-// varying float vMaterialSlot;
+attribute float mtoonMaterialSlot;
+varying float vMaterialSlot;
 
 #ifndef FLAT_SHADED
   varying vec3 vNormal;
@@ -50,7 +50,23 @@ varying vec3 vViewPosition;
 
 uniform float outlineWidthFactor;
 
+uniform sampler2D uParameterTexture;
+uniform vec2 uParameterTextureSize;  // (texelsPerSlot, slotCount) = (width, height)
+uniform float uTexelsPerSlot;
+
+vec4 sampleParameter(float slotIndex, float texelIndex) {
+  float y = (slotIndex + 0.5) / uParameterTextureSize.y;
+  float x = (texelIndex + 0.5) / uParameterTextureSize.x;
+  return texture2D(uParameterTexture, vec2(x, y));
+}
+
 void main() {
+  vMaterialSlot = mtoonMaterialSlot;
+
+  // Sample outlineWidthFactor from parameter texture
+  // outlineWidth is at texel 3, channel a (index 3)
+  vec4 param3 = sampleParameter(vMaterialSlot, 3.0);
+  float outlineWidthFactor = param3.a;
 
   // #include <uv_vertex>
   #ifdef MTOON_USE_UV

@@ -1,16 +1,16 @@
 // #define PHONG
 
 // TODO: MToonAtlasMaterial - パラメータテクスチャサンプリング
-// uniform sampler2D uParameterTexture;
-// uniform vec2 uParameterTextureSize;     // (slotCount, texelsPerSlot)
-// uniform float uTexelsPerSlot;
-// varying float vMaterialSlot;
-//
-// vec4 sampleParameter(float slotIndex, float texelIndex) {
-//   float y = (slotIndex + 0.5) / uParameterTextureSize.y;
-//   float x = (texelIndex + 0.5) / uParameterTextureSize.x;
-//   return texture2D(uParameterTexture, vec2(x, y));
-// }
+uniform sampler2D uParameterTexture;
+uniform vec2 uParameterTextureSize;     // (texelsPerSlot, slotCount) = (width, height)
+uniform float uTexelsPerSlot;
+varying float vMaterialSlot;
+
+vec4 sampleParameter(float slotIndex, float texelIndex) {
+  float y = (slotIndex + 0.5) / uParameterTextureSize.y;
+  float x = (texelIndex + 0.5) / uParameterTextureSize.x;
+  return texture2D(uParameterTexture, vec2(x, y));
+}
 
 uniform vec3 litFactor;
 
@@ -123,6 +123,7 @@ struct MToonMaterial {
   vec3 diffuseColor;
   vec3 shadeColor;
   float shadingShift;
+  float shadingToony;
 };
 
 float linearstep( float a, float b, float t ) {
@@ -135,11 +136,12 @@ float linearstep( float a, float b, float t ) {
 float getShading(
   const in float dotNL,
   const in float shadow,
-  const in float shadingShift
+  const in float shadingShift,
+  const in float shadingToony
 ) {
   float shading = dotNL;
   shading = shading + shadingShift;
-  shading = linearstep( -1.0 + shadingToonyFactor, 1.0 - shadingToonyFactor, shading );
+  shading = linearstep( -1.0 + shadingToony, 1.0 - shadingToony, shading );
   shading *= shadow;
   return shading;
 }
@@ -177,7 +179,7 @@ vec3 getDiffuse(
 
     irradiance *= dotNL;
 
-    float shading = getShading( dotNL, shadow, material.shadingShift );
+    float shading = getShading( dotNL, shadow, material.shadingShift, material.shadingToony );
 
     // toon shaded diffuse
     reflectedLight.directDiffuse += getDiffuse( material, shading, directLight.color );
@@ -200,7 +202,7 @@ vec3 getDiffuse(
 
     irradiance *= dotNL;
 
-    float shading = getShading( dotNL, shadow, material.shadingShift );
+    float shading = getShading( dotNL, shadow, material.shadingShift, material.shadingToony );
 
     // toon shaded diffuse
     reflectedLight.directDiffuse += getDiffuse( material, shading, directLight.color );
@@ -322,6 +324,41 @@ void postCorrection() {
 
 // == main procedure ===========================================================
 void main() {
+  // Sample parameters from texture
+  vec4 param0 = sampleParameter(vMaterialSlot, 0.0);
+  vec3 litFactor = param0.rgb;
+  float shadingShiftFactor = param0.a;
+
+  vec4 param1 = sampleParameter(vMaterialSlot, 1.0);
+  vec3 shadeColorFactor = param1.rgb;
+  float shadingShiftTextureScale = param1.a;
+
+  vec4 param2 = sampleParameter(vMaterialSlot, 2.0);
+  vec3 emissive = param2.rgb;
+  float emissiveIntensity = param2.a;
+
+  vec4 param3 = sampleParameter(vMaterialSlot, 3.0);
+  vec3 matcapFactor = param3.rgb;
+  float outlineWidthFactor = param3.a;
+
+  vec4 param4 = sampleParameter(vMaterialSlot, 4.0);
+  vec3 outlineColorFactor = param4.rgb;
+  float outlineLightingMixFactor = param4.a;
+
+  vec4 param5 = sampleParameter(vMaterialSlot, 5.0);
+  vec3 parametricRimColorFactor = param5.rgb;
+  float parametricRimLiftFactor = param5.a;
+
+  vec4 param6 = sampleParameter(vMaterialSlot, 6.0);
+  float parametricRimFresnelPowerFactor = param6.r;
+  float shadingToonyFactor = param6.g;
+  float rimLightingMixFactor = param6.b;
+  float uvAnimationRotationPhase = param6.a;
+
+  vec4 param7 = sampleParameter(vMaterialSlot, 7.0);
+  vec2 normalScale = param7.rg;
+  float uvAnimationScrollXOffset = param7.b;
+  float uvAnimationScrollYOffset = param7.a;
   #include <clipping_planes_fragment>
 
   vec2 uv = vec2(0.5, 0.5);
@@ -528,6 +565,8 @@ void main() {
     vec2 shadingShiftTextureUv = ( shadingShiftTextureUvTransform * vec3( uv, 1 ) ).xy;
     material.shadingShift += texture2D( shadingShiftTexture, shadingShiftTextureUv ).r * shadingShiftTextureScale;
   #endif
+
+  material.shadingToony = shadingToonyFactor;
 
   // #include <lights_fragment_begin>
 
