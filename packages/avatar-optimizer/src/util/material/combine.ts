@@ -45,10 +45,9 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
 export function combineMToonMaterials(
   materialMeshMap: Map<MToonMaterial, Mesh[]>,
   options: CombineMaterialOptions = {},
-): Result<CombinedMeshResult, OptimizationError>
-{
-  return safeTry(function* ()
-  {
+  excludedMeshes?: Set<Mesh>,
+): Result<CombinedMeshResult, OptimizationError> {
+  return safeTry(function* () {
     const opts = { ...DEFAULT_OPTIONS, ...options }
 
     const materials = Array.from(materialMeshMap.keys())
@@ -64,8 +63,7 @@ export function combineMToonMaterials(
     const materialSlotIndex = new Map<MToonMaterial, number>()
 
     // マテリアルをスロットインデックスにマッピング
-    materials.forEach((mat, index) =>
-    {
+    materials.forEach((mat, index) => {
       materialSlotIndex.set(mat, index)
     })
 
@@ -73,18 +71,17 @@ export function combineMToonMaterials(
     const meshToSlotIndex = new Map<Mesh, number>()
     const meshesForMerge: Mesh[] = []
 
-    for (const [material, meshList] of materialMeshMap)
-    {
+    for (const [material, meshList] of materialMeshMap) {
       const slotIndex = materialSlotIndex.get(material) ?? 0
-      for (const mesh of meshList)
-      {
+      for (const mesh of meshList) {
+        if (excludedMeshes?.has(mesh)) continue
+
         meshToSlotIndex.set(mesh, slotIndex)
         meshesForMerge.push(mesh)
       }
     }
 
-    if (meshesForMerge.length === 0)
-    {
+    if (meshesForMerge.length === 0) {
       return err({
         type: 'ASSET_ERROR',
         message: 'マージ対象のメッシュがありません',
@@ -115,15 +112,13 @@ export function combineMToonMaterials(
     )
 
     let combinedMesh: Mesh
-    if (firstSkinnedMesh)
-    {
+    if (firstSkinnedMesh) {
       // SkinnedMeshとして作成
       const skinnedMesh = new SkinnedMesh(mergedGeometry, atlasMaterial)
       skinnedMesh.name = 'CombinedMToonMesh'
 
       // 統合されたスケルトンを使用
-      if (mergedGeometry.userData.skeleton)
-      {
+      if (mergedGeometry.userData.skeleton) {
         const skeleton = mergedGeometry.userData.skeleton
 
         // bindMatrixは単位行列（Identity）を使用する
@@ -133,15 +128,13 @@ export function combineMToonMaterials(
         skinnedMesh.bind(skeleton, identityMatrix)
       }
       // フォールバック：最初のSkinnedMeshからskeletonをコピー（通常はここには来ない）
-      else if (firstSkinnedMesh.skeleton)
-      {
+      else if (firstSkinnedMesh.skeleton) {
         const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
         skinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
       }
 
       combinedMesh = skinnedMesh
-    } else
-    {
+    } else {
       // 通常のMeshとして作成
       combinedMesh = new Mesh(mergedGeometry, atlasMaterial)
       combinedMesh.name = 'CombinedMToonMesh'
@@ -178,42 +171,33 @@ function createMToonAtlasMaterial(
   slotCount: number,
   texelsPerSlot: number,
   slotAttributeName: string,
-): MToonAtlasMaterial
-{
+): MToonAtlasMaterial {
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
 
   // 代表マテリアルからアトラス化テクスチャを取得
-  if (representativeMaterial.map)
-  {
+  if (representativeMaterial.map) {
     atlasedTextures.baseColor = representativeMaterial.map
   }
-  if (representativeMaterial.shadeMultiplyTexture)
-  {
+  if (representativeMaterial.shadeMultiplyTexture) {
     atlasedTextures.shade = representativeMaterial.shadeMultiplyTexture
   }
-  if (representativeMaterial.shadingShiftTexture)
-  {
+  if (representativeMaterial.shadingShiftTexture) {
     atlasedTextures.shadingShift = representativeMaterial.shadingShiftTexture
   }
-  if (representativeMaterial.normalMap)
-  {
+  if (representativeMaterial.normalMap) {
     atlasedTextures.normal = representativeMaterial.normalMap
   }
-  if (representativeMaterial.emissiveMap)
-  {
+  if (representativeMaterial.emissiveMap) {
     atlasedTextures.emissive = representativeMaterial.emissiveMap
   }
-  if (representativeMaterial.matcapTexture)
-  {
+  if (representativeMaterial.matcapTexture) {
     atlasedTextures.matcap = representativeMaterial.matcapTexture
   }
-  if (representativeMaterial.rimMultiplyTexture)
-  {
+  if (representativeMaterial.rimMultiplyTexture) {
     atlasedTextures.rim = representativeMaterial.rimMultiplyTexture
   }
-  if (representativeMaterial.uvAnimationMaskTexture)
-  {
+  if (representativeMaterial.uvAnimationMaskTexture) {
     atlasedTextures.uvAnimationMask =
       representativeMaterial.uvAnimationMaskTexture
   }

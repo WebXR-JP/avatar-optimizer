@@ -42,7 +42,7 @@ function Viewport3D({
 
     try
     {
-      await optimizeModel(vrm.scene)
+      await optimizeModel(vrm)
     } catch (err)
     {
       onError(`Optimization failed: ${String(err)}`)

@@ -1,6 +1,6 @@
-import { MToonMaterial } from '@pixiv/three-vrm'
+import { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { Mesh, Object3D } from 'three'
+import { Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
@@ -26,11 +26,13 @@ import { deleteMesh } from './util/mesh/deleter'
  * @returns 最適化結果（統合メッシュ情報を含む）
  */
 export function optimizeModel(
-  rootNode: Object3D,
+  vrm: VRM,
 ): ResultAsync<CombinedMeshResult, OptimizationError>
 {
   return safeTry(async function* ()
   {
+    const rootNode = vrm.scene
+
     // モデルのマテリアル集計
     const materialMeshMap =
       yield* getMToonMaterialsWithMeshesFromObject3D(rootNode)
@@ -62,18 +64,65 @@ export function optimizeModel(
       }
     })
 
+    // アトラス画像をマテリアルにそれぞれアサインする
     // アトラス画像の配置に合わせてUVを移動する
     yield* applyPlacementsToGeometries(rootNode, materialPlacementMap)
 
+    // 顔メッシュ（表情で使われているメッシュ）を特定
+    const excludedMeshes = new Set<Mesh>()
+    if (vrm.expressionManager)
+    {
+      for (const expression of vrm.expressionManager.expressions)
+      {
+        for (const bind of expression.binds)
+        {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const bindAny = bind as any
+
+          // MorphTargetBind
+          if (bindAny.primitives)
+          {
+            for (const mesh of bindAny.primitives)
+            {
+              if (mesh && mesh.isMesh)
+              {
+                excludedMeshes.add(mesh)
+              }
+            }
+          }
+
+          // MaterialColorBind / TextureTransformBind
+          if (bindAny.material)
+          {
+            const meshes = materialMeshMap.get(bindAny.material)
+            if (meshes)
+            {
+              meshes.forEach((mesh) => excludedMeshes.add(mesh))
+            }
+          }
+        }
+      }
+    }
+
     // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
     // このとき頂点アトリビュートに元のマテリアル識別用の情報を追加する
-    const combineResult = yield* combineMeshAndMaterial(materialMeshMap)
+    const combineResult = yield* combineMeshAndMaterial(
+      materialMeshMap,
+      {},
+      excludedMeshes,
+    )
 
     // 元のrootNodeから既存のメッシュを削除
     const meshesToRemove: Mesh[] = []
     for (const meshes of materialMeshMap.values())
     {
-      meshesToRemove.push(...meshes)
+      for (const mesh of meshes)
+      {
+        if (!excludedMeshes.has(mesh))
+        {
+          meshesToRemove.push(mesh)
+        }
+      }
     }
 
     // 最初のメッシュの親を取得（結合後のメッシュを同じ親に追加するため）

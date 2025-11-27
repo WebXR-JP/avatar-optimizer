@@ -107,7 +107,7 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
-    const result = await optimizeModel(vrm.scene)
+    const result = await optimizeModel(vrm)
 
     if (result.isErr())
     {
@@ -224,7 +224,7 @@ function App()
     setIsLoading(true)
     setError(null)
 
-    const result = await loadVRMAnimation('/vrma/VRMA_01.vrma')
+    const result = await loadVRMAnimation('/vrma/VRMA_03.vrma')
 
     if (result.isErr())
     {

@@ -1,22 +1,18 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
-import
-  {
-    BufferAttribute,
-    BufferGeometry,
-    Mesh,
-    SkinnedMesh,
-    Skeleton,
-    Bone,
-  } from 'three'
+import {
+  Bone,
+  BufferAttribute,
+  BufferGeometry,
+  Mesh,
+  Skeleton,
+  SkinnedMesh,
+} from 'three'
 import { describe, expect, it } from 'vitest'
 import { mergeGeometriesWithSlotAttribute } from '../../src/util/mesh/merge-mesh'
 
-describe('merge-mesh', () =>
-{
-  describe('mergeGeometriesWithSlotAttribute', () =>
-  {
-    it('should merge geometries and add slot attribute', () =>
-    {
+describe('merge-mesh', () => {
+  describe('mergeGeometriesWithSlotAttribute', () => {
+    it('should merge geometries and add slot attribute', () => {
       // Create two simple meshes
       const geometry1 = new BufferGeometry()
       const positions1 = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
@@ -45,8 +41,7 @@ describe('merge-mesh', () =>
 
       expect(result.isOk()).toBe(true)
 
-      if (result.isOk())
-      {
+      if (result.isOk()) {
         const [mergedGeometry] = result.value
         expect(mergedGeometry).toBeDefined()
 
@@ -71,8 +66,7 @@ describe('merge-mesh', () =>
       }
     })
 
-    it('should preserve skinning weights when merging skinned meshes', () =>
-    {
+    it('should preserve skinning weights when merging skinned meshes', () => {
       // Create a simple skinned mesh with bone weights
       const geometry1 = new BufferGeometry()
       const positions1 = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
@@ -80,23 +74,35 @@ describe('merge-mesh', () =>
 
       // Add skin weights and indices
       const skinWeights1 = new Float32Array([
-        1.0, 0.0, 0.0, 0.0, // vertex 0: fully weighted to bone 0
-        0.5, 0.5, 0.0, 0.0, // vertex 1: split between bone 0 and 1
-        0.0, 1.0, 0.0, 0.0, // vertex 2: fully weighted to bone 1
+        1.0,
+        0.0,
+        0.0,
+        0.0, // vertex 0: fully weighted to bone 0
+        0.5,
+        0.5,
+        0.0,
+        0.0, // vertex 1: split between bone 0 and 1
+        0.0,
+        1.0,
+        0.0,
+        0.0, // vertex 2: fully weighted to bone 1
       ])
       const skinIndices1 = new Float32Array([
-        0, 1, 2, 3, // vertex 0
-        0, 1, 2, 3, // vertex 1
-        0, 1, 2, 3, // vertex 2
+        0,
+        1,
+        2,
+        3, // vertex 0
+        0,
+        1,
+        2,
+        3, // vertex 1
+        0,
+        1,
+        2,
+        3, // vertex 2
       ])
-      geometry1.setAttribute(
-        'skinWeight',
-        new BufferAttribute(skinWeights1, 4),
-      )
-      geometry1.setAttribute(
-        'skinIndex',
-        new BufferAttribute(skinIndices1, 4),
-      )
+      geometry1.setAttribute('skinWeight', new BufferAttribute(skinWeights1, 4))
+      geometry1.setAttribute('skinIndex', new BufferAttribute(skinIndices1, 4))
 
       // Create a second skinned mesh
       const geometry2 = new BufferGeometry()
@@ -104,23 +110,35 @@ describe('merge-mesh', () =>
       geometry2.setAttribute('position', new BufferAttribute(positions2, 3))
 
       const skinWeights2 = new Float32Array([
-        0.0, 0.0, 1.0, 0.0, // vertex 0: fully weighted to bone 2
-        0.0, 0.0, 0.5, 0.5, // vertex 1: split between bone 2 and 3
-        0.0, 0.0, 0.0, 1.0, // vertex 2: fully weighted to bone 3
+        0.0,
+        0.0,
+        1.0,
+        0.0, // vertex 0: fully weighted to bone 2
+        0.0,
+        0.0,
+        0.5,
+        0.5, // vertex 1: split between bone 2 and 3
+        0.0,
+        0.0,
+        0.0,
+        1.0, // vertex 2: fully weighted to bone 3
       ])
       const skinIndices2 = new Float32Array([
-        0, 1, 2, 3, // vertex 0
-        0, 1, 2, 3, // vertex 1
-        0, 1, 2, 3, // vertex 2
+        0,
+        1,
+        2,
+        3, // vertex 0
+        0,
+        1,
+        2,
+        3, // vertex 1
+        0,
+        1,
+        2,
+        3, // vertex 2
       ])
-      geometry2.setAttribute(
-        'skinWeight',
-        new BufferAttribute(skinWeights2, 4),
-      )
-      geometry2.setAttribute(
-        'skinIndex',
-        new BufferAttribute(skinIndices2, 4),
-      )
+      geometry2.setAttribute('skinWeight', new BufferAttribute(skinWeights2, 4))
+      geometry2.setAttribute('skinIndex', new BufferAttribute(skinIndices2, 4))
 
       // Create bones and skeleton
       const bone0 = new Bone()
@@ -152,8 +170,7 @@ describe('merge-mesh', () =>
 
       expect(result.isOk()).toBe(true)
 
-      if (result.isOk())
-      {
+      if (result.isOk()) {
         const [mergedGeometry] = result.value
 
         // Check that skinWeight attribute is preserved
@@ -212,8 +229,7 @@ describe('merge-mesh', () =>
       }
     })
 
-    it('should handle empty mesh array', () =>
-    {
+    it('should handle empty mesh array', () => {
       const result = mergeGeometriesWithSlotAttribute(
         [],
         new Map(),
@@ -221,15 +237,15 @@ describe('merge-mesh', () =>
       )
 
       expect(result.isErr()).toBe(true)
-      if (result.isErr())
-      {
+      if (result.isErr()) {
         expect(result.error.type).toBe('ASSET_ERROR')
-        expect(result.error.message).toContain('マージ対象のメッシュがありません')
+        expect(result.error.message).toContain(
+          'マージ対象のメッシュがありません',
+        )
       }
     })
 
-    it('should handle meshes with no valid geometry', () =>
-    {
+    it('should handle meshes with no valid geometry', () => {
       const emptyGeometry = new BufferGeometry()
       const mesh = new Mesh(emptyGeometry, new MToonMaterial())
 
@@ -240,8 +256,7 @@ describe('merge-mesh', () =>
       )
 
       expect(result.isErr()).toBe(true)
-      if (result.isErr())
-      {
+      if (result.isErr()) {
         expect(result.error.type).toBe('ASSET_ERROR')
         expect(result.error.message).toContain(
           '有効なジオメトリを持つメッシュがありません',

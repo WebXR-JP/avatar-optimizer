@@ -10,7 +10,8 @@ import './VRMViewer.css'
  * ファイルアップロード、VRM読み込み、表示を管理します。
  * 起動時に public/AliciaSolid.vrm をデフォルトで読み込みます。
  */
-function VRMViewer() {
+function VRMViewer()
+{
   const [vrm, setVRM] = useState<VRM | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,14 +19,17 @@ function VRMViewer() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 起動時にデフォルト VRM を読み込み
-  useEffect(() => {
-    const loadDefaultVRM = async () => {
+  useEffect(() =>
+  {
+    const loadDefaultVRM = async () =>
+    {
       setIsLoading(true)
       setError(null)
 
       const result = await loadVRM('/AliciaSolid.vrm')
 
-      if (result.isErr()) {
+      if (result.isErr())
+      {
         setError(result.error.message)
         setIsLoading(false)
         return
@@ -39,7 +43,8 @@ function VRMViewer() {
   }, [])
 
   const handleFileChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
+    async (event: React.ChangeEvent<HTMLInputElement>) =>
+    {
       const file = event.target.files?.[0]
       if (!file) return
 
@@ -48,7 +53,8 @@ function VRMViewer() {
 
       const result = await loadVRMFromFile(file)
 
-      if (result.isErr()) {
+      if (result.isErr())
+      {
         setError(result.error.message)
         setIsLoading(false)
         return
@@ -60,22 +66,27 @@ function VRMViewer() {
     [],
   )
 
-  const handleButtonClick = useCallback(() => {
+  const handleButtonClick = useCallback(() =>
+  {
     fileInputRef.current?.click()
   }, [])
 
-  const handleOptimizeClick = useCallback(async () => {
+  const handleOptimizeClick = useCallback(async () =>
+  {
     if (!vrm) return
 
     setIsOptimizing(true)
     setError(null)
 
-    try {
-      await optimizeModel(vrm.scene)
-    } catch (err) {
+    try
+    {
+      await optimizeModel(vrm)
+    } catch (err)
+    {
       console.error(err)
       setError(`Optimization failed: ${String(err)}`)
-    } finally {
+    } finally
+    {
       setIsOptimizing(false)
     }
   }, [vrm])

@@ -4,7 +4,7 @@ import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
-import { optimizeModel } from '@xrift/avatar-optimizer'
+
 import './VRMCanvas.css'
 
 interface VRMCanvasProps
