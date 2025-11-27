@@ -2,16 +2,19 @@ import { useCallback, useState } from 'react'
 import { Box, List, ListItem, ListItemButton, ListItemText, Typography, CircularProgress, Button, Divider } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { MToonMaterial, type VRM } from '@pixiv/three-vrm'
+import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import { Mesh, Texture } from 'three'
 import { Canvas } from '@react-three/fiber'
 import TexturePreviewScene from './TexturePreviewScene'
 
-interface TextureEntry {
+interface TextureEntry
+{
   name: string
   texture: Texture
 }
 
-interface TextureViewerProps {
+interface TextureViewerProps
+{
   vrm: VRM | null
 }
 
@@ -19,13 +22,16 @@ interface TextureViewerProps {
  * VRMモデルに含まれるテクスチャを一覧表示するコンポーネント。
  * 左側にテクスチャ名リストを表示し、右側で選択したテクスチャを表示します。
  */
-function TextureViewer({ vrm }: TextureViewerProps) {
+function TextureViewer({ vrm }: TextureViewerProps)
+{
   const [textures, setTextures] = useState<TextureEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
-  const extractAndSetTextures = useCallback(async () => {
-    if (!vrm) {
+  const extractAndSetTextures = useCallback(async () =>
+  {
+    if (!vrm)
+    {
       console.warn('No VRM model loaded.')
       setTextures([])
       setSelectedIndex(null)
@@ -34,22 +40,32 @@ function TextureViewer({ vrm }: TextureViewerProps) {
 
     setIsLoading(true)
 
-    try {
+    try
+    {
       const textureMap = new Map<string, Texture>()
 
       // シーン内のメッシュを走査してテクスチャを抽出
-      vrm.scene.traverse((obj) => {
-        if (obj instanceof Mesh) {
+      vrm.scene.traverse((obj) =>
+      {
+        if (obj instanceof Mesh)
+        {
           const material = obj.material
 
-          if (Array.isArray(material)) {
-            material.forEach((mat) => {
-              if (!(mat instanceof MToonMaterial)) return
-              extractTexturesFromMaterial(mat, textureMap)
+          if (Array.isArray(material))
+          {
+            material.forEach((mat) =>
+            {
+              if (mat instanceof MToonMaterial || ('isMToonAtlasMaterial' in mat && mat.isMToonAtlasMaterial))
+              {
+                extractTexturesFromMaterial(mat as MToonMaterial | MToonAtlasMaterial, textureMap)
+              }
             })
-          } else {
-            if (!(material instanceof MToonMaterial)) return
-            extractTexturesFromMaterial(material, textureMap)
+          } else
+          {
+            if (material instanceof MToonMaterial || ('isMToonAtlasMaterial' in material && material.isMToonAtlasMaterial))
+            {
+              extractTexturesFromMaterial(material as MToonMaterial | MToonAtlasMaterial, textureMap)
+            }
           }
         }
       })
@@ -65,7 +81,8 @@ function TextureViewer({ vrm }: TextureViewerProps) {
       setTextures(textureList)
       // 最初のテクスチャを選択
       setSelectedIndex(textureList.length > 0 ? 0 : null)
-    } finally {
+    } finally
+    {
       setIsLoading(false)
     }
   }, [vrm])
@@ -135,7 +152,7 @@ function TextureViewer({ vrm }: TextureViewerProps) {
                 >
                   <ListItemText
                     primary={entry.name}
-                    secondary={`${entry.texture.image.width} × ${entry.texture.image.height}`}
+                    secondary={`${(entry.texture.image as any)?.width ?? '?'} × ${(entry.texture.image as any)?.height ?? '?'}`}
                     primaryTypographyProps={{ noWrap: true, fontSize: '0.9rem', sx: { color: '#000' } }}
                     secondaryTypographyProps={{ noWrap: true, fontSize: '0.75rem' }}
                   />
@@ -156,7 +173,7 @@ function TextureViewer({ vrm }: TextureViewerProps) {
                 {selectedTexture.name}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                {selectedTexture.texture.image.width} × {selectedTexture.texture.image.height} px
+                {(selectedTexture.texture.image as any)?.width ?? '?'} × {(selectedTexture.texture.image as any)?.height ?? '?'} px
               </Typography>
             </Box>
 
@@ -192,10 +209,57 @@ function TextureViewer({ vrm }: TextureViewerProps) {
 /**
  * マテリアルからテクスチャを抽出するヘルパー関数
  */
+
+
+/**
+ * マテリアルからテクスチャを抽出するヘルパー関数
+ */
 function extractTexturesFromMaterial(
-  material: MToonMaterial,
+  material: MToonMaterial | MToonAtlasMaterial,
   textureMap: Map<string, Texture>,
-): void {
+): void
+{
+  // MToonAtlasMaterial の場合
+  if ('isMToonAtlasMaterial' in material && material.isMToonAtlasMaterial)
+  {
+    const atlasMaterial = material as MToonAtlasMaterial
+    const uniforms = atlasMaterial.uniforms
+
+    // パラメータテクスチャ
+    if (uniforms.uParameterTexture?.value)
+    {
+      const name = `${material.name || 'AtlasMaterial'}_uParameterTexture`
+      textureMap.set(name, uniforms.uParameterTexture.value)
+    }
+
+    // その他のアトラス化されたテクスチャ
+    const textureUniforms = [
+      'map',
+      'normalMap',
+      'emissiveMap',
+      'shadeMultiplyTexture',
+      'shadingShiftTexture',
+      'matcapTexture',
+      'rimMultiplyTexture',
+      'outlineWidthMultiplyTexture',
+      'uvAnimationMaskTexture',
+    ] as const
+
+    for (const prop of textureUniforms)
+    {
+      const texture = uniforms[prop]?.value
+      if (texture && texture instanceof Texture)
+      {
+        const name = `${material.name || 'AtlasMaterial'}_${prop}`
+        // 重複を避けるために既に登録済みかチェックしても良いが、Mapなので上書きされる
+        textureMap.set(name, texture)
+      }
+    }
+    return
+  }
+
+  // 通常の MToonMaterial の場合
+  const mtoonMaterial = material as MToonMaterial
   const textureProperties = [
     'map',
     'normalMap',
@@ -208,10 +272,12 @@ function extractTexturesFromMaterial(
     'uvAnimationMaskTexture',
   ] as const
 
-  for (const prop of textureProperties) {
-    const texture = material[prop]
-    if (texture && texture instanceof Texture) {
-      const name = `${material.name || 'Material'}_${prop}`
+  for (const prop of textureProperties)
+  {
+    const texture = mtoonMaterial[prop]
+    if (texture && texture instanceof Texture)
+    {
+      const name = `${mtoonMaterial.name || 'Material'}_${prop}`
       textureMap.set(name, texture)
     }
   }

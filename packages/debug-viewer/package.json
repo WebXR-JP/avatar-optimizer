@@ -19,6 +19,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@xrift/avatar-optimizer": "workspace:*",
+    "@xrift/mtoon-atlas": "workspace:^",
     "neverthrow": "^8.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

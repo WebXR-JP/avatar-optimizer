@@ -180,6 +180,9 @@ importers:
       '@xrift/avatar-optimizer':
         specifier: workspace:*
         version: link:../avatar-optimizer
+      '@xrift/mtoon-atlas':
+        specifier: workspace:^
+        version: link:../mtoon-atlas
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
