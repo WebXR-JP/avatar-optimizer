@@ -24,3 +24,6 @@ export type {
   TextureSlotInfo,
   ThreeVRMDocument,
 } from './types'
+
+// Exporter
+export { VRMExporterPlugin } from './exporter'

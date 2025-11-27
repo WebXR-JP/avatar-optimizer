@@ -1,0 +1,1 @@
+export { VRMExporterPlugin } from './VRMExporterPlugin'

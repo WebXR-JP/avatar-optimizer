@@ -6,7 +6,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel } from '@xrift/avatar-optimizer'
+import { optimizeModel, VRMExporterPlugin } from '@xrift/avatar-optimizer'
 import { MToonAtlasExporterPlugin } from '@xrift/mtoon-atlas'
 import './App.css'
 
@@ -173,6 +173,7 @@ function App()
 
     const exporter = new GLTFExporter()
     exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
+    exporter.register((writer: any) => new VRMExporterPlugin(writer))
 
     exporter.parse(
       vrm.scene,

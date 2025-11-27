@@ -5,13 +5,12 @@ import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { OffsetScale, OptimizationError } from './types'
-import
-  {
-    assignAtlasTexturesToMaterial,
-    CombinedMeshResult,
-    combineMToonMaterials as combineMeshAndMaterial,
-    getMToonMaterialsWithMeshesFromObject3D,
-  } from './util/material'
+import {
+  assignAtlasTexturesToMaterial,
+  CombinedMeshResult,
+  combineMToonMaterials as combineMeshAndMaterial,
+  getMToonMaterialsWithMeshesFromObject3D,
+} from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 
 /**
@@ -27,10 +26,8 @@ import { deleteMesh } from './util/mesh/deleter'
  */
 export function optimizeModel(
   vrm: VRM,
-): ResultAsync<CombinedMeshResult, OptimizationError>
-{
-  return safeTry(async function* ()
-  {
+): ResultAsync<CombinedMeshResult, OptimizationError> {
+  return safeTry(async function* () {
     const rootNode = vrm.scene
 
     // モデルのマテリアル集計
@@ -53,11 +50,9 @@ export function optimizeModel(
 
     // アトラス画像をマテリアルにそれぞれアサインする
     const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
-    patternMappings.forEach((mapping, index) =>
-    {
+    patternMappings.forEach((mapping, index) => {
       const placement = packLayouts.packed[index]
-      for (const materialIndex of mapping.materialIndices)
-      {
+      for (const materialIndex of mapping.materialIndices) {
         const material = materials[materialIndex]
         assignAtlasTexturesToMaterial(material, atlasMap)
         materialPlacementMap.set(material, placement)
@@ -70,33 +65,25 @@ export function optimizeModel(
 
     // 顔メッシュ（表情で使われているメッシュ）を特定
     const excludedMeshes = new Set<Mesh>()
-    if (vrm.expressionManager)
-    {
-      for (const expression of vrm.expressionManager.expressions)
-      {
-        for (const bind of expression.binds)
-        {
+    if (vrm.expressionManager) {
+      for (const expression of vrm.expressionManager.expressions) {
+        for (const bind of expression.binds) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const bindAny = bind as any
 
           // MorphTargetBind
-          if (bindAny.primitives)
-          {
-            for (const mesh of bindAny.primitives)
-            {
-              if (mesh && mesh.isMesh)
-              {
+          if (bindAny.primitives) {
+            for (const mesh of bindAny.primitives) {
+              if (mesh && mesh.isMesh) {
                 excludedMeshes.add(mesh)
               }
             }
           }
 
           // MaterialColorBind / TextureTransformBind
-          if (bindAny.material)
-          {
+          if (bindAny.material) {
             const meshes = materialMeshMap.get(bindAny.material)
-            if (meshes)
-            {
+            if (meshes) {
               meshes.forEach((mesh) => excludedMeshes.add(mesh))
             }
           }
@@ -114,12 +101,9 @@ export function optimizeModel(
 
     // 元のrootNodeから既存のメッシュを削除
     const meshesToRemove: Mesh[] = []
-    for (const meshes of materialMeshMap.values())
-    {
-      for (const mesh of meshes)
-      {
-        if (!excludedMeshes.has(mesh))
-        {
+    for (const meshes of materialMeshMap.values()) {
+      for (const mesh of meshes) {
+        if (!excludedMeshes.has(mesh)) {
           meshesToRemove.push(mesh)
         }
       }
@@ -131,8 +115,7 @@ export function optimizeModel(
     meshesToRemove.forEach((mesh) => mesh.parent?.remove(mesh))
 
     // バッファを削除
-    for (const mesh of meshesToRemove)
-    {
+    for (const mesh of meshesToRemove) {
       deleteMesh(mesh)
     }
 
