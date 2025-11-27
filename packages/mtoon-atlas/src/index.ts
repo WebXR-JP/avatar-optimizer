@@ -19,3 +19,9 @@ export type {
   MaterialSlotAttributeConfig,
   MToonAtlasOptions,
 } from './types'
+
+// GLTF拡張プラグイン
+export { MToonAtlasLoaderPlugin } from './extensions/MToonAtlasLoaderPlugin'
+export { MToonAtlasExporterPlugin } from './extensions/MToonAtlasExporterPlugin'
+export { MTOON_ATLAS_EXTENSION_NAME } from './extensions/types'
+export type { MToonAtlasExtensionSchema } from './extensions/types'

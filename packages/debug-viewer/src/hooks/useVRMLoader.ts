@@ -2,6 +2,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm'
 import { ResultAsync } from 'neverthrow'
 import type { GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MToonAtlasLoaderPlugin } from '@xrift/mtoon-atlas'
 
 export type VRMLoaderError =
   | { type: 'VRM_LOAD_FAILED'; message: string }
@@ -21,6 +22,7 @@ export function loadVRM(url: string): ResultAsync<VRM, VRMLoaderError>
     {
       const loader = new GLTFLoader()
       loader.register(parser => new VRMLoaderPlugin(parser))
+      loader.register((parser: any) => new MToonAtlasLoaderPlugin(parser))
 
       const gltf = await loader.loadAsync(url)
       const vrm = gltf.userData.vrm as VRM | undefined
@@ -57,6 +59,7 @@ export function loadVRMFromFile(file: File): ResultAsync<VRM, VRMLoaderError>
       {
         const loader = new GLTFLoader()
         loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser))
+        loader.register((parser: any) => new MToonAtlasLoaderPlugin(parser))
 
         const gltf = await loader.loadAsync(url)
         const vrm = gltf.userData.vrm as VRM | undefined

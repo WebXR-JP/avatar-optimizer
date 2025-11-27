@@ -7,6 +7,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
 import { optimizeModel } from '@xrift/avatar-optimizer'
+import { MToonAtlasExporterPlugin } from '@xrift/mtoon-atlas'
 import './App.css'
 
 function App()
@@ -171,6 +172,7 @@ function App()
     if (!vrm) return
 
     const exporter = new GLTFExporter()
+    exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
 
     exporter.parse(
       vrm.scene,
