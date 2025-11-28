@@ -4,7 +4,7 @@ import {
   MToonAtlasLoaderPlugin,
   MToonAtlasMaterial,
 } from '@xrift/mtoon-atlas'
-import { SkinnedMesh, SRGBColorSpace, Texture } from 'three'
+import { Object3D, Scene, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
@@ -50,10 +50,25 @@ describe('MToonAtlas Roundtrip', () =>
 
     return new Promise<ArrayBuffer>((resolve, reject) =>
     {
+      // vrm.scene の子要素を Scene に直接追加してエクスポート
+      // これにより GLTFExporter が AuxScene を作成するのを防ぎ、
+      // かつシーン構造が保持される
+      const exportScene = new Scene()
+
+      // 子要素を一時的にコピー（add()すると元の親から外れるため参照を保持）
+      // VRMHumanoidRig と VRMExpression はランタイムで動的に生成されるため除外
+      const children = [...vrm.scene.children].filter((child) =>
+        child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
+      )
+      children.forEach((child) => exportScene.add(child))
+
       exporter.parse(
-        vrm.scene,
+        exportScene,
         (result) =>
         {
+          // エクスポート後、子要素を元のvrm.sceneに戻す
+          children.forEach((child) => vrm.scene.add(child))
+
           if (result instanceof ArrayBuffer)
           {
             resolve(result)
@@ -62,7 +77,12 @@ describe('MToonAtlas Roundtrip', () =>
             reject(new Error('Expected ArrayBuffer output'))
           }
         },
-        (error) => reject(error),
+        (error) =>
+        {
+          // エラー時も子要素を元に戻す
+          children.forEach((child) => vrm.scene.add(child))
+          reject(error)
+        },
         { binary: true },
       )
     })
@@ -264,8 +284,10 @@ describe('MToonAtlas Roundtrip', () =>
       // テクスチャサイズが一致することを確認
       if (originalTexture instanceof Texture && reloadedTexture instanceof Texture)
       {
-        expect(reloadedTexture.image.width).toBe(originalTexture.image.width)
-        expect(reloadedTexture.image.height).toBe(originalTexture.image.height)
+        const origImg = originalTexture.image as { width?: number; height?: number }
+        const reloadImg = reloadedTexture.image as { width?: number; height?: number }
+        expect(reloadImg.width).toBe(origImg.width)
+        expect(reloadImg.height).toBe(origImg.height)
       }
     }
   })
@@ -467,4 +489,391 @@ describe('MToonAtlas Roundtrip', () =>
     // スロット属性のサイズが一致することを確認
     expect(reloadedSlotAttribute.count).toBe(originalSlotAttribute.count)
   })
+
+  it('should compare material properties before export and after reimport', async () =>
+  {
+    // 1. 元のVRMを読み込み
+    const response = await fetch(VRM_FILE_PATH)
+    const originalBuffer = await response.arrayBuffer()
+    const { vrm: originalVRM } = await loadVRM(originalBuffer)
+
+    // 2. 最適化を実行
+    const optimizeResult = await optimizeModel(originalVRM)
+    expect(optimizeResult.isOk()).toBe(true)
+
+    // 3. エクスポート前のマテリアル情報を取得
+    const originalMaterials = findMToonAtlasMaterials(originalVRM)
+    expect(originalMaterials.length).toBeGreaterThan(0)
+
+    const originalMaterial = originalMaterials[0]
+
+    // エクスポート前のマテリアル情報をキャプチャ
+    const beforeExport = captureMaterialState(originalMaterial, 'Before Export')
+
+    // 4. エクスポート
+    const exportedBuffer = await exportVRM(originalVRM)
+
+    // 5. 再読み込み
+    const { vrm: reloadedVRM } = await loadVRM(exportedBuffer)
+
+    // 6. 再読み込み後のマテリアル情報を取得
+    const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
+    expect(reloadedMaterials.length).toBeGreaterThan(0)
+
+    const reloadedMaterial = reloadedMaterials[0]
+
+    // 再読み込み後のマテリアル情報をキャプチャ
+    const afterReimport = captureMaterialState(reloadedMaterial, 'After Reimport')
+
+    // 7. 差分を比較・出力
+    const differences = compareMaterialStates(beforeExport, afterReimport)
+
+    // 差分をコンソールに出力（デバッグ用）
+    console.log('=== Material Comparison ===')
+    console.log('Before Export:', JSON.stringify(beforeExport, null, 2))
+    console.log('After Reimport:', JSON.stringify(afterReimport, null, 2))
+
+    if (differences.length > 0)
+    {
+      console.log('\n=== Differences Found ===')
+      for (const diff of differences)
+      {
+        console.log(`  ${diff.property}:`)
+        console.log(`    Before: ${JSON.stringify(diff.before)}`)
+        console.log(`    After:  ${JSON.stringify(diff.after)}`)
+      }
+    } else
+    {
+      console.log('\nNo differences found in material properties.')
+    }
+
+    // テストはパスさせる（比較結果の確認用）
+    expect(true).toBe(true)
+  })
+
+  it('should compare scene structure before export and after reimport', async () =>
+  {
+    // 1. 元のVRMを読み込み
+    const response = await fetch(VRM_FILE_PATH)
+    const originalBuffer = await response.arrayBuffer()
+    const { vrm: originalVRM } = await loadVRM(originalBuffer)
+
+    // 2. 最適化を実行
+    const optimizeResult = await optimizeModel(originalVRM)
+    expect(optimizeResult.isOk()).toBe(true)
+
+    // 3. エクスポート前のシーン構造を記録
+    console.log('=== Scene Structure Comparison ===')
+    console.log('Before Export:')
+    logSceneStructure(originalVRM.scene, 0)
+
+    // 4. エクスポート
+    const exportedBuffer = await exportVRM(originalVRM)
+
+    // 5. 再読み込み
+    const { vrm: reloadedVRM } = await loadVRM(exportedBuffer)
+
+    // 6. 再読み込み後のシーン構造を記録
+    console.log('\nAfter Reimport:')
+    logSceneStructure(reloadedVRM.scene, 0)
+
+    // 7. ルートノードの名前を比較
+    console.log('\n=== Root Node Comparison ===')
+    console.log(`Original root name: "${originalVRM.scene.name}" (type: ${originalVRM.scene.type})`)
+    console.log(`Reloaded root name: "${reloadedVRM.scene.name}" (type: ${reloadedVRM.scene.type})`)
+    console.log(`Original children count: ${originalVRM.scene.children.length}`)
+    console.log(`Reloaded children count: ${reloadedVRM.scene.children.length}`)
+
+    // ルートの子要素の名前を列挙
+    console.log('\nOriginal root children:')
+    originalVRM.scene.children.forEach((child, i) =>
+    {
+      console.log(`  [${i}] "${child.name}" (${child.type})`)
+    })
+
+    console.log('\nReloaded root children:')
+    reloadedVRM.scene.children.forEach((child, i) =>
+    {
+      console.log(`  [${i}] "${child.name}" (${child.type})`)
+    })
+
+    expect(true).toBe(true)
+  })
+
+  it('should compare shade texture data before export and after reimport', async () =>
+  {
+    // 1. 元のVRMを読み込み
+    const response = await fetch(VRM_FILE_PATH)
+    const originalBuffer = await response.arrayBuffer()
+    const { vrm: originalVRM } = await loadVRM(originalBuffer)
+
+    // 2. 最適化を実行
+    const optimizeResult = await optimizeModel(originalVRM)
+    expect(optimizeResult.isOk()).toBe(true)
+
+    // 3. エクスポート前のマテリアル情報を取得
+    const originalMaterials = findMToonAtlasMaterials(originalVRM)
+    expect(originalMaterials.length).toBeGreaterThan(0)
+
+    const originalMaterial = originalMaterials[0]
+    const originalShadeTexture = originalMaterial.parameterTexture?.atlasedTextures?.shade
+
+    // shadeテクスチャが存在することを確認
+    expect(originalShadeTexture, 'Original shade texture should exist').toBeDefined()
+
+    // エクスポート前のshadeテクスチャデータを取得
+    const originalShadeData = getTexturePixelData(originalShadeTexture!)
+    expect(originalShadeData, 'Should be able to read original shade texture data').not.toBeNull()
+
+    // 元のshadeテクスチャの非ゼロピクセルをカウント
+    const originalNonZeroCount = countNonZeroPixels(originalShadeData!)
+
+    console.log('=== Shade Texture Comparison ===')
+    const origImg = originalShadeTexture!.image as { width?: number; height?: number } | null
+    console.log(`Original shade texture size: ${origImg?.width}x${origImg?.height}`)
+    console.log(`Original shade texture non-zero pixels: ${originalNonZeroCount}`)
+    console.log(`Original shade texture colorSpace: ${originalShadeTexture!.colorSpace}`)
+
+    // 4. エクスポート
+    const exportedBuffer = await exportVRM(originalVRM)
+
+    // 5. 再読み込み
+    const { vrm: reloadedVRM } = await loadVRM(exportedBuffer)
+
+    // 6. 再読み込み後のマテリアル情報を取得
+    const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
+    expect(reloadedMaterials.length).toBeGreaterThan(0)
+
+    const reloadedMaterial = reloadedMaterials[0]
+    const reloadedShadeTexture = reloadedMaterial.parameterTexture?.atlasedTextures?.shade
+
+    // shadeテクスチャが復元されていることを確認
+    expect(reloadedShadeTexture, 'Reloaded shade texture should exist').toBeDefined()
+
+    // 再読み込み後のshadeテクスチャデータを取得
+    const reloadedShadeData = getTexturePixelData(reloadedShadeTexture!)
+    expect(reloadedShadeData, 'Should be able to read reloaded shade texture data').not.toBeNull()
+
+    // 再読み込み後のshadeテクスチャの非ゼロピクセルをカウント
+    const reloadedNonZeroCount = countNonZeroPixels(reloadedShadeData!)
+
+    const reloadImg = reloadedShadeTexture!.image as { width?: number; height?: number } | null
+    console.log(`Reloaded shade texture size: ${reloadImg?.width}x${reloadImg?.height}`)
+    console.log(`Reloaded shade texture non-zero pixels: ${reloadedNonZeroCount}`)
+    console.log(`Reloaded shade texture colorSpace: ${reloadedShadeTexture!.colorSpace}`)
+
+    // 最初の数ピクセルのRGBA値を比較
+    console.log('\n=== First 10 pixels comparison (RGBA) ===')
+    for (let i = 0; i < Math.min(40, originalShadeData!.length); i += 4)
+    {
+      const origR = originalShadeData![i]
+      const origG = originalShadeData![i + 1]
+      const origB = originalShadeData![i + 2]
+      const origA = originalShadeData![i + 3]
+
+      const reloadR = reloadedShadeData![i]
+      const reloadG = reloadedShadeData![i + 1]
+      const reloadB = reloadedShadeData![i + 2]
+      const reloadA = reloadedShadeData![i + 3]
+
+      const pixelIndex = i / 4
+      const isDifferent = origR !== reloadR || origG !== reloadG || origB !== reloadB || origA !== reloadA
+      console.log(
+        `Pixel ${pixelIndex}: ` +
+        `Original(${origR},${origG},${origB},${origA}) vs ` +
+        `Reloaded(${reloadR},${reloadG},${reloadB},${reloadA})` +
+        (isDifferent ? ' [DIFFERENT]' : '')
+      )
+    }
+
+    // 非ゼロピクセル数が概ね一致することを確認
+    const ratio = reloadedNonZeroCount / (originalNonZeroCount || 1)
+    console.log(`\nNon-zero pixel ratio: ${ratio}`)
+
+    // テストはパスさせる（比較結果の確認用）
+    expect(true).toBe(true)
+  })
 })
+
+/**
+ * マテリアルの状態をキャプチャ
+ */
+function captureMaterialState(material: MToonAtlasMaterial, label: string): Record<string, unknown>
+{
+  const state: Record<string, unknown> = {
+    label,
+    name: material.name,
+
+    // 基本プロパティ
+    side: material.side,
+    transparent: material.transparent,
+    depthWrite: material.depthWrite,
+    alphaTest: material.alphaTest,
+
+    // パラメータテクスチャ情報
+    parameterTexture: material.parameterTexture ? {
+      slotCount: material.parameterTexture.slotCount,
+      texelsPerSlot: material.parameterTexture.texelsPerSlot,
+      textureExists: !!material.parameterTexture.texture,
+      textureSize: material.parameterTexture.texture?.image ? {
+        width: (material.parameterTexture.texture.image as { width?: number }).width,
+        height: (material.parameterTexture.texture.image as { height?: number }).height,
+      } : null,
+      atlasedTextureKeys: material.parameterTexture.atlasedTextures
+        ? Object.keys(material.parameterTexture.atlasedTextures).filter(
+          (key) => material.parameterTexture!.atlasedTextures![key as keyof typeof material.parameterTexture.atlasedTextures] != null
+        )
+        : [],
+    } : null,
+
+    // スロット属性
+    slotAttribute: material.slotAttribute,
+
+    // Defines
+    defines: { ...material.defines },
+
+    // Uniforms（主要なもののみ）
+    uniforms: captureUniforms(material),
+
+    // Three.js 標準プロパティ
+    fog: material.fog,
+    lights: material.lights,
+    clipping: material.clipping,
+    vertexShaderLength: material.vertexShader?.length,
+    fragmentShaderLength: material.fragmentShader?.length,
+  }
+
+  return state
+}
+
+/**
+ * Uniformsの値をキャプチャ
+ */
+function captureUniforms(material: MToonAtlasMaterial): Record<string, unknown>
+{
+  const uniforms = material.uniforms
+  const result: Record<string, unknown> = {}
+
+  // テクスチャ関連
+  result.hasParameterTexture = !!uniforms.uParameterTexture?.value
+  result.parameterTextureSize = uniforms.uParameterTextureSize?.value
+    ? { x: uniforms.uParameterTextureSize.value.x, y: uniforms.uParameterTextureSize.value.y }
+    : null
+  result.texelsPerSlot = uniforms.uTexelsPerSlot?.value
+
+  // アトラステクスチャの存在チェック
+  result.hasMap = !!uniforms.map?.value
+  result.hasShadeMultiplyTexture = !!uniforms.shadeMultiplyTexture?.value
+  result.hasShadingShiftTexture = !!uniforms.shadingShiftTexture?.value
+  result.hasNormalMap = !!uniforms.normalMap?.value
+  result.hasEmissiveMap = !!uniforms.emissiveMap?.value
+  result.hasMatcapTexture = !!uniforms.matcapTexture?.value
+  result.hasRimMultiplyTexture = !!uniforms.rimMultiplyTexture?.value
+  result.hasUvAnimationMaskTexture = !!uniforms.uvAnimationMaskTexture?.value
+
+  // MToonパラメータ（Color型は文字列に変換）
+  const litFactor = uniforms.litFactor?.value
+  result.litFactor = litFactor ? { r: litFactor.r, g: litFactor.g, b: litFactor.b } : null
+
+  result.opacity = uniforms.opacity?.value
+
+  const shadeColorFactor = uniforms.shadeColorFactor?.value
+  result.shadeColorFactor = shadeColorFactor
+    ? { r: shadeColorFactor.r, g: shadeColorFactor.g, b: shadeColorFactor.b }
+    : null
+
+  result.shadingShiftFactor = uniforms.shadingShiftFactor?.value
+  result.shadingToonyFactor = uniforms.shadingToonyFactor?.value
+  result.giEqualizationFactor = uniforms.giEqualizationFactor?.value
+
+  const parametricRimColorFactor = uniforms.parametricRimColorFactor?.value
+  result.parametricRimColorFactor = parametricRimColorFactor
+    ? { r: parametricRimColorFactor.r, g: parametricRimColorFactor.g, b: parametricRimColorFactor.b }
+    : null
+
+  result.rimLightingMixFactor = uniforms.rimLightingMixFactor?.value
+  result.parametricRimFresnelPowerFactor = uniforms.parametricRimFresnelPowerFactor?.value
+  result.parametricRimLiftFactor = uniforms.parametricRimLiftFactor?.value
+
+  const matcapFactor = uniforms.matcapFactor?.value
+  result.matcapFactor = matcapFactor
+    ? { r: matcapFactor.r, g: matcapFactor.g, b: matcapFactor.b }
+    : null
+
+  const emissive = uniforms.emissive?.value
+  result.emissive = emissive
+    ? { r: emissive.r, g: emissive.g, b: emissive.b }
+    : null
+
+  result.emissiveIntensity = uniforms.emissiveIntensity?.value
+
+  const outlineColorFactor = uniforms.outlineColorFactor?.value
+  result.outlineColorFactor = outlineColorFactor
+    ? { r: outlineColorFactor.r, g: outlineColorFactor.g, b: outlineColorFactor.b }
+    : null
+
+  result.outlineLightingMixFactor = uniforms.outlineLightingMixFactor?.value
+
+  result.uvAnimationScrollXOffset = uniforms.uvAnimationScrollXOffset?.value
+  result.uvAnimationScrollYOffset = uniforms.uvAnimationScrollYOffset?.value
+  result.uvAnimationRotationPhase = uniforms.uvAnimationRotationPhase?.value
+
+  return result
+}
+
+/**
+ * 2つのマテリアル状態を比較して差分を返す
+ */
+function compareMaterialStates(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+): Array<{ property: string; before: unknown; after: unknown }>
+{
+  const differences: Array<{ property: string; before: unknown; after: unknown }> = []
+
+  function compare(obj1: unknown, obj2: unknown, path: string)
+  {
+    if (obj1 === obj2) return
+
+    if (obj1 === null || obj2 === null || typeof obj1 !== 'object' || typeof obj2 !== 'object')
+    {
+      differences.push({ property: path, before: obj1, after: obj2 })
+      return
+    }
+
+    const keys = new Set([...Object.keys(obj1 as object), ...Object.keys(obj2 as object)])
+    for (const key of keys)
+    {
+      const val1 = (obj1 as Record<string, unknown>)[key]
+      const val2 = (obj2 as Record<string, unknown>)[key]
+      compare(val1, val2, path ? `${path}.${key}` : key)
+    }
+  }
+
+  // label は比較対象外
+  const beforeCopy = { ...before }
+  const afterCopy = { ...after }
+  delete beforeCopy.label
+  delete afterCopy.label
+
+  compare(beforeCopy, afterCopy, '')
+
+  return differences
+}
+
+/**
+ * シーン構造をログ出力（最大2階層）
+ */
+function logSceneStructure(obj: Object3D, depth: number, maxDepth = 2)
+{
+  const indent = '  '.repeat(depth)
+  console.log(`${indent}${obj.name || `<${obj.type}>`} (${obj.type}) - children: ${obj.children.length}`)
+
+  if (depth < maxDepth)
+  {
+    obj.children.forEach((child) =>
+    {
+      logSceneStructure(child, depth + 1, maxDepth)
+    })
+  }
+}

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button } from '@mui/material';
-import { ExpandLess, ExpandMore, GridOn } from '@mui/icons-material';
+import React, { useState, useEffect } from 'react';
+import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button, Chip, Stack } from '@mui/material';
+import { ExpandLess, ExpandMore, GridOn, LightMode } from '@mui/icons-material';
 import * as THREE from 'three';
 import { VRM } from '@pixiv/three-vrm';
 import { UVPreviewDialog } from './UVPreviewDialog';
@@ -9,6 +9,7 @@ import { UVPreviewDialog } from './UVPreviewDialog';
 interface SceneInspectorProps
 {
   vrm: VRM | null;
+  scene?: THREE.Scene; // Three.jsシーン全体（ライトなど含む）
 }
 
 interface SceneNodeProps
@@ -223,9 +224,92 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
   );
 };
 
-export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm }) =>
+/**
+ * シーン統計を計算
+ */
+function computeSceneStats(scene: THREE.Object3D): {
+  totalObjects: number;
+  meshes: number;
+  skinnedMeshes: number;
+  lights: number;
+  directionalLights: number;
+  ambientLights: number;
+  pointLights: number;
+  materials: Set<THREE.Material>;
+}
+{
+  const stats = {
+    totalObjects: 0,
+    meshes: 0,
+    skinnedMeshes: 0,
+    lights: 0,
+    directionalLights: 0,
+    ambientLights: 0,
+    pointLights: 0,
+    materials: new Set<THREE.Material>(),
+  };
+
+  scene.traverse((obj) =>
+  {
+    stats.totalObjects++;
+
+    if ((obj as THREE.Mesh).isMesh)
+    {
+      stats.meshes++;
+      const mesh = obj as THREE.Mesh;
+      if (Array.isArray(mesh.material))
+      {
+        mesh.material.forEach((m) => stats.materials.add(m));
+      } else if (mesh.material)
+      {
+        stats.materials.add(mesh.material);
+      }
+    }
+
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh)
+    {
+      stats.skinnedMeshes++;
+    }
+
+    if ((obj as THREE.Light).isLight)
+    {
+      stats.lights++;
+      if ((obj as THREE.DirectionalLight).isDirectionalLight)
+      {
+        stats.directionalLights++;
+      }
+      if ((obj as THREE.AmbientLight).isAmbientLight)
+      {
+        stats.ambientLights++;
+      }
+      if ((obj as THREE.PointLight).isPointLight)
+      {
+        stats.pointLights++;
+      }
+    }
+  });
+
+  return stats;
+}
+
+export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
 {
   const [selectedObject, setSelectedObject] = useState<THREE.Object3D | null>(null);
+  const [sceneStats, setSceneStats] = useState<ReturnType<typeof computeSceneStats> | null>(null);
+  const [vrmStats, setVrmStats] = useState<ReturnType<typeof computeSceneStats> | null>(null);
+
+  // シーン統計を計算
+  useEffect(() =>
+  {
+    if (scene)
+    {
+      setSceneStats(computeSceneStats(scene));
+    }
+    if (vrm)
+    {
+      setVrmStats(computeSceneStats(vrm.scene));
+    }
+  }, [scene, vrm]);
 
   if (!vrm)
   {
@@ -233,19 +317,82 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm }) =>
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100%', color: 'black' }}>
-      <Paper sx={{ width: '40%', overflow: 'auto', borderRight: '1px solid #ddd', borderRadius: 0, color: 'black' }} elevation={0}>
-        <List component="nav" dense>
-          <SceneNode
-            object={vrm.scene}
-            depth={0}
-            selectedObject={selectedObject}
-            onSelect={setSelectedObject}
-          />
-        </List>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', color: 'black' }}>
+      {/* シーン統計パネル */}
+      <Paper sx={{ p: 2, borderBottom: '1px solid #ddd', borderRadius: 0 }} elevation={0}>
+        <Typography variant="subtitle2" gutterBottom>
+          <LightMode fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+          Scene Statistics
+        </Typography>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {sceneStats && (
+            <>
+              <Chip
+                size="small"
+                label={`Lights: ${sceneStats.lights}`}
+                color={sceneStats.lights > 0 ? 'success' : 'error'}
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                label={`Dir: ${sceneStats.directionalLights}`}
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                label={`Ambient: ${sceneStats.ambientLights}`}
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                label={`Objects: ${sceneStats.totalObjects}`}
+                variant="outlined"
+              />
+            </>
+          )}
+        </Stack>
+        {vrmStats && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              VRM Scene: {vrmStats.meshes} meshes, {vrmStats.skinnedMeshes} skinned, {vrmStats.materials.size} materials
+            </Typography>
+          </Box>
+        )}
       </Paper>
-      <Box sx={{ width: '60%', overflow: 'auto', bgcolor: '#f5f5f5', color: 'black' }}>
-        <InspectorPanel object={selectedObject} />
+
+      {/* メインコンテンツ */}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <Paper sx={{ width: '40%', overflow: 'auto', borderRight: '1px solid #ddd', borderRadius: 0, color: 'black' }} elevation={0}>
+          <List component="nav" dense>
+            {/* Three.jsシーン全体を表示（渡されている場合） */}
+            {scene && (
+              <>
+                <Typography variant="caption" sx={{ pl: 2, pt: 1, display: 'block', color: 'text.secondary' }}>
+                  Full Scene
+                </Typography>
+                <SceneNode
+                  object={scene}
+                  depth={0}
+                  selectedObject={selectedObject}
+                  onSelect={setSelectedObject}
+                />
+                <Divider sx={{ my: 1 }} />
+              </>
+            )}
+            <Typography variant="caption" sx={{ pl: 2, pt: 1, display: 'block', color: 'text.secondary' }}>
+              VRM Scene
+            </Typography>
+            <SceneNode
+              object={vrm.scene}
+              depth={0}
+              selectedObject={selectedObject}
+              onSelect={setSelectedObject}
+            />
+          </List>
+        </Paper>
+        <Box sx={{ width: '60%', overflow: 'auto', bgcolor: '#f5f5f5', color: 'black' }}>
+          <InspectorPanel object={selectedObject} />
+        </Box>
       </Box>
     </Box>
   );

@@ -3,6 +3,7 @@ import { Box, Tabs, Tab } from '@mui/material'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
+import { Scene } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
@@ -180,10 +181,22 @@ function App()
       return plugin
     })
 
+    // vrm.scene の子要素を Scene に直接追加してエクスポート
+    // これにより GLTFExporter が AuxScene を作成するのを防ぐ
+    // VRMHumanoidRig と VRMExpression はランタイムで動的に生成されるため除外
+    const exportScene = new Scene()
+    const children = [...vrm.scene.children].filter((child) =>
+      child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
+    )
+    children.forEach((child) => exportScene.add(child))
+
     exporter.parse(
-      vrm.scene,
+      exportScene,
       (result) =>
       {
+        // エクスポート後、子要素を元のvrm.sceneに戻す
+        children.forEach((child) => vrm.scene.add(child))
+
         try
         {
           let blob: Blob
@@ -217,6 +230,8 @@ function App()
       },
       (error) =>
       {
+        // エラー時も子要素を元に戻す
+        children.forEach((child) => vrm.scene.add(child))
         setError(`GLTF export failed: ${String(error)}`)
       },
       {
