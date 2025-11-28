@@ -9,6 +9,7 @@
 
 // クラスエクスポート
 export { MToonAtlasMaterial } from './MToonAtlasMaterial'
+export type { DebugMode } from './MToonAtlasMaterial'
 
 // 型定義エクスポート
 export type {

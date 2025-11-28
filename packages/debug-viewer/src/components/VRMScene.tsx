@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer } from 'three'
+import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
+import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
 
 interface VRMSceneProps
 {
   vrm: VRM | null
   vrmAnimation: VRMAnimation | null
+  debugMode: DebugMode
 }
 
 /**
@@ -16,7 +18,7 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
@@ -51,6 +53,27 @@ function VRMScene({ vrm, vrmAnimation }: VRMSceneProps)
       mixerRef.current = null
     }
   }, [vrm, vrmAnimation])
+
+  // デバッグモードの変更をマテリアルに適用
+  useEffect(() =>
+  {
+    if (!vrm) return
+
+    vrm.scene.traverse((object) =>
+    {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials)
+      {
+        if (material instanceof MToonAtlasMaterial)
+        {
+          material.setDebugMode(debugMode)
+        }
+      }
+    })
+  }, [vrm, debugMode])
 
   // アニメーションループ
   useFrame((_state, delta) =>

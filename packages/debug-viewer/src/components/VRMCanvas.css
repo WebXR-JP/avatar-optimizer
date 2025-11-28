@@ -78,3 +78,51 @@
 .vrm-canvas__info p {
   margin: 0;
 }
+
+/* デバッグパネル */
+.vrm-canvas__debug-panel {
+  position: absolute;
+  bottom: 50px;
+  right: 10px;
+  padding: 0.75rem 1rem;
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 100;
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.vrm-canvas__debug-panel label {
+  font-weight: 500;
+  color: #ccc;
+}
+
+.vrm-canvas__debug-select {
+  padding: 0.4rem 0.6rem;
+  background-color: #2a2a2a;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.vrm-canvas__debug-select:hover {
+  border-color: #777;
+}
+
+.vrm-canvas__debug-select:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.vrm-canvas__debug-hint {
+  font-size: 0.75rem;
+  color: #888;
+  font-style: italic;
+  max-width: 200px;
+}

@@ -543,6 +543,64 @@ void main() {
     return;
   #endif
 
+  // デバッグ: シャドウ関連の値を可視化
+  #ifdef DEBUG_SHADOW
+    // シャドウマップの有効状態を確認
+    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+      // DirectionalShadowCoord の可視化（赤緑チャンネル）
+      vec4 shadowCoord = vDirectionalShadowCoord[ 0 ];
+      gl_FragColor = vec4( shadowCoord.xy, 0.0, 1.0 );
+    #else
+      // シャドウマップが無効の場合は黄色
+      gl_FragColor = vec4( 1.0, 1.0, 0.0, 1.0 );
+    #endif
+    return;
+  #endif
+
+  #ifdef DEBUG_SHADOW_VALUE
+    // 実際のシャドウ値を可視化（白=影なし、黒=影あり）
+    float debugShadow = 1.0;
+    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+      DirectionalLightShadow debugDirLightShadow = directionalLightShadows[ 0 ];
+      #if THREE_VRM_THREE_REVISION >= 166
+        debugShadow = getShadow( directionalShadowMap[ 0 ], debugDirLightShadow.shadowMapSize, debugDirLightShadow.shadowIntensity, debugDirLightShadow.shadowBias, debugDirLightShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
+      #else
+        debugShadow = getShadow( directionalShadowMap[ 0 ], debugDirLightShadow.shadowMapSize, debugDirLightShadow.shadowBias, debugDirLightShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
+      #endif
+    #endif
+    gl_FragColor = vec4( vec3( debugShadow ), 1.0 );
+    return;
+  #endif
+
+  #ifdef DEBUG_RECEIVE_SHADOW
+    // receiveShadow フラグの確認（緑=有効、赤=無効）
+    gl_FragColor = vec4( receiveShadow ? 0.0 : 1.0, receiveShadow ? 1.0 : 0.0, 0.0, 1.0 );
+    return;
+  #endif
+
+  #ifdef DEBUG_LIGHT_DIR
+    // ライト方向の可視化
+    #if NUM_DIR_LIGHTS > 0
+      vec3 lightDir = directionalLights[ 0 ].direction;
+      gl_FragColor = vec4( 0.5 + 0.5 * lightDir, 1.0 );
+    #else
+      gl_FragColor = vec4( 1.0, 0.0, 1.0, 1.0 ); // マゼンタ = ライトなし
+    #endif
+    return;
+  #endif
+
+  #ifdef DEBUG_DOT_NL
+    // dotNL（法線とライト方向の内積）の可視化
+    #if NUM_DIR_LIGHTS > 0
+      float debugDotNL = dot( normal, directionalLights[ 0 ].direction );
+      // -1〜1 を 0〜1 にマッピング
+      gl_FragColor = vec4( vec3( 0.5 + 0.5 * debugDotNL ), 1.0 );
+    #else
+      gl_FragColor = vec4( 1.0, 0.0, 1.0, 1.0 );
+    #endif
+    return;
+  #endif
+
   // -- MToon: lighting --------------------------------------------------------
   // accumulation
   // #include <lights_phong_fragment>
@@ -567,6 +625,25 @@ void main() {
   #endif
 
   material.shadingToony = shadingToonyFactor;
+
+  #ifdef DEBUG_SHADING
+    // MToonのシェーディング結果を可視化（shadingShift/shadingToony適用後）
+    #if NUM_DIR_LIGHTS > 0
+      float debugDotNL2 = clamp( dot( normal, directionalLights[ 0 ].direction ), -1.0, 1.0 );
+      float debugShading = getShading( debugDotNL2, 1.0, material.shadingShift, material.shadingToony );
+      gl_FragColor = vec4( vec3( debugShading ), 1.0 );
+    #else
+      gl_FragColor = vec4( 1.0, 0.0, 1.0, 1.0 );
+    #endif
+    return;
+  #endif
+
+  #ifdef DEBUG_SHADING_PARAMS
+    // shadingShift と shadingToony の値を可視化
+    // R = shadingShift (-1〜1 を 0〜1 に), G = shadingToony (0〜1)
+    gl_FragColor = vec4( 0.5 + 0.5 * material.shadingShift, material.shadingToony, 0.0, 1.0 );
+    return;
+  #endif
 
   // #include <lights_fragment_begin>
 

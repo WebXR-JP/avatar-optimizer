@@ -44,7 +44,7 @@ export function replaceVRMTextures(
             ? mesh.material
             : [mesh.material]
 
-          materials.forEach((material) => {
+          materials.forEach((material: any) => {
             if (!material) return
 
             // このテクスチャプロパティを置き換え

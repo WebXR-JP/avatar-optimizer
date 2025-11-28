@@ -4,6 +4,7 @@ import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
+import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
 
 import './VRMCanvas.css'
 
@@ -22,6 +23,8 @@ interface VRMCanvasProps
   isReplacingTextures: boolean
   vrmAnimation: VRMAnimation | null
   onPlayAnimation: () => Promise<void>
+  debugMode: DebugMode
+  onDebugModeChange: (mode: DebugMode) => void
 }
 
 /**
@@ -65,6 +68,8 @@ function VRMCanvas({
   isReplacingTextures,
   vrmAnimation,
   onPlayAnimation,
+  debugMode,
+  onDebugModeChange,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -97,7 +102,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -163,6 +168,36 @@ function VRMCanvas({
               <p>VRM loaded: {vrm.scene.name || 'Unnamed Model'}</p>
             </div>
           )}
+
+          {/* デバッグモード選択UI */}
+          <div className="vrm-canvas__debug-panel">
+            <label htmlFor="debug-mode-select">Debug Mode: </label>
+            <select
+              id="debug-mode-select"
+              value={debugMode}
+              onChange={(e) => onDebugModeChange(e.target.value as DebugMode)}
+              className="vrm-canvas__debug-select"
+            >
+              {MToonAtlasMaterial.getAvailableDebugModes().map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode === 'none' ? 'None (Normal)' : mode}
+                </option>
+              ))}
+            </select>
+            <span className="vrm-canvas__debug-hint">
+              {debugMode === 'none' && '通常描画'}
+              {debugMode === 'uv' && 'UV座標を可視化 (RG=UV)'}
+              {debugMode === 'normal' && 'ワールド法線を可視化'}
+              {debugMode === 'shadow' && 'シャドウ座標を可視化 (黄色=無効)'}
+              {debugMode === 'shadowValue' && 'シャドウ値 (白=影なし、黒=影あり)'}
+              {debugMode === 'receiveShadow' && 'receiveShadow (緑=有効、赤=無効)'}
+              {debugMode === 'lightDir' && 'ライト方向を可視化'}
+              {debugMode === 'dotNL' && '法線・ライト内積 (NdotL)'}
+              {debugMode === 'shading' && 'MToonシェーディング結果'}
+              {debugMode === 'shadingParams' && 'shadingShift(R)/shadingToony(G)'}
+              {debugMode === 'litShadeRate' && '明暗グラデーション'}
+            </span>
+          </div>
         </>
       )}
     </div>

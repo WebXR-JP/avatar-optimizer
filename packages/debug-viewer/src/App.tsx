@@ -8,7 +8,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
 import { optimizeModel, VRMExporterPlugin } from '@xrift/avatar-optimizer'
-import { MToonAtlasExporterPlugin } from '@xrift/mtoon-atlas'
+import { MToonAtlasExporterPlugin, type DebugMode } from '@xrift/mtoon-atlas'
 import './App.css'
 
 function App()
@@ -21,6 +21,7 @@ function App()
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [isReplacingTextures, setIsReplacingTextures] = useState(false)
+  const [debugMode, setDebugMode] = useState<DebugMode>('none')
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -285,6 +286,8 @@ function App()
           isReplacingTextures={isReplacingTextures}
           vrmAnimation={vrmAnimation}
           onPlayAnimation={handlePlayAnimation}
+          debugMode={debugMode}
+          onDebugModeChange={setDebugMode}
         />
 
         {/* Routes でオーバーレイを管理 */}

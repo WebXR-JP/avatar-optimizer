@@ -18,6 +18,34 @@ import type {
 } from './types'
 
 /**
+ * デバッグモードの種類
+ *
+ * - 'none': デバッグなし（通常描画）
+ * - 'uv': UV座標を可視化（RG = UV）
+ * - 'normal': ワールド法線を可視化
+ * - 'shadow': シャドウ座標を可視化（シャドウマップが無効なら黄色）
+ * - 'shadowValue': 実際のシャドウ値を可視化（白=影なし、黒=影あり）
+ * - 'receiveShadow': receiveShadowフラグの確認（緑=有効、赤=無効）
+ * - 'lightDir': ライト方向を可視化
+ * - 'dotNL': 法線とライト方向の内積を可視化
+ * - 'shading': MToonシェーディング結果を可視化
+ * - 'shadingParams': shadingShift/shadingToonyの値を可視化
+ * - 'litShadeRate': 明暗のグラデーションを可視化
+ */
+export type DebugMode =
+  | 'none'
+  | 'uv'
+  | 'normal'
+  | 'shadow'
+  | 'shadowValue'
+  | 'receiveShadow'
+  | 'lightDir'
+  | 'dotNL'
+  | 'shading'
+  | 'shadingParams'
+  | 'litShadeRate'
+
+/**
  * MToonAtlasMaterial
  *
  * パラメータテクスチャベースの統合 MToon マテリアル
@@ -44,6 +72,13 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
   private _slotAttribute: MaterialSlotAttributeConfig = {
     name: 'mtoonMaterialSlot',
   }
+
+  /**
+   * 現在のデバッグモード
+   *
+   * @internal
+   */
+  private _debugMode: DebugMode = 'none'
 
   /**
    * Uniform インターフェース
@@ -401,5 +436,105 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
         // 実装例: scrollX += uvAnimationScrollX * _deltaTime
       }
     }
+  }
+
+  /**
+   * デバッグモードを設定
+   *
+   * シャドウの問題を調査するために、様々なパラメータを可視化できます。
+   *
+   * @param mode デバッグモード
+   * @returns this（チェーン可能）
+   *
+   * @example
+   * ```typescript
+   * // シャドウ値を可視化（白=影なし、黒=影あり）
+   * material.setDebugMode('shadowValue')
+   *
+   * // 通常描画に戻す
+   * material.setDebugMode('none')
+   * ```
+   */
+  setDebugMode(mode: DebugMode): this
+  {
+    this._debugMode = mode
+
+    if (!this.defines) return this
+
+    // すべてのデバッグdefineをクリア
+    const debugDefines = [
+      'DEBUG_UV',
+      'DEBUG_NORMAL',
+      'DEBUG_SHADOW',
+      'DEBUG_SHADOW_VALUE',
+      'DEBUG_RECEIVE_SHADOW',
+      'DEBUG_LIGHT_DIR',
+      'DEBUG_DOT_NL',
+      'DEBUG_SHADING',
+      'DEBUG_SHADING_PARAMS',
+      'DEBUG_LITSHADERATE',
+    ]
+
+    for (const define of debugDefines)
+    {
+      delete this.defines[define]
+    }
+
+    // 選択されたモードのdefineを設定
+    const modeToDefine: Record<DebugMode, string | null> = {
+      'none': null,
+      'uv': 'DEBUG_UV',
+      'normal': 'DEBUG_NORMAL',
+      'shadow': 'DEBUG_SHADOW',
+      'shadowValue': 'DEBUG_SHADOW_VALUE',
+      'receiveShadow': 'DEBUG_RECEIVE_SHADOW',
+      'lightDir': 'DEBUG_LIGHT_DIR',
+      'dotNL': 'DEBUG_DOT_NL',
+      'shading': 'DEBUG_SHADING',
+      'shadingParams': 'DEBUG_SHADING_PARAMS',
+      'litShadeRate': 'DEBUG_LITSHADERATE',
+    }
+
+    const define = modeToDefine[mode]
+    if (define)
+    {
+      this.defines[define] = ''
+    }
+
+    this.needsUpdate = true
+
+    return this
+  }
+
+  /**
+   * 現在のデバッグモードを取得
+   *
+   * @returns 現在のデバッグモード
+   */
+  get debugMode(): DebugMode
+  {
+    return this._debugMode
+  }
+
+  /**
+   * 利用可能なデバッグモードの一覧を取得
+   *
+   * @returns デバッグモードの配列
+   */
+  static getAvailableDebugModes(): DebugMode[]
+  {
+    return [
+      'none',
+      'uv',
+      'normal',
+      'shadow',
+      'shadowValue',
+      'receiveShadow',
+      'lightDir',
+      'dotNL',
+      'shading',
+      'shadingParams',
+      'litShadeRate',
+    ]
   }
 }
