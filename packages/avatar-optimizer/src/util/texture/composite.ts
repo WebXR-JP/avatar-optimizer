@@ -7,8 +7,10 @@ import {
   DataTexture,
   DoubleSide,
   LinearFilter,
+  LinearSRGBColorSpace,
   Mesh,
   MeshBasicMaterial,
+  NoColorSpace,
   OneFactor,
   OrthographicCamera,
   PlaneGeometry,
@@ -120,6 +122,8 @@ export function composeImagesToAtlas(
 
 /**
  * WebGL レンダラーを作成する（オフスクリーン描画用）
+ * outputColorSpace を LinearSRGBColorSpace に設定し、
+ * 色空間変換を行わずピクセルデータをそのまま出力する
  */
 function createRenderer(): WebGLRenderer {
   const canvas = new OffscreenCanvas(1, 1) // ダミーキャンバス
@@ -128,6 +132,8 @@ function createRenderer(): WebGLRenderer {
     antialias: false,
     alpha: true,
   })
+  // ガンマ補正を無効化（ソーステクスチャのデータをそのまま保持）
+  renderer.outputColorSpace = LinearSRGBColorSpace
   return renderer
 }
 
@@ -140,6 +146,10 @@ function createRenderer(): WebGLRenderer {
 function createLayerMesh(layer: ImageMatrixPair): Mesh {
   const texture = layer.image
   const uvTransform = layer.uvTransform
+
+  // 色空間変換を無効化（ピクセルデータをそのまま合成）
+  // outputColorSpace = LinearSRGBColorSpace と組み合わせて使用
+  texture.colorSpace = NoColorSpace
 
   // PlaneGeometry: デフォルトは 1x1、中心が原点
   const geometry = new PlaneGeometry()
