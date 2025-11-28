@@ -1,15 +1,15 @@
 import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { describe, expect, it } from 'vitest'
 import {
   MToonAtlasExporterPlugin,
   MToonAtlasLoaderPlugin,
   MToonAtlasMaterial,
 } from '@xrift/mtoon-atlas'
+import { SkinnedMesh, SRGBColorSpace, Texture } from 'three'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
 import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
-import { SkinnedMesh, Texture } from 'three'
 
 /**
  * MToonAtlasMaterialを使用した最適化済みVRMのラウンドトリップテスト
@@ -68,7 +68,7 @@ describe('MToonAtlas Roundtrip', () =>
     })
   }
 
-/**
+  /**
    * テクスチャからピクセルデータを取得するヘルパー関数
    */
   function getTexturePixelData(texture: Texture): Uint8ClampedArray | null
@@ -237,7 +237,7 @@ describe('MToonAtlas Roundtrip', () =>
     const originalAtlasedTextures = originalMaterials[0].parameterTexture?.atlasedTextures
     const originalTextureKeys = originalAtlasedTextures
       ? Object.keys(originalAtlasedTextures).filter(
-        (key) => originalAtlasedTextures[key as keyof typeof originalAtlasedTextures] != null
+        (key) => originalAtlasedTextures[key as keyof typeof originalAtlasedTextures] != null,
       )
       : []
 
@@ -326,6 +326,75 @@ describe('MToonAtlas Roundtrip', () =>
       ratio,
       `Non-zero pixel count ratio should be close to 1.0 (got ${ratio})`,
     ).toBeGreaterThan(0.9)
+  })
+
+  it('should preserve texture colorSpace after roundtrip', async () =>
+  {
+    // 1. 元のVRMを読み込み
+    const response = await fetch(VRM_FILE_PATH)
+    const originalBuffer = await response.arrayBuffer()
+    const { vrm: originalVRM } = await loadVRM(originalBuffer)
+
+    // 2. 最適化を実行
+    const optimizeResult = await optimizeModel(originalVRM)
+    expect(optimizeResult.isOk()).toBe(true)
+
+    // 3. 最適化後のテクスチャのcolorSpaceを取得
+    const originalMaterials = findMToonAtlasMaterials(originalVRM)
+    expect(originalMaterials.length).toBeGreaterThan(0)
+
+    const originalAtlasedTextures = originalMaterials[0].parameterTexture?.atlasedTextures
+    expect(originalAtlasedTextures, 'Original atlased textures should exist').toBeDefined()
+
+    // 元のcolorSpaceを記録
+    const originalColorSpaces: Record<string, string> = {}
+    for (const [key, texture] of Object.entries(originalAtlasedTextures!))
+    {
+      if (texture instanceof Texture)
+      {
+        originalColorSpaces[key] = texture.colorSpace
+      }
+    }
+
+    // baseColor は sRGB であることを確認
+    if (originalColorSpaces.baseColor)
+    {
+      expect(originalColorSpaces.baseColor).toBe(SRGBColorSpace)
+    }
+
+    // 4. エクスポート
+    const exportedBuffer = await exportVRM(originalVRM)
+
+    // 5. 再読み込み
+    const { vrm: reloadedVRM } = await loadVRM(exportedBuffer)
+
+    // 6. 再読み込み後のcolorSpaceを確認
+    const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
+    expect(reloadedMaterials.length).toBeGreaterThan(0)
+
+    const reloadedAtlasedTextures = reloadedMaterials[0].parameterTexture?.atlasedTextures
+    expect(reloadedAtlasedTextures, 'Reloaded atlased textures should exist').toBeDefined()
+
+    // 各テクスチャのcolorSpaceが保持されていることを確認
+    for (const [key, originalColorSpace] of Object.entries(originalColorSpaces))
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reloadedTexture = (reloadedAtlasedTextures as any)?.[key]
+      if (reloadedTexture instanceof Texture)
+      {
+        // sRGB テクスチャは再読み込み後も sRGB であるべき
+        const expectedColorSpace = originalColorSpace === SRGBColorSpace ? SRGBColorSpace : reloadedTexture.colorSpace
+        expect(
+          reloadedTexture.colorSpace,
+          `Texture '${key}' colorSpace should be preserved (expected: ${expectedColorSpace}, got: ${reloadedTexture.colorSpace})`,
+        ).toBe(expectedColorSpace)
+      }
+    }
+
+    // パラメータテクスチャのcolorSpaceも確認（NoColorSpace/Linear であるべき）
+    const originalParamTexture = originalMaterials[0].parameterTexture?.texture
+    const reloadedParamTexture = reloadedMaterials[0].parameterTexture?.texture
+    expect(reloadedParamTexture?.colorSpace).toBe(originalParamTexture?.colorSpace)
   })
 
   it('should preserve slot attribute data after roundtrip', async () =>

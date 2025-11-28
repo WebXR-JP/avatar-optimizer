@@ -249,27 +249,27 @@ export class VRMExporterPlugin
       type: lookAt.applier?.type ?? 'bone', // 'bone' or 'expression'
       rangeMapHorizontalInner: lookAt.rangeMapHorizontalInner
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalInner.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalInner.outputScale,
+        }
         : defaultRangeMap,
       rangeMapHorizontalOuter: lookAt.rangeMapHorizontalOuter
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalDown: lookAt.rangeMapVerticalDown
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalDown.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalDown.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalUp: lookAt.rangeMapVerticalUp
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalUp.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalUp.outputScale,
+        }
         : defaultRangeMap,
     }
   }

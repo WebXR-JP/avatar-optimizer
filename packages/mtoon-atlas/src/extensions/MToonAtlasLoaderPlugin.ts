@@ -48,18 +48,22 @@ export class MToonAtlasLoaderPlugin
     {
       if (textureInfo)
       {
-        const texture = await this.parser.loadTexture(textureInfo.index)
+        const loadedTexture = await this.parser.loadTexture(textureInfo.index)
+        // GLTFLoader がテクスチャをキャッシュするため、clone() して独立したオブジェクトを使用
+        const texture = loadedTexture.clone()
+        texture.source = loadedTexture.source // image ソースを共有
         texture.flipY = false
 
         // Set color space based on texture type
         // baseColor, shade, emissive, matcap, rim are usually sRGB (color data)
         // normal, shadingShift, uvAnimationMask are Linear (non-color data)
-        if (['baseColor', 'shade', 'emissive', 'matcap', 'rim'].includes(key))
+        const srgbTextures = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
+        if (srgbTextures.includes(key))
         {
-          texture.colorSpace = SRGBColorSpace;
+          texture.colorSpace = SRGBColorSpace
         } else
         {
-          texture.colorSpace = NoColorSpace;
+          texture.colorSpace = NoColorSpace
         }
 
         atlasedTextures[key] = texture

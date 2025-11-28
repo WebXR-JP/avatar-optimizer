@@ -1,6 +1,6 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { ParameterSemanticId } from '@xrift/mtoon-atlas'
-import { Texture, TypedArray, Vector2 } from 'three'
+import { ColorSpace, NoColorSpace, SRGBColorSpace, Texture, TypedArray, Vector2 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 /**
@@ -66,6 +66,23 @@ export const MTOON_TEXTURE_SLOTS = [
   'uvAnimationMaskTexture',
 ] as const
 export type MToonTextureSlot = (typeof MTOON_TEXTURE_SLOTS)[number]
+
+/**
+ * テクスチャスロットごとのカラースペース設定
+ * - sRGB: カラーデータを持つテクスチャ（map, emissiveMap, shadeMultiplyTexture, matcapTexture, rimMultiplyTexture）
+ * - Linear/NoColorSpace: 非カラーデータ（normalMap, shadingShiftTexture, outlineWidthMultiplyTexture, uvAnimationMaskTexture）
+ */
+export const MTOON_TEXTURE_SLOT_COLOR_SPACES: Record<MToonTextureSlot, ColorSpace> = {
+  map: SRGBColorSpace,
+  normalMap: NoColorSpace,
+  emissiveMap: SRGBColorSpace,
+  shadeMultiplyTexture: SRGBColorSpace,
+  shadingShiftTexture: NoColorSpace,
+  matcapTexture: SRGBColorSpace,
+  rimMultiplyTexture: SRGBColorSpace,
+  outlineWidthMultiplyTexture: NoColorSpace,
+  uvAnimationMaskTexture: NoColorSpace,
+}
 
 /**
  * テクスチャスロット名をキーにしたアトラス画像マップの型

@@ -3,6 +3,7 @@ import { err, ok, Result, safeTry } from 'neverthrow'
 import { OptimizationError } from '..'
 import {
   AtlasImageMap,
+  MTOON_TEXTURE_SLOT_COLOR_SPACES,
   MTOON_TEXTURE_SLOTS,
   OffsetScale,
   PatternMaterialMapping,
@@ -58,6 +59,7 @@ export function generateAtlasImagesFromPatterns(
       const atlas = yield* composeImagesToAtlas(layers, {
         width: 2048,
         height: 2048,
+        colorSpace: MTOON_TEXTURE_SLOT_COLOR_SPACES[slot],
       })
 
       atlasMap[slot] = atlas

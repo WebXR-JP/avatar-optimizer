@@ -2,6 +2,7 @@ import { err, ok, Result } from 'neverthrow'
 import {
   AddEquation,
   Color,
+  ColorSpace,
   CustomBlending,
   DataTexture,
   DoubleSide,
@@ -14,6 +15,7 @@ import {
   RepeatWrapping,
   RGBAFormat,
   Scene,
+  SRGBColorSpace,
   Texture,
   UnsignedByteType,
   WebGLRenderer,
@@ -26,6 +28,8 @@ import { ImageMatrixPair } from './types'
 export interface ComposeImageOptions {
   width: number
   height: number
+  /** 出力テクスチャのカラースペース（デフォルト: SRGBColorSpace） */
+  colorSpace?: ColorSpace
 }
 
 /**
@@ -41,7 +45,7 @@ export function composeImagesToAtlas(
   layers: ImageMatrixPair[],
   options: ComposeImageOptions,
 ): Result<Texture, OptimizationError> {
-  const { width, height } = options
+  const { width, height, colorSpace = SRGBColorSpace } = options
 
   if (width <= 0 || height <= 0) {
     return err({
@@ -96,6 +100,7 @@ export function composeImagesToAtlas(
   tex.minFilter = LinearFilter
   tex.wrapS = RepeatWrapping
   tex.wrapT = RepeatWrapping
+  tex.colorSpace = colorSpace
 
   // 6. リソース解放
   scene.traverse((obj) => {
