@@ -194,7 +194,8 @@ function VRMCanvas({
               {debugMode === 'lightDir' && 'ライト方向を可視化'}
               {debugMode === 'dotNL' && '法線・ライト内積 (NdotL)'}
               {debugMode === 'shading' && 'MToonシェーディング結果'}
-              {debugMode === 'shadingParams' && 'shadingShift(R)/shadingToony(G)'}
+              {debugMode === 'shadingParams' && 'shadingShift(R)/shadingToony(G)/raw(B)'}
+              {debugMode === 'paramRaw' && 'R=shadingShift, G=shadingToony, B=slot'}
               {debugMode === 'litShadeRate' && '明暗グラデーション'}
             </span>
           </div>

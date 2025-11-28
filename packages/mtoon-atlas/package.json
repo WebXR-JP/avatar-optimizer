@@ -36,6 +36,7 @@
     "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
     "@types/node": "^22.0.0",
     "@types/three": "^0.181.0",
+    "@types/upng-js": "^2.1.5",
     "esbuild-raw-plugin": "^0.3.1",
     "three": "^0.181.1",
     "tsup": "^8.0.0",
@@ -52,5 +53,8 @@
   ],
   "author": "xrift",
   "license": "MIT",
-  "packageManager": "pnpm@10.22.0"
+  "packageManager": "pnpm@10.22.0",
+  "dependencies": {
+    "upng-js": "^2.1.0"
+  }
 }

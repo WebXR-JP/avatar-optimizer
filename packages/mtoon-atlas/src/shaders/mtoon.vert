@@ -2,9 +2,10 @@
 
 varying vec3 vViewPosition;
 
-// TODO: MToonAtlasMaterial - スロット属性
+// MToonAtlasMaterial - スロット属性
 // 頂点ごとのマテリアルスロットインデックス（パラメータテクスチャからパラメータを復元するために使用）
-attribute float mtoonMaterialSlot;
+// 属性名はMToonAtlasMaterial.setSlotAttribute()で動的に変更可能
+attribute float mtoonMaterialSlot; // SLOT_ATTRIBUTE
 varying float vMaterialSlot;
 
 #ifndef FLAT_SHADED

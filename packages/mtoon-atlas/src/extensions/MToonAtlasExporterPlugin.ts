@@ -1,4 +1,5 @@
 import { Material, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
+import UPNG from 'upng-js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {
@@ -93,13 +94,12 @@ export class MToonAtlasExporterPlugin
     }
 
     // パラメータテクスチャを処理
-    // パラメータテクスチャは alpha=0 のピクセルでも RGB 値が意味を持つため
-    // forceOpaqueAlpha=true で alpha を 255 に強制する
+    // パラメータテクスチャはRGBA全チャンネルにパラメータデータが格納されているため
+    // Canvas 2D経由ではなくUPNGで直接PNGエンコードする（Premultiplied Alpha問題回避）
     if (material.parameterTexture?.texture)
     {
-      indices.parameterTextureIndex = this.processTextureWithFallback(
-        material.parameterTexture.texture,
-        true // パラメータテクスチャは alpha を強制的に 255 にする
+      indices.parameterTextureIndex = this.processParameterTexture(
+        material.parameterTexture.texture
       )
     }
 
@@ -117,6 +117,95 @@ export class MToonAtlasExporterPlugin
     }
 
     this.textureIndices.set(material, indices)
+  }
+
+  /**
+   * パラメータテクスチャを処理（UPNGで直接PNGエンコード）
+   * Canvas 2DのPremultiplied Alpha問題を回避するため、
+   * 生のRGBAデータから直接PNGを生成する
+   */
+  private processParameterTexture(texture: Texture): number
+  {
+    const json = this.writer.json
+    json.textures = json.textures || []
+    json.images = json.images || []
+    json.samplers = json.samplers || []
+
+    // パラメータテクスチャ用サンプラー（Nearest Filter）
+    let nearestSamplerIndex = json.samplers.findIndex(
+      (s: any) => s.magFilter === 9728 && s.minFilter === 9728
+    )
+    if (nearestSamplerIndex === -1)
+    {
+      nearestSamplerIndex = json.samplers.length
+      json.samplers.push({
+        magFilter: 9728, // NEAREST
+        minFilter: 9728, // NEAREST
+        wrapS: 33071, // CLAMP_TO_EDGE
+        wrapT: 33071, // CLAMP_TO_EDGE
+      })
+    }
+
+    const imageIndex = json.images.length
+    const imageDef: any = {
+      name: texture.name || 'parameterTexture',
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const image = texture.image as any
+    if (image?.data && image.width && image.height)
+    {
+      // DataTextureの生データからUPNGで直接PNGエンコード
+      const srcData = image.data
+      const isFloatData = srcData instanceof Float32Array ||
+        srcData.constructor?.name === 'Float32Array'
+      const pixelCount = image.width * image.height * 4
+      const uint8Data = new Uint8Array(pixelCount)
+
+      for (let i = 0; i < pixelCount; i++)
+      {
+        const value = srcData[i]
+        // Float32Array (0.0-1.0) の場合は 255 を掛ける
+        // Uint8Array (0-255) の場合はそのまま
+        uint8Data[i] = isFloatData
+          ? Math.round(Math.min(1, Math.max(0, value)) * 255)
+          : value
+      }
+
+      // UPNGで直接PNGエンコード（Premultiplied Alpha問題を回避）
+      const pngData = UPNG.encode([uint8Data.buffer], image.width, image.height, 0)
+      const base64 = this.arrayBufferToBase64(pngData)
+      imageDef.uri = `data:image/png;base64,${base64}`
+    } else
+    {
+      console.warn('MToonAtlasExporterPlugin: Parameter texture has no valid data')
+      imageDef.uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    }
+
+    json.images.push(imageDef)
+
+    const textureIndex = json.textures.length
+    json.textures.push({
+      sampler: nearestSamplerIndex,
+      source: imageIndex,
+      name: texture.name || 'parameterTexture',
+    })
+
+    return textureIndex
+  }
+
+  /**
+   * ArrayBufferをBase64文字列に変換
+   */
+  private arrayBufferToBase64(buffer: ArrayBuffer): string
+  {
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++)
+    {
+      binary += String.fromCharCode(bytes[i])
+    }
+    return btoa(binary)
   }
 
 /**
@@ -465,18 +554,4 @@ export class MToonAtlasExporterPlugin
     primitive.attributes['_MTOON_MATERIAL_SLOT'] = accessorIndex
   }
 
-  // writeMaterialはGLTFExporterがShaderMaterialをスキップするため呼ばれない
-  // 代わりにafterParseで処理
-  public writeMaterial(_material: Material, _materialDef: any)
-  {
-    // This method is not called for ShaderMaterial
-    // Processing is done in afterParse instead
-  }
-
-  // writeMeshも同様にafterParseで処理
-  public writeMesh(_mesh: Mesh, _meshDef: any)
-  {
-    // This method may not be called correctly for ShaderMaterial meshes
-    // Processing is done in afterParse instead
-  }
 }

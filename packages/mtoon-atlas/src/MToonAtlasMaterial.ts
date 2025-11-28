@@ -43,6 +43,7 @@ export type DebugMode =
   | 'dotNL'
   | 'shading'
   | 'shadingParams'
+  | 'paramRaw'
   | 'litShadeRate'
 
 /**
@@ -301,14 +302,32 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
   /**
    * スロット属性を設定
    *
+   * シェーダー内の属性名を動的に変更します。
+   * GLTFLoaderはカスタム属性名を小文字に変換するため、
+   * ローダーで設定された属性名に合わせてシェーダーを更新します。
+   *
    * @param config スロット属性設定
    * @returns this（チェーン可能）
    */
   setSlotAttribute(config: MaterialSlotAttributeConfig): this
   {
+    const oldName = this._slotAttribute.name
     this._slotAttribute = config
 
-    // TODO: ジオメトリと連動するメタデータの更新（必要に応じて）
+    // シェーダー内の属性名を更新
+    // デフォルト属性名 'mtoonMaterialSlot' を新しい名前に置換
+    if (config.name !== oldName)
+    {
+      this.vertexShader = this.vertexShader.replace(
+        /attribute float \w+;\s*\/\/ SLOT_ATTRIBUTE/g,
+        `attribute float ${config.name}; // SLOT_ATTRIBUTE`
+      )
+      this.vertexShader = this.vertexShader.replace(
+        /vMaterialSlot = \w+;/g,
+        `vMaterialSlot = ${config.name};`
+      )
+      this.needsUpdate = true
+    }
 
     return this
   }
@@ -472,6 +491,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'DEBUG_DOT_NL',
       'DEBUG_SHADING',
       'DEBUG_SHADING_PARAMS',
+      'DEBUG_PARAM_RAW',
       'DEBUG_LITSHADERATE',
     ]
 
@@ -492,6 +512,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'dotNL': 'DEBUG_DOT_NL',
       'shading': 'DEBUG_SHADING',
       'shadingParams': 'DEBUG_SHADING_PARAMS',
+      'paramRaw': 'DEBUG_PARAM_RAW',
       'litShadeRate': 'DEBUG_LITSHADERATE',
     }
 
@@ -534,6 +555,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'dotNL',
       'shading',
       'shadingParams',
+      'paramRaw',
       'litShadeRate',
     ]
   }

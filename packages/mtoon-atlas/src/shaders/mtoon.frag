@@ -641,7 +641,16 @@ void main() {
   #ifdef DEBUG_SHADING_PARAMS
     // shadingShift と shadingToony の値を可視化
     // R = shadingShift (-1〜1 を 0〜1 に), G = shadingToony (0〜1)
-    gl_FragColor = vec4( 0.5 + 0.5 * material.shadingShift, material.shadingToony, 0.0, 1.0 );
+    // B = パラメータテクスチャからの生のshadingToonyFactor
+    gl_FragColor = vec4( 0.5 + 0.5 * material.shadingShift, material.shadingToony, shadingToonyFactor, 1.0 );
+    return;
+  #endif
+
+  #ifdef DEBUG_PARAM_RAW
+    // パラメータテクスチャからの生の値を可視化
+    // R = shadingShiftFactor (param0.a), G = shadingToonyFactor (param6.g)
+    // B = vMaterialSlot / 10.0 (スロット確認用)
+    gl_FragColor = vec4( 0.5 + 0.5 * shadingShiftFactor, shadingToonyFactor, vMaterialSlot / 10.0, 1.0 );
     return;
   #endif
 
