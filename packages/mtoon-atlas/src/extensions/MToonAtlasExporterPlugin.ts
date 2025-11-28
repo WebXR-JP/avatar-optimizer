@@ -1,4 +1,4 @@
-import { Material, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
+import { Mesh, Object3D, Texture } from 'three'
 import UPNG from 'upng-js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
@@ -28,8 +28,8 @@ export class MToonAtlasExporterPlugin
   public readonly name = MTOON_ATLAS_EXTENSION_NAME
   private writer: GLTFWriter
 
-  // MToonAtlasMaterialを持つメッシュのマップ
-  private mtoonAtlasMeshes: Map<SkinnedMesh, MToonAtlasMaterial[]> = new Map()
+  // MToonAtlasMaterialを持つメッシュのマップ（SkinnedMeshと通常のMesh両方対応）
+  private mtoonAtlasMeshes: Map<Mesh, MToonAtlasMaterial[]> = new Map()
 
   // beforeParseで処理されたテクスチャインデックス
   private textureIndices: Map<MToonAtlasMaterial, TextureIndexInfo> = new Map()
@@ -52,7 +52,8 @@ export class MToonAtlasExporterPlugin
     {
       root.traverse((obj) =>
       {
-        if (obj instanceof SkinnedMesh)
+        // SkinnedMeshと通常のMesh両方を対象にする
+        if (obj instanceof Mesh)
         {
           const materials = Array.isArray(obj.material) ? obj.material : [obj.material]
           const mtoonMaterials: MToonAtlasMaterial[] = []
@@ -448,7 +449,7 @@ export class MToonAtlasExporterPlugin
    * メッシュのプリミティブにマテリアルとスロット属性を設定
    */
   private updateMeshPrimitive(
-    mesh: SkinnedMesh,
+    mesh: Mesh,
     materials: MToonAtlasMaterial[],
     materialIndexMap: Map<MToonAtlasMaterial, number>
   )
@@ -489,7 +490,7 @@ export class MToonAtlasExporterPlugin
   /**
    * スロット属性をプリミティブに追加
    */
-  private addSlotAttribute(primitive: any, mesh: SkinnedMesh, attributeName: string)
+  private addSlotAttribute(primitive: any, mesh: Mesh, attributeName: string)
   {
     const attribute = mesh.geometry.getAttribute(attributeName)
     if (!attribute) return

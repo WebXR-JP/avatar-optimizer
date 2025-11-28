@@ -1,6 +1,6 @@
 import { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { Mesh } from 'three'
+import { BufferAttribute, Mesh, SkinnedMesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
@@ -98,6 +98,36 @@ export function optimizeModel(
       {},
       excludedMeshes,
     )
+
+    // excludedMeshesにもMToonAtlasMaterialを適用
+    // これにより、エクスポート→インポート後も正しくレンダリングされる
+    const slotAttributeName =
+      combineResult.material.slotAttribute?.name || 'mtoonMaterialSlot'
+    for (const mesh of excludedMeshes) {
+      // メッシュのマテリアルを取得
+      const originalMaterial = Array.isArray(mesh.material)
+        ? mesh.material[0]
+        : mesh.material
+
+      if (!(originalMaterial instanceof MToonMaterial)) continue
+
+      // スロットインデックスを取得
+      const slotIndex = combineResult.materialSlotIndex.get(originalMaterial)
+      if (slotIndex === undefined) continue
+
+      // ジオメトリにスロット属性を追加
+      const geometry = mesh.geometry
+      const vertexCount = geometry.getAttribute('position').count
+      const slotArray = new Float32Array(vertexCount).fill(slotIndex)
+      geometry.setAttribute(slotAttributeName, new BufferAttribute(slotArray, 1))
+
+      // MToonAtlasMaterialを適用（同じマテリアルインスタンスを共有）
+      if (mesh instanceof SkinnedMesh) {
+        mesh.material = combineResult.material
+      } else {
+        mesh.material = combineResult.material
+      }
+    }
 
     // 元のrootNodeから既存のメッシュを削除
     const meshesToRemove: Mesh[] = []

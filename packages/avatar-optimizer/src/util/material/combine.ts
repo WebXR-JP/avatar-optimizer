@@ -143,6 +143,7 @@ export function combineMToonMaterials(
     return ok({
       mesh: combinedMesh,
       material: atlasMaterial,
+      materialSlotIndex,
       statistics: {
         originalMeshCount: meshesForMerge.length,
         originalMaterialCount: materials.length,

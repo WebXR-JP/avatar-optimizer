@@ -3,6 +3,7 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
+import { MToonMaterial } from '@pixiv/three-vrm'
 import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import { Matrix3, Mesh } from 'three'
 import { OffsetScale } from '../../types'
@@ -108,6 +109,8 @@ export interface CombinedMeshResult {
   mesh: Mesh
   /** 使用されたMToonAtlasMaterial */
   material: MToonAtlasMaterial
+  /** マテリアルからスロットインデックスへのマッピング */
+  materialSlotIndex: Map<MToonMaterial, number>
   /** 統計情報 */
   statistics: {
     /** 元のメッシュ数 */
