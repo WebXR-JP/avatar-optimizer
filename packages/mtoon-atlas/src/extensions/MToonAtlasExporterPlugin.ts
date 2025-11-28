@@ -93,10 +93,13 @@ export class MToonAtlasExporterPlugin
     }
 
     // パラメータテクスチャを処理
+    // パラメータテクスチャは alpha=0 のピクセルでも RGB 値が意味を持つため
+    // forceOpaqueAlpha=true で alpha を 255 に強制する
     if (material.parameterTexture?.texture)
     {
       indices.parameterTextureIndex = this.processTextureWithFallback(
-        material.parameterTexture.texture
+        material.parameterTexture.texture,
+        true // パラメータテクスチャは alpha を強制的に 255 にする
       )
     }
 
@@ -116,10 +119,12 @@ export class MToonAtlasExporterPlugin
     this.textureIndices.set(material, indices)
   }
 
-  /**
+/**
    * テクスチャを処理（processTextureが使えない場合は直接JSONに追加）
+   * @param texture - 処理するテクスチャ
+   * @param forceOpaqueAlpha - alpha を強制的に 255 にする（パラメータテクスチャ用）
    */
-  private processTextureWithFallback(texture: Texture): number
+  private processTextureWithFallback(texture: Texture, forceOpaqueAlpha = false): number
   {
     // processTextureが使える場合はそれを使用
     if (typeof this.writer.processTexture === 'function')
@@ -190,11 +195,31 @@ export class MToonAtlasExporterPlugin
         if (ctx)
         {
           // RGBA データを ImageData に変換
-          const imageData = new ImageData(
-            new Uint8ClampedArray(image.data),
-            image.width,
-            image.height
-          )
+          // Float32Array の場合は 0.0-1.0 を 0-255 に変換
+          const srcData = image.data
+          const isFloatData = srcData instanceof Float32Array ||
+            srcData.constructor?.name === 'Float32Array'
+          const pixelCount = image.width * image.height * 4
+          const uint8Data = new Uint8ClampedArray(pixelCount)
+          for (let i = 0; i < pixelCount; i++)
+          {
+            const value = srcData[i]
+            // Float32Array (0.0-1.0) の場合は 255 を掛ける
+            // Uint8Array (0-255) の場合はそのまま
+            let convertedValue = isFloatData
+              ? Math.round(Math.min(1, Math.max(0, value)) * 255)
+              : value
+
+            // alpha チャンネル（i % 4 === 3）を強制的に 255 にする
+            // PNG 保存時にアルファが 0 だと RGB 値が失われるため
+            if (forceOpaqueAlpha && i % 4 === 3)
+            {
+              convertedValue = 255
+            }
+
+            uint8Data[i] = convertedValue
+          }
+          const imageData = new ImageData(uint8Data, image.width, image.height)
           ctx.putImageData(imageData, 0, 0)
           dataUrl = canvas.toDataURL('image/png')
         }
