@@ -5,6 +5,7 @@ import {
   Color,
   DataTexture,
   FloatType,
+  NearestFilter,
   RGBAFormat,
   Vector3,
   Vector4,
@@ -163,7 +164,10 @@ export function createParameterTexture(
   }
 
   // DataTextureを作成
+  // パラメータテクスチャは数値データなのでバイリニア補間を無効化
   const texture = new DataTexture(data, width, height, RGBAFormat, FloatType)
+  texture.minFilter = NearestFilter
+  texture.magFilter = NearestFilter
   texture.needsUpdate = true
 
   return ok(texture)

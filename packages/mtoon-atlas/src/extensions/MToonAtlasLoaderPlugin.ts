@@ -1,4 +1,4 @@
-import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide } from 'three'
+import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter } from 'three'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {
@@ -80,6 +80,9 @@ export class MToonAtlasLoaderPlugin
           parameterTexture = tex
           parameterTexture.flipY = false
           parameterTexture.colorSpace = NoColorSpace
+          // パラメータテクスチャは数値データなのでバイリニア補間を無効化
+          parameterTexture.minFilter = NearestFilter
+          parameterTexture.magFilter = NearestFilter
         })
       )
     }
