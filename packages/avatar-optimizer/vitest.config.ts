@@ -16,6 +16,22 @@ export default defineConfig({
       provider: 'webdriverio',
       name: 'chrome',
       headless: true,
+      providerOptions: {
+        capabilities: {
+          'goog:chromeOptions': {
+            args: [
+              '--use-gl=angle',
+              '--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader',
+              '--enable-webgl',
+              '--ignore-gpu-blocklist',
+              '--disable-gpu-sandbox',
+              '--no-sandbox',
+              '--disable-dev-shm-usage',
+            ],
+          },
+        },
+      },
     },
   },
 })

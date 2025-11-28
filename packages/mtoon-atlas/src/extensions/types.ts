@@ -41,6 +41,7 @@ export interface GLTFParser
 export interface GLTFWriter
 {
   json: any
+  nodeMap: Map<any, number>
   processTexture: (texture: Texture) => number
   processAccessor: (attribute: BufferAttribute | InterleavedBufferAttribute, geometry: BufferGeometry, start?: number, count?: number) => number
 }
