@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // テスト用fixturesディレクトリを配信するための設定
+  publicDir: 'tests/fixtures',
   test: {
     include: ['tests/**/*.test.ts', '__tests__/**/*.test.ts'],
     environment: 'happy-dom',

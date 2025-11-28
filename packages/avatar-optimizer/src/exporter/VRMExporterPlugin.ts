@@ -72,6 +72,32 @@ export class VRMExporterPlugin
 
     // Map VRM 0.0 meta to VRM 1.0 if necessary, or just use what's available
     // VRM 0.0 uses 'title', VRM 1.0 uses 'name'
+
+    // VRM 0.0のライセンス名をVRM 1.0のライセンスURLに変換
+    let licenseUrl = meta.licenseUrl
+    if (!licenseUrl && meta.licenseName)
+    {
+      // VRM 0.0のライセンス名からVRM 1.0のURLへマッピング
+      const licenseMapping: Record<string, string> = {
+        Redistribution_Prohibited: 'https://vrm.dev/licenses/1.0/',
+        CC0: 'https://creativecommons.org/publicdomain/zero/1.0/',
+        CC_BY: 'https://creativecommons.org/licenses/by/4.0/',
+        CC_BY_NC: 'https://creativecommons.org/licenses/by-nc/4.0/',
+        CC_BY_SA: 'https://creativecommons.org/licenses/by-sa/4.0/',
+        CC_BY_NC_SA: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+        CC_BY_ND: 'https://creativecommons.org/licenses/by-nd/4.0/',
+        CC_BY_NC_ND: 'https://creativecommons.org/licenses/by-nc-nd/4.0/',
+        Other: 'https://vrm.dev/licenses/1.0/',
+      }
+      licenseUrl = licenseMapping[meta.licenseName] ?? 'https://vrm.dev/licenses/1.0/'
+    }
+
+    // licenseUrlが未定義の場合はデフォルトを設定
+    if (!licenseUrl)
+    {
+      licenseUrl = 'https://vrm.dev/licenses/1.0/'
+    }
+
     return {
       name: meta.name ?? meta.title,
       version: meta.version,
@@ -84,16 +110,16 @@ export class VRMExporterPlugin
       thumbnailImage: meta.thumbnailImage
         ? this.writer.processTexture(meta.thumbnailImage)
         : undefined,
-      licenseUrl: meta.licenseUrl,
-      avatarPermission: meta.avatarPermission,
-      allowExcessivelyViolentUsage: meta.allowExcessivelyViolentUsage,
-      allowExcessivelySexualUsage: meta.allowExcessivelySexualUsage,
-      commercialUsage: meta.commercialUsage,
-      allowPoliticalOrReligiousUsage: meta.allowPoliticalOrReligiousUsage,
-      allowAntisocialOrHateUsage: meta.allowAntisocialOrHateUsage,
-      creditNotation: meta.creditNotation,
-      allowRedistribution: meta.allowRedistribution,
-      modification: meta.modification,
+      licenseUrl,
+      avatarPermission: meta.avatarPermission ?? 'onlyAuthor',
+      allowExcessivelyViolentUsage: meta.allowExcessivelyViolentUsage ?? false,
+      allowExcessivelySexualUsage: meta.allowExcessivelySexualUsage ?? false,
+      commercialUsage: meta.commercialUsage ?? 'personalNonProfit',
+      allowPoliticalOrReligiousUsage: meta.allowPoliticalOrReligiousUsage ?? false,
+      allowAntisocialOrHateUsage: meta.allowAntisocialOrHateUsage ?? false,
+      creditNotation: meta.creditNotation ?? 'required',
+      allowRedistribution: meta.allowRedistribution ?? false,
+      modification: meta.modification ?? 'prohibited',
     }
   }
 
@@ -215,25 +241,36 @@ export class VRMExporterPlugin
 
     const lookAt = vrm.lookAt as any
 
+    // rangeMapが存在しない場合はデフォルト値を使用
+    const defaultRangeMap = { inputMaxValue: 90, outputScale: 10 }
+
     return {
-      offsetFromHeadBone: lookAt.offsetFromHeadBone.toArray(),
-      type: lookAt.applier?.type, // 'bone' or 'expression'
-      rangeMapHorizontalInner: {
-        inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
-        outputScale: lookAt.rangeMapHorizontalInner.outputScale,
-      },
-      rangeMapHorizontalOuter: {
-        inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
-        outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
-      },
-      rangeMapVerticalDown: {
-        inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
-        outputScale: lookAt.rangeMapVerticalDown.outputScale,
-      },
-      rangeMapVerticalUp: {
-        inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
-        outputScale: lookAt.rangeMapVerticalUp.outputScale,
-      },
+      offsetFromHeadBone: lookAt.offsetFromHeadBone?.toArray?.() ?? [0, 0, 0],
+      type: lookAt.applier?.type ?? 'bone', // 'bone' or 'expression'
+      rangeMapHorizontalInner: lookAt.rangeMapHorizontalInner
+        ? {
+            inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
+            outputScale: lookAt.rangeMapHorizontalInner.outputScale,
+          }
+        : defaultRangeMap,
+      rangeMapHorizontalOuter: lookAt.rangeMapHorizontalOuter
+        ? {
+            inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
+            outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
+          }
+        : defaultRangeMap,
+      rangeMapVerticalDown: lookAt.rangeMapVerticalDown
+        ? {
+            inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
+            outputScale: lookAt.rangeMapVerticalDown.outputScale,
+          }
+        : defaultRangeMap,
+      rangeMapVerticalUp: lookAt.rangeMapVerticalUp
+        ? {
+            inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
+            outputScale: lookAt.rangeMapVerticalUp.outputScale,
+          }
+        : defaultRangeMap,
     }
   }
 
