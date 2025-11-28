@@ -173,7 +173,12 @@ function App()
 
     const exporter = new GLTFExporter()
     exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
-    exporter.register((writer: any) => new VRMExporterPlugin(writer))
+    exporter.register((writer: any) =>
+    {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
 
     exporter.parse(
       vrm.scene,

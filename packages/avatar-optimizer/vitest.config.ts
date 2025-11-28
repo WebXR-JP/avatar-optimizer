@@ -5,8 +5,10 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', '__tests__/**/*.test.ts'],
     environment: 'happy-dom',
     testTimeout: 30_000,
-    // pool: 'vmThreads', // pool option is not needed for browser mode or can be conflicting
-    coverage: { enabled: true },
+    coverage: {
+      enabled: true,
+      provider: 'istanbul', // webdriverioブラウザプロバイダと互換性を持たせるため
+    },
     browser: {
       enabled: true,
       provider: 'webdriverio',

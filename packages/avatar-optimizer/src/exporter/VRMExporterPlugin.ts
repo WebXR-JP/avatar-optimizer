@@ -2,34 +2,50 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { Object3D } from 'three'
 
-export class VRMExporterPlugin {
+export class VRMExporterPlugin
+{
   public readonly name = 'VRMC_vrm'
   private writer: any
   private vrm: VRM | null = null
 
-  constructor(writer: any) {
+  constructor(writer: any)
+  {
     this.writer = writer
   }
 
-  public beforeParse(input: Object3D | Object3D[]) {
+  public setVRM(vrm: VRM)
+  {
+    this.vrm = vrm
+  }
+
+  public beforeParse(input: Object3D | Object3D[])
+  {
     const root = Array.isArray(input) ? input[0] : input
     if (!root) return
 
     // Find VRM instance in userData
     // This assumes the input object or its children have userData.vrm set
     // which is common when loading via VRMLoaderPlugin
-    root.traverse((obj) => {
-      if (obj.userData.vrm && !this.vrm) {
+    root.traverse((obj: any) =>
+    {
+      if (obj.userData && obj.userData.vrm && !this.vrm)
+      {
         this.vrm = obj.userData.vrm as VRM
       }
     })
   }
 
-  public afterParse(input: any) {
-    if (!this.vrm) return
+  public afterParse(_input: any)
+  {
+    if (!this.vrm)
+    {
+      return
+    }
 
+    // writer.jsonに直接アクセスして拡張を追加
+    // afterParseの引数はinputオブジェクトのみで、JSONは含まれない
+    const json = this.writer.json
     const vrm = this.vrm
-    const json = input
 
     json.extensions = json.extensions || {}
     json.extensions.VRMC_vrm = {
@@ -42,12 +58,14 @@ export class VRMExporterPlugin {
     }
 
     json.extensionsUsed = json.extensionsUsed || []
-    if (!json.extensionsUsed.includes('VRMC_vrm')) {
+    if (!json.extensionsUsed.includes('VRMC_vrm'))
+    {
       json.extensionsUsed.push('VRMC_vrm')
     }
   }
 
-  private exportMeta(vrm: VRM) {
+  private exportMeta(vrm: VRM)
+  {
     if (!vrm.meta) return undefined
 
     const meta = vrm.meta as any // Cast to any to handle both VRM 0.0 and 1.0 meta types
@@ -79,14 +97,17 @@ export class VRMExporterPlugin {
     }
   }
 
-  private exportHumanoid(vrm: VRM) {
+  private exportHumanoid(vrm: VRM)
+  {
     if (!vrm.humanoid) return undefined
 
     const humanBones: any = {}
 
     // Iterate over all possible human bone names
-    Object.entries(vrm.humanoid.humanBones).forEach(([name, bone]) => {
-      if (bone && bone.node) {
+    Object.entries(vrm.humanoid.humanBones).forEach(([name, bone]) =>
+    {
+      if (bone && bone.node)
+      {
         // Find the node index in the exported GLTF
         // The writer should have a map of Object3D to node index
         // However, standard GLTFExporter doesn't expose this easily in public API
@@ -100,7 +121,8 @@ export class VRMExporterPlugin {
         // We can use writer.nodeMap if it exists (it's a Map<Object3D, number>)
         // In Three.js GLTFExporter, it uses a Map called `nodeMap`.
         const nodeIndex = this.writer.nodeMap.get(bone.node)
-        if (nodeIndex !== undefined) {
+        if (nodeIndex !== undefined)
+        {
           humanBones[name] = { node: nodeIndex }
         }
       }
@@ -111,13 +133,16 @@ export class VRMExporterPlugin {
     }
   }
 
-  private exportExpressions(vrm: VRM) {
+  private exportExpressions(vrm: VRM)
+  {
     if (!vrm.expressionManager) return undefined
 
     const expressions: any = {}
 
-    if (vrm.expressionManager.expressions) {
-      vrm.expressionManager.expressions.forEach((expression) => {
+    if (vrm.expressionManager.expressions)
+    {
+      vrm.expressionManager.expressions.forEach((expression) =>
+      {
         const expr = expression as any // Cast to access binds
         const exprDef: any = {
           isBinary: expr.isBinary,
@@ -126,9 +151,11 @@ export class VRMExporterPlugin {
           overrideMouth: expr.overrideMouth,
         }
 
-        if (expr.morphTargetBinds && expr.morphTargetBinds.length > 0) {
+        if (expr.morphTargetBinds && expr.morphTargetBinds.length > 0)
+        {
           exprDef.morphTargetBinds = expr.morphTargetBinds
-            .map((bind: any) => {
+            .map((bind: any) =>
+            {
               const nodeIndex = this.writer.nodeMap.get(bind.node)
               return {
                 node: nodeIndex,
@@ -139,9 +166,11 @@ export class VRMExporterPlugin {
             .filter((b: any) => b.node !== undefined)
         }
 
-        if (expr.materialColorBinds && expr.materialColorBinds.length > 0) {
+        if (expr.materialColorBinds && expr.materialColorBinds.length > 0)
+        {
           exprDef.materialColorBinds = expr.materialColorBinds.map(
-            (bind: any) => {
+            (bind: any) =>
+            {
               const materialIndex = this.writer.processMaterial(bind.material)
               return {
                 material: materialIndex,
@@ -155,9 +184,11 @@ export class VRMExporterPlugin {
         if (
           expr.textureTransformBinds &&
           expr.textureTransformBinds.length > 0
-        ) {
+        )
+        {
           exprDef.textureTransformBinds = expr.textureTransformBinds.map(
-            (bind: any) => {
+            (bind: any) =>
+            {
               const materialIndex = this.writer.processMaterial(bind.material)
               return {
                 material: materialIndex,
@@ -178,7 +209,8 @@ export class VRMExporterPlugin {
     }
   }
 
-  private exportLookAt(vrm: VRM) {
+  private exportLookAt(vrm: VRM)
+  {
     if (!vrm.lookAt) return undefined
 
     const lookAt = vrm.lookAt as any
@@ -205,12 +237,15 @@ export class VRMExporterPlugin {
     }
   }
 
-  private exportFirstPerson(vrm: VRM) {
+  private exportFirstPerson(vrm: VRM)
+  {
     if (!vrm.firstPerson) return undefined
 
     const meshAnnotations: any[] = []
-    if (vrm.firstPerson.meshAnnotations) {
-      vrm.firstPerson.meshAnnotations.forEach((annotation) => {
+    if (vrm.firstPerson.meshAnnotations)
+    {
+      vrm.firstPerson.meshAnnotations.forEach((annotation) =>
+      {
         const ann = annotation as any
         // In three-vrm, annotation might hold 'mesh' (Object3D) instead of 'node' index
         // If it holds 'mesh', we need to find its node index.
@@ -218,7 +253,8 @@ export class VRMExporterPlugin {
         // Usually in loaded VRM, it holds the Mesh object.
         const mesh = ann.mesh || ann.node
         const nodeIndex = this.writer.nodeMap.get(mesh)
-        if (nodeIndex !== undefined) {
+        if (nodeIndex !== undefined)
+        {
           meshAnnotations.push({
             node: nodeIndex,
             type: ann.type,
