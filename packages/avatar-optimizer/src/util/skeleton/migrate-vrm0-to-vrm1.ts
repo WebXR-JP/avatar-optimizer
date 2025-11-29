@@ -115,7 +115,7 @@ export function migrateSkeletonVRM0ToVRM1(
 
 /**
  * SkinnedMeshの頂点位置をY軸周り180度回転
- * position属性のみ変換（normalは維持）
+ * position属性とmorphTarget(position)を変換
  */
 export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
   const geometry = mesh.geometry
@@ -128,13 +128,30 @@ export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
   const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
   const vertex = new Vector3()
 
+  // 頂点位置を回転
   for (let i = 0; i < positionAttr.count; i++) {
     vertex.set(positionAttr.getX(i), positionAttr.getY(i), positionAttr.getZ(i))
     vertex.applyMatrix4(rotationMatrix)
     positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z)
   }
-
   positionAttr.needsUpdate = true
+
+  // morphTargetのposition属性も回転
+  // morphAttributesはキー(position, normalなど)ごとにBufferAttribute配列を持つ
+  const morphPositions = geometry.morphAttributes.position
+  if (morphPositions && Array.isArray(morphPositions)) {
+    for (const morphAttr of morphPositions) {
+      if (!(morphAttr instanceof BufferAttribute)) continue
+
+      for (let i = 0; i < morphAttr.count; i++) {
+        // morphTargetはデルタ（差分ベクトル）なので、同様にY軸180度回転
+        vertex.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
+        vertex.applyMatrix4(rotationMatrix)
+        morphAttr.setXYZ(i, vertex.x, vertex.y, vertex.z)
+      }
+      morphAttr.needsUpdate = true
+    }
+  }
 }
 
 /**
