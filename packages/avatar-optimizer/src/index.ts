@@ -21,6 +21,7 @@ export type {
   AtlasTextureDescriptor,
   OptimizationError,
   OptimizationOptions,
+  OptimizeModelOptions,
   TextureSlotInfo,
   ThreeVRMDocument,
 } from './types'

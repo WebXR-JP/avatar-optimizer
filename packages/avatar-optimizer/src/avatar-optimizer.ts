@@ -4,7 +4,7 @@ import { BufferAttribute, Mesh, SkinnedMesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
-import { OffsetScale, OptimizationError } from './types'
+import { OffsetScale, OptimizationError, OptimizeModelOptions } from './types'
 import {
   assignAtlasTexturesToMaterial,
   CombinedMeshResult,
@@ -12,6 +12,7 @@ import {
   getMToonMaterialsWithMeshesFromObject3D,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
+import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -20,12 +21,13 @@ import { deleteMesh } from './util/mesh/deleter'
  * 対応するメッシュのUVをパッキング結果に基づき修正する
  * 最後にマテリアルを統合してドローコール数を削減する
  *
- * @param rootNode - 最適化対象のThree.jsオブジェクトのルートノード
- * @param atlasSize - 生成するアトラス画像のサイズ（ピクセル）
+ * @param vrm - 最適化対象のVRMオブジェクト
+ * @param options - 最適化オプション
  * @returns 最適化結果（統合メッシュ情報を含む）
  */
 export function optimizeModel(
   vrm: VRM,
+  options: OptimizeModelOptions = {},
 ): ResultAsync<CombinedMeshResult, OptimizationError> {
   return safeTry(async function* () {
     const rootNode = vrm.scene
@@ -151,6 +153,11 @@ export function optimizeModel(
 
     // 統合されたメッシュを元のメッシュと同じ親に追加
     firstMeshParent.add(combineResult.mesh)
+
+    // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
+    if (options.migrateVRM0ToVRM1) {
+      yield* migrateSkeletonVRM0ToVRM1(rootNode)
+    }
 
     return ok(combineResult)
   })

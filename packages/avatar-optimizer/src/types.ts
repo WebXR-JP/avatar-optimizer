@@ -24,6 +24,17 @@ export interface OptimizationOptions {
 }
 
 /**
+ * optimizeModel 関数のオプション
+ */
+export interface OptimizeModelOptions {
+  /**
+   * VRM0.xからVRM1.0へのスケルトンマイグレーションを行う
+   * Y軸周り180度回転を適用してモデルの向きを+Z前向きに変更
+   */
+  migrateVRM0ToVRM1?: boolean
+}
+
+/**
  * three-vrm / GLTFLoader で読み込んだ VRM ドキュメント
  */
 export interface ThreeVRMDocument {

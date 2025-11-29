@@ -110,7 +110,7 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
-    const result = await optimizeModel(vrm)
+    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true })
 
     if (result.isErr())
     {
