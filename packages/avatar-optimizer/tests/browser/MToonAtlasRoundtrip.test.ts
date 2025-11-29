@@ -6,7 +6,7 @@ import {
 } from '@xrift/mtoon-atlas'
 import { Object3D, Scene, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
 import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
@@ -23,7 +23,7 @@ describe('MToonAtlas Roundtrip', () =>
   /**
    * VRMを読み込むヘルパー関数
    */
-  async function loadVRM(buffer: ArrayBuffer): Promise<{ gltf: any; vrm: VRM }>
+  async function loadVRM(buffer: ArrayBuffer): Promise<{ gltf: GLTF; vrm: VRM }>
   {
     const loader = new GLTFLoader()
     loader.register((parser) => new VRMLoaderPlugin(parser))
@@ -31,6 +31,7 @@ describe('MToonAtlas Roundtrip', () =>
 
     const gltf = await loader.parseAsync(buffer, '')
     const vrm = gltf.userData.vrm as VRM
+
     return { gltf, vrm }
   }
 
@@ -58,7 +59,7 @@ describe('MToonAtlas Roundtrip', () =>
       // 子要素を一時的にコピー（add()すると元の親から外れるため参照を保持）
       // VRMHumanoidRig と VRMExpression はランタイムで動的に生成されるため除外
       const children = [...vrm.scene.children].filter((child) =>
-        child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
+        child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression'),
       )
       children.forEach((child) => exportScene.add(child))
 
@@ -682,7 +683,7 @@ describe('MToonAtlas Roundtrip', () =>
         `Pixel ${pixelIndex}: ` +
         `Original(${origR},${origG},${origB},${origA}) vs ` +
         `Reloaded(${reloadR},${reloadG},${reloadB},${reloadA})` +
-        (isDifferent ? ' [DIFFERENT]' : '')
+        (isDifferent ? ' [DIFFERENT]' : ''),
       )
     }
 
@@ -721,7 +722,7 @@ function captureMaterialState(material: MToonAtlasMaterial, label: string): Reco
       } : null,
       atlasedTextureKeys: material.parameterTexture.atlasedTextures
         ? Object.keys(material.parameterTexture.atlasedTextures).filter(
-          (key) => material.parameterTexture!.atlasedTextures![key as keyof typeof material.parameterTexture.atlasedTextures] != null
+          (key) => material.parameterTexture!.atlasedTextures![key as keyof typeof material.parameterTexture.atlasedTextures] != null,
         )
         : [],
     } : null,
@@ -826,7 +827,7 @@ function captureUniforms(material: MToonAtlasMaterial): Record<string, unknown>
  */
 function compareMaterialStates(
   before: Record<string, unknown>,
-  after: Record<string, unknown>
+  after: Record<string, unknown>,
 ): Array<{ property: string; before: unknown; after: unknown }>
 {
   const differences: Array<{ property: string; before: unknown; after: unknown }> = []
