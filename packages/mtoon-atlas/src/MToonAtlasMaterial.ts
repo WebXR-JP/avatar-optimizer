@@ -82,6 +82,23 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
   private _debugMode: DebugMode = 'none'
 
   /**
+   * アウトラインモードフラグ
+   *
+   * @internal
+   */
+  private _isOutline = false
+
+  /**
+   * アウトライン幅モード
+   * - 'none': アウトラインなし
+   * - 'worldCoordinates': ワールド座標系での固定幅
+   * - 'screenCoordinates': スクリーン座標系での固定幅
+   *
+   * @internal
+   */
+  private _outlineWidthMode: 'none' | 'worldCoordinates' | 'screenCoordinates' = 'none'
+
+  /**
    * Uniform インターフェース
    *
    * TODO: 完全な型定義を追加
@@ -296,6 +313,10 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
 
     setDefine('MTOON_USE_UV', useUv)
 
+    // アウトライン関連
+    setDefine('OUTLINE', this._isOutline)
+    setDefine('OUTLINE_WIDTH_SCREEN', this._isOutline && this._outlineWidthMode === 'screenCoordinates')
+
     this.needsUpdate = true
   }
 
@@ -415,6 +436,10 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     // スロット属性のコピー
     this._slotAttribute = { ...source._slotAttribute }
 
+    // アウトラインプロパティのコピー
+    this._isOutline = source._isOutline
+    this._outlineWidthMode = source._outlineWidthMode
+
     return this
   }
 
@@ -431,6 +456,86 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     cloned.copy(this)
 
     return cloned
+  }
+
+  /**
+   * アウトラインモードを取得
+   *
+   * @returns アウトラインモードかどうか
+   */
+  get isOutline(): boolean
+  {
+    return this._isOutline
+  }
+
+  /**
+   * アウトラインモードを設定
+   *
+   * @param value アウトラインモードにするかどうか
+   */
+  set isOutline(value: boolean)
+  {
+    if (this._isOutline === value) return
+
+    this._isOutline = value
+
+    // アウトラインモードでは裏面を描画
+    this.side = value ? THREE.BackSide : THREE.FrontSide
+
+    this._updateDefines()
+  }
+
+  /**
+   * アウトライン幅モードを取得
+   *
+   * @returns アウトライン幅モード
+   */
+  get outlineWidthMode(): 'none' | 'worldCoordinates' | 'screenCoordinates'
+  {
+    return this._outlineWidthMode
+  }
+
+  /**
+   * アウトライン幅モードを設定
+   *
+   * @param value アウトライン幅モード
+   */
+  set outlineWidthMode(value: 'none' | 'worldCoordinates' | 'screenCoordinates')
+  {
+    if (this._outlineWidthMode === value) return
+
+    this._outlineWidthMode = value
+    this._updateDefines()
+  }
+
+  /**
+   * アウトライン用マテリアルを作成
+   *
+   * このマテリアルをベースに、アウトライン描画用のマテリアルを生成します。
+   * 生成されたマテリアルは `isOutline = true` が設定され、
+   * `side = BackSide` で裏面を描画します。
+   *
+   * @param widthMode アウトライン幅モード（デフォルト: 'worldCoordinates'）
+   * @returns アウトライン用マテリアル
+   *
+   * @example
+   * ```typescript
+   * const baseMaterial = new MToonAtlasMaterial()
+   * baseMaterial.setParameterTexture(descriptor)
+   *
+   * const outlineMaterial = baseMaterial.createOutlineMaterial()
+   * // outlineMaterial.isOutline === true
+   * // outlineMaterial.side === THREE.BackSide
+   * ```
+   */
+  createOutlineMaterial(widthMode: 'worldCoordinates' | 'screenCoordinates' = 'worldCoordinates'): MToonAtlasMaterial
+  {
+    const outlineMaterial = this.clone() as MToonAtlasMaterial
+
+    outlineMaterial._outlineWidthMode = widthMode
+    outlineMaterial.isOutline = true
+
+    return outlineMaterial
   }
 
   /**

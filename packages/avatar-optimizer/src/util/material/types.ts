@@ -102,6 +102,25 @@ export interface CombineMaterialOptions {
 }
 
 /**
+ * アウトライン幅モード
+ */
+export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
+
+/**
+ * マテリアル情報（アウトライン情報を含む）
+ */
+export interface MaterialInfo {
+  /** マテリアル */
+  material: MToonMaterial
+  /** このマテリアルを使用しているメッシュ */
+  meshes: Mesh[]
+  /** アウトラインが有効かどうか */
+  hasOutline: boolean
+  /** アウトライン幅モード */
+  outlineWidthMode: OutlineWidthMode
+}
+
+/**
  * マテリアル結合の結果
  */
 export interface CombinedMeshResult {
@@ -109,6 +128,10 @@ export interface CombinedMeshResult {
   mesh: Mesh
   /** 使用されたMToonAtlasMaterial */
   material: MToonAtlasMaterial
+  /** アウトライン用メッシュ（アウトラインが不要な場合はundefined） */
+  outlineMesh?: Mesh
+  /** アウトライン用MToonAtlasMaterial（アウトラインが不要な場合はundefined） */
+  outlineMaterial?: MToonAtlasMaterial
   /** マテリアルからスロットインデックスへのマッピング */
   materialSlotIndex: Map<MToonMaterial, number>
   /** 統計情報 */

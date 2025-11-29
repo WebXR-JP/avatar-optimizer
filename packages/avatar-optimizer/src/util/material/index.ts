@@ -12,7 +12,7 @@ import { AtlasImageMap, OptimizationError } from '../../types'
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials } from './combine'
-export type { CombinedMeshResult, CombineMaterialOptions } from './types'
+export type { CombinedMeshResult, CombineMaterialOptions, MaterialInfo, OutlineWidthMode } from './types'
 
 /**
  * アトラス化したテクスチャ群をマテリアルにアサインする
@@ -46,10 +46,31 @@ export function assignAtlasTexturesToMaterial(
  *
  * @param rootNode 探索を開始するNode
  * @returns マテリアルをキー、メッシュの配列を値とするMap
+ * @deprecated getMToonMaterialInfoFromObject3Dを使用してください
  */
 export function getMToonMaterialsWithMeshesFromObject3D(
   rootNode: Object3D,
 ): Result<Map<MToonMaterial, Mesh[]>, OptimizationError> {
+  const result = getMToonMaterialInfoFromObject3D(rootNode)
+  if (result.isErr()) return err(result.error)
+
+  const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+  for (const info of result.value) {
+    materialMeshMap.set(info.material, info.meshes)
+  }
+  return ok(materialMeshMap)
+}
+
+/**
+ * Three.jsのノードを再帰的に探索してMeshを検索し
+ * マテリアル情報（アウトライン情報を含む）のリストを返す
+ *
+ * @param rootNode 探索を開始するNode
+ * @returns マテリアル情報の配列
+ */
+export function getMToonMaterialInfoFromObject3D(
+  rootNode: Object3D,
+): Result<import('./types').MaterialInfo[], OptimizationError> {
   const meshes: Mesh[] = []
   rootNode.traverse((obj) => {
     if (obj instanceof Mesh) {
@@ -57,34 +78,69 @@ export function getMToonMaterialsWithMeshesFromObject3D(
     }
   })
 
-  const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+  // マテリアルごとの情報を収集
+  const materialInfoMap = new Map<MToonMaterial, {
+    meshes: Mesh[]
+    hasOutline: boolean
+    outlineWidthMode: import('./types').OutlineWidthMode
+  }>()
 
   for (const mesh of meshes) {
     if (Array.isArray(mesh.material)) {
-      // thee-vrmで読み込んだモデルのMToonにおいてMaterialがArrayになるのはOutlineMeshのみ
-      // このとき1番目と2番目のマテリアルパラメータは全く同じなので1番目だけ取る
+      // three-vrmで読み込んだモデルのMToonにおいてMaterialが配列になるのはOutlineMeshのみ
+      // [0]が通常マテリアル、[1]がアウトライン用マテリアル（isOutline=true）
       if (mesh.material.length === 0) continue
       if (!(mesh.material[0] instanceof MToonMaterial)) continue
+
       const material = mesh.material[0] as MToonMaterial
-      if (!materialMeshMap.has(material)) {
-        materialMeshMap.set(material, [])
+
+      // アウトライン情報を取得
+      const hasOutline = material.outlineWidthMode !== 'none'
+      const outlineWidthMode = material.outlineWidthMode as import('./types').OutlineWidthMode
+
+      if (!materialInfoMap.has(material)) {
+        materialInfoMap.set(material, {
+          meshes: [],
+          hasOutline,
+          outlineWidthMode,
+        })
       }
-      materialMeshMap.get(material)!.push(mesh)
+      materialInfoMap.get(material)!.meshes.push(mesh)
     } else if (mesh.material instanceof MToonMaterial) {
       const material = mesh.material as MToonMaterial
-      if (!materialMeshMap.has(material)) {
-        materialMeshMap.set(material, [])
+
+      // アウトライン情報を取得
+      const hasOutline = material.outlineWidthMode !== 'none'
+      const outlineWidthMode = material.outlineWidthMode as import('./types').OutlineWidthMode
+
+      if (!materialInfoMap.has(material)) {
+        materialInfoMap.set(material, {
+          meshes: [],
+          hasOutline,
+          outlineWidthMode,
+        })
       }
-      materialMeshMap.get(material)!.push(mesh)
+      materialInfoMap.get(material)!.meshes.push(mesh)
     }
   }
 
-  if (materialMeshMap.size === 0) {
+  if (materialInfoMap.size === 0) {
     return err({
       type: 'ASSET_ERROR',
       message: 'MToonMaterialがありません',
     })
   }
 
-  return ok(materialMeshMap)
+  // MaterialInfo配列に変換
+  const result: import('./types').MaterialInfo[] = []
+  for (const [material, info] of materialInfoMap) {
+    result.push({
+      material,
+      meshes: info.meshes,
+      hasOutline: info.hasOutline,
+      outlineWidthMode: info.outlineWidthMode,
+    })
+  }
+
+  return ok(result)
 }

@@ -9,7 +9,7 @@ import {
   assignAtlasTexturesToMaterial,
   CombinedMeshResult,
   combineMToonMaterials as combineMeshAndMaterial,
-  getMToonMaterialsWithMeshesFromObject3D,
+  getMToonMaterialInfoFromObject3D,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
@@ -35,10 +35,15 @@ export function optimizeModel(
     // SpringBoneを初期姿勢にリセット（マイグレーション前に物理演算の影響を排除）
     vrm.springBoneManager?.reset()
 
-    // モデルのマテリアル集計
-    const materialMeshMap =
-      yield* getMToonMaterialsWithMeshesFromObject3D(rootNode)
-    const materials = Array.from(materialMeshMap.keys())
+    // モデルのマテリアル集計（アウトライン情報を含む）
+    const materialInfos = yield* getMToonMaterialInfoFromObject3D(rootNode)
+    const materials = materialInfos.map((info) => info.material)
+
+    // 後方互換性のためのMap生成
+    const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+    for (const info of materialInfos) {
+      materialMeshMap.set(info.material, info.meshes)
+    }
 
     // マテリアルで使われてるテクスチャの組のパターンを集計
     const patternMappings = buildPatternMaterialMappings(materials)
@@ -98,8 +103,9 @@ export function optimizeModel(
 
     // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
     // このとき頂点アトリビュートに元のマテリアル識別用の情報を追加する
+    // アウトライン情報を含むmaterialInfosを渡してアウトラインメッシュも生成
     const combineResult = yield* combineMeshAndMaterial(
-      materialMeshMap,
+      materialInfos,
       {},
       excludedMeshes,
     )
@@ -156,6 +162,11 @@ export function optimizeModel(
 
     // 統合されたメッシュを元のメッシュと同じ親に追加
     firstMeshParent.add(combineResult.mesh)
+
+    // アウトラインメッシュがある場合は追加
+    if (combineResult.outlineMesh) {
+      firstMeshParent.add(combineResult.outlineMesh)
+    }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
     if (options.migrateVRM0ToVRM1) {

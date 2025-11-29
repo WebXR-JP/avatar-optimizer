@@ -23,7 +23,7 @@ import { DataTexture, Mesh, SkinnedMesh } from 'three'
 import type { OptimizationError } from '../../types'
 import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
 import { createParameterTexture } from '../texture'
-import type { CombinedMeshResult, CombineMaterialOptions } from './types'
+import type { CombinedMeshResult, CombineMaterialOptions, MaterialInfo, OutlineWidthMode } from './types'
 
 /**
  * デフォルトオプション
@@ -44,13 +44,73 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
  */
 export function combineMToonMaterials(
   materialMeshMap: Map<MToonMaterial, Mesh[]>,
+  options?: CombineMaterialOptions,
+  excludedMeshes?: Set<Mesh>,
+): Result<CombinedMeshResult, OptimizationError>
+
+/**
+ * MaterialInfo配列から複数のMToonMaterialを単一のMToonAtlasMaterialに結合
+ * アウトライン情報を使用してアウトラインメッシュも生成
+ *
+ * @param materialInfos - マテリアル情報の配列（アウトライン情報を含む）
+ * @param options - 結合オプション
+ * @returns 結合されたメッシュと統計情報（アウトラインメッシュを含む）
+ */
+export function combineMToonMaterials(
+  materialInfos: MaterialInfo[],
+  options?: CombineMaterialOptions,
+  excludedMeshes?: Set<Mesh>,
+): Result<CombinedMeshResult, OptimizationError>
+
+export function combineMToonMaterials(
+  input: Map<MToonMaterial, Mesh[]> | MaterialInfo[],
   options: CombineMaterialOptions = {},
+  excludedMeshes?: Set<Mesh>,
+): Result<CombinedMeshResult, OptimizationError> {
+  // MaterialInfo[]形式に統一
+  let materialInfos: MaterialInfo[]
+  if (input instanceof Map) {
+    // 旧API: Map<MToonMaterial, Mesh[]>からMaterialInfo[]に変換
+    materialInfos = []
+    for (const [material, meshes] of input) {
+      materialInfos.push({
+        material,
+        meshes,
+        hasOutline: material.outlineWidthMode !== 'none',
+        outlineWidthMode: material.outlineWidthMode as OutlineWidthMode,
+      })
+    }
+  } else {
+    materialInfos = input
+  }
+
+  return combineMToonMaterialsInternal(materialInfos, options, excludedMeshes)
+}
+
+/**
+ * 内部実装: MaterialInfo配列を処理
+ */
+function combineMToonMaterialsInternal(
+  materialInfos: MaterialInfo[],
+  options: CombineMaterialOptions,
   excludedMeshes?: Set<Mesh>,
 ): Result<CombinedMeshResult, OptimizationError> {
   return safeTry(function* () {
     const opts = { ...DEFAULT_OPTIONS, ...options }
 
-    const materials = Array.from(materialMeshMap.keys())
+    const materials = materialInfos.map((info) => info.material)
+
+    // アウトライン情報を収集
+    // 最初のアウトライン有効なマテリアルのモードを全体に適用
+    let hasAnyOutline = false
+    let outlineWidthMode: OutlineWidthMode = 'worldCoordinates'
+    for (const info of materialInfos) {
+      if (info.hasOutline) {
+        hasAnyOutline = true
+        outlineWidthMode = info.outlineWidthMode
+        break
+      }
+    }
 
     // 2. パラメータテクスチャ生成
     const parameterTexture = yield* createParameterTexture(
@@ -71,9 +131,9 @@ export function combineMToonMaterials(
     const meshToSlotIndex = new Map<Mesh, number>()
     const meshesForMerge: Mesh[] = []
 
-    for (const [material, meshList] of materialMeshMap) {
-      const slotIndex = materialSlotIndex.get(material) ?? 0
-      for (const mesh of meshList) {
+    for (const info of materialInfos) {
+      const slotIndex = materialSlotIndex.get(info.material) ?? 0
+      for (const mesh of info.meshes) {
         if (excludedMeshes?.has(mesh)) continue
 
         meshToSlotIndex.set(mesh, slotIndex)
@@ -140,9 +200,46 @@ export function combineMToonMaterials(
       combinedMesh.name = 'CombinedMToonMesh'
     }
 
+    // 8. アウトラインメッシュの作成（アウトラインが必要な場合）
+    let outlineMesh: Mesh | undefined
+    let outlineMaterial: MToonAtlasMaterial | undefined
+
+    if (hasAnyOutline) {
+      // アウトライン用マテリアルを作成
+      outlineMaterial = atlasMaterial.createOutlineMaterial(
+        outlineWidthMode === 'screenCoordinates' ? 'screenCoordinates' : 'worldCoordinates',
+      )
+
+      // アウトライン用メッシュを作成（ジオメトリは共有）
+      if (firstSkinnedMesh) {
+        const outlineSkinnedMesh = new SkinnedMesh(mergedGeometry, outlineMaterial)
+        outlineSkinnedMesh.name = 'CombinedMToonMesh_Outline'
+        // アウトラインは通常メッシュより先に描画（後ろに配置されるように）
+        outlineSkinnedMesh.renderOrder = combinedMesh.renderOrder - 1
+
+        // スケルトンをバインド
+        if (mergedGeometry.userData.skeleton) {
+          const skeleton = mergedGeometry.userData.skeleton
+          const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+          outlineSkinnedMesh.bind(skeleton, identityMatrix)
+        } else if (firstSkinnedMesh.skeleton) {
+          const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+          outlineSkinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
+        }
+
+        outlineMesh = outlineSkinnedMesh
+      } else {
+        outlineMesh = new Mesh(mergedGeometry, outlineMaterial)
+        outlineMesh.name = 'CombinedMToonMesh_Outline'
+        outlineMesh.renderOrder = combinedMesh.renderOrder - 1
+      }
+    }
+
     return ok({
       mesh: combinedMesh,
       material: atlasMaterial,
+      outlineMesh,
+      outlineMaterial,
       materialSlotIndex,
       statistics: {
         originalMeshCount: meshesForMerge.length,

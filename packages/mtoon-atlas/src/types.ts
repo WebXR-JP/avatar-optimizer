@@ -7,6 +7,13 @@
 import * as THREE from 'three'
 
 /**
+ * アウトライン幅モード
+ *
+ * MToonMaterialのアウトライン描画における幅の計算方式
+ */
+export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
+
+/**
  * パラメータセマンティクス定義
  *
  * パラメータテクスチャの各テクセル・チャンネルに対応するセマンティック情報

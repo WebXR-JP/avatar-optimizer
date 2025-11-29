@@ -2,6 +2,7 @@ import { err, ok, Result, safeTry } from 'neverthrow'
 import {
   Bone,
   BufferAttribute,
+  BufferGeometry,
   Matrix4,
   Object3D,
   Skeleton,
@@ -64,8 +65,13 @@ export function migrateSkeletonVRM0ToVRM1(
     }
 
     // 2. 各メッシュの頂点位置をY軸180度回転
+    // 同じジオメトリを共有するメッシュ（通常メッシュとアウトラインメッシュなど）が
+    // 複数回処理されないようにするため、処理済みジオメトリを追跡
     if (!debug.skipVertexRotation) {
+      const processedGeometries = new Set<BufferGeometry>()
       for (const mesh of skinnedMeshes) {
+        if (processedGeometries.has(mesh.geometry)) continue
+        processedGeometries.add(mesh.geometry)
         rotateVertexPositionsAroundYAxis(mesh)
       }
     }
