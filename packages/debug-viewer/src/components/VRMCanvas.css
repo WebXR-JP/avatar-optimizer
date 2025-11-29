@@ -126,3 +126,79 @@
   font-style: italic;
   max-width: 200px;
 }
+
+/* 表情パネル */
+.vrm-canvas__expression-panel {
+  position: absolute;
+  bottom: 50px;
+  left: 10px;
+  width: 280px;
+  max-height: 400px;
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  border-radius: 6px;
+  z-index: 100;
+  color: #fff;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.vrm-canvas__expression-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #444;
+  font-weight: 500;
+}
+
+.vrm-canvas__expression-reset-btn {
+  padding: 0.25rem 0.5rem;
+  background-color: #555;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.vrm-canvas__expression-reset-btn:hover {
+  background-color: #666;
+}
+
+.vrm-canvas__expression-list {
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.vrm-canvas__expression-item {
+  display: grid;
+  grid-template-columns: 80px 1fr 40px;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vrm-canvas__expression-item label {
+  font-size: 0.75rem;
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vrm-canvas__expression-item input[type="range"] {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+}
+
+.vrm-canvas__expression-value {
+  font-size: 0.7rem;
+  color: #888;
+  text-align: right;
+  font-family: monospace;
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
@@ -7,6 +7,95 @@ import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
 
 import './VRMCanvas.css'
+
+/**
+ * VRM表情（モーフ）確認用パネル
+ * expressionManagerから利用可能な表情一覧を取得し、スライダーで調整可能
+ */
+function ExpressionPanel({ vrm }: { vrm: VRM })
+{
+  const [expressionValues, setExpressionValues] = useState<Record<string, number>>({})
+  const expressionNames = useMemo(() =>
+  {
+    const manager = vrm.expressionManager
+    if (!manager) return []
+    // 登録されている全ての表情名を取得
+    const names: string[] = []
+    manager.expressions.forEach((expression) =>
+    {
+      names.push(expression.expressionName)
+    })
+    return names.sort()
+  }, [vrm])
+
+  // VRMが変わったら値をリセット
+  useEffect(() =>
+  {
+    const initial: Record<string, number> = {}
+    expressionNames.forEach((name) =>
+    {
+      initial[name] = vrm.expressionManager?.getValue(name) ?? 0
+    })
+    setExpressionValues(initial)
+  }, [vrm, expressionNames])
+
+  const handleExpressionChange = useCallback((name: string, value: number) =>
+  {
+    vrm.expressionManager?.setValue(name, value)
+    setExpressionValues((prev) => ({ ...prev, [name]: value }))
+  }, [vrm])
+
+  const handleResetAll = useCallback(() =>
+  {
+    expressionNames.forEach((name) =>
+    {
+      vrm.expressionManager?.setValue(name, 0)
+    })
+    const reset: Record<string, number> = {}
+    expressionNames.forEach((name) =>
+    {
+      reset[name] = 0
+    })
+    setExpressionValues(reset)
+  }, [vrm, expressionNames])
+
+  if (expressionNames.length === 0)
+  {
+    return null
+  }
+
+  return (
+    <div className="vrm-canvas__expression-panel">
+      <div className="vrm-canvas__expression-header">
+        <span>Expressions ({expressionNames.length})</span>
+        <button
+          className="vrm-canvas__expression-reset-btn"
+          onClick={handleResetAll}
+        >
+          Reset
+        </button>
+      </div>
+      <div className="vrm-canvas__expression-list">
+        {expressionNames.map((name) => (
+          <div key={name} className="vrm-canvas__expression-item">
+            <label>{name}</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={expressionValues[name] ?? 0}
+              onChange={(e) => handleExpressionChange(name, parseFloat(e.target.value))}
+            />
+            <span className="vrm-canvas__expression-value">
+              {(expressionValues[name] ?? 0).toFixed(2)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 interface VRMCanvasProps
 {
@@ -199,6 +288,11 @@ function VRMCanvas({
               {debugMode === 'litShadeRate' && '明暗グラデーション'}
             </span>
           </div>
+
+          {/* 表情（モーフ）パネル */}
+          {vrm?.expressionManager && (
+            <ExpressionPanel vrm={vrm} />
+          )}
         </>
       )}
     </div>
