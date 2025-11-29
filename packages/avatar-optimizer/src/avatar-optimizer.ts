@@ -32,6 +32,9 @@ export function optimizeModel(
   return safeTry(async function* () {
     const rootNode = vrm.scene
 
+    // SpringBoneを初期姿勢にリセット（マイグレーション前に物理演算の影響を排除）
+    vrm.springBoneManager?.reset()
+
     // モデルのマテリアル集計
     const materialMeshMap =
       yield* getMToonMaterialsWithMeshesFromObject3D(rootNode)
@@ -157,6 +160,9 @@ export function optimizeModel(
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
     if (options.migrateVRM0ToVRM1) {
       yield* migrateSkeletonVRM0ToVRM1(rootNode)
+
+      // SpringBoneの初期状態を再設定（ボーン変換後の状態を記録）
+      vrm.springBoneManager?.setInitState()
     }
 
     return ok(combineResult)
