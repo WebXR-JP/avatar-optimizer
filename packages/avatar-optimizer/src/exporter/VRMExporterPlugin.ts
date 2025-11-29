@@ -62,6 +62,17 @@ export class VRMExporterPlugin
     {
       json.extensionsUsed.push('VRMC_vrm')
     }
+
+    // SpringBone拡張をエクスポート
+    const springBoneExtension = this.exportSpringBone(vrm)
+    if (springBoneExtension)
+    {
+      json.extensions.VRMC_springBone = springBoneExtension
+      if (!json.extensionsUsed.includes('VRMC_springBone'))
+      {
+        json.extensionsUsed.push('VRMC_springBone')
+      }
+    }
   }
 
   private exportMeta(vrm: VRM)
@@ -303,5 +314,217 @@ export class VRMExporterPlugin
     return {
       meshAnnotations,
     }
+  }
+
+  /**
+   * VRMC_springBone 拡張をエクスポート
+   * three-vrm の VRMSpringBoneManager から SpringBone データを抽出
+   */
+  private exportSpringBone(vrm: VRM)
+  {
+    const springBoneManager = vrm.springBoneManager
+    if (!springBoneManager) return undefined
+
+    const joints = springBoneManager.joints
+    if (!joints || joints.size === 0) return undefined
+
+    // コライダーをインデックス化
+    const colliders = springBoneManager.colliders
+    const colliderIndexMap = new Map<any, number>()
+    const colliderDefs: any[] = []
+
+    colliders.forEach((collider: any) =>
+    {
+      const nodeIndex = this.writer.nodeMap.get(collider)
+      if (nodeIndex === undefined) return
+
+      const shape = collider.shape
+      let shapeDef: any
+
+      if (shape.type === 'sphere')
+      {
+        shapeDef = {
+          sphere: {
+            offset: shape.offset ? [shape.offset.x, shape.offset.y, shape.offset.z] : [0, 0, 0],
+            radius: shape.radius ?? 0,
+          },
+        }
+      } else if (shape.type === 'capsule')
+      {
+        shapeDef = {
+          capsule: {
+            offset: shape.offset ? [shape.offset.x, shape.offset.y, shape.offset.z] : [0, 0, 0],
+            radius: shape.radius ?? 0,
+            tail: shape.tail ? [shape.tail.x, shape.tail.y, shape.tail.z] : [0, 0, 0],
+          },
+        }
+      } else
+      {
+        // plane などその他のシェイプはスキップ
+        return
+      }
+
+      const colliderIndex = colliderDefs.length
+      colliderIndexMap.set(collider, colliderIndex)
+      colliderDefs.push({
+        node: nodeIndex,
+        shape: shapeDef,
+      })
+    })
+
+    // コライダーグループをインデックス化
+    const colliderGroups = springBoneManager.colliderGroups
+    const colliderGroupIndexMap = new Map<any, number>()
+    const colliderGroupDefs: any[] = []
+
+    colliderGroups.forEach((group: any) =>
+    {
+      const colliderIndices: number[] = []
+      group.colliders.forEach((collider: any) =>
+      {
+        const index = colliderIndexMap.get(collider)
+        if (index !== undefined)
+        {
+          colliderIndices.push(index)
+        }
+      })
+
+      if (colliderIndices.length > 0)
+      {
+        const groupIndex = colliderGroupDefs.length
+        colliderGroupIndexMap.set(group, groupIndex)
+        colliderGroupDefs.push({
+          name: group.name,
+          colliders: colliderIndices,
+        })
+      }
+    })
+
+    // ジョイントをスプリングにグループ化
+    // three-vrm では各ジョイントが独立しているが、
+    // VRMC_springBone 仕様ではジョイントチェーンとして表現する
+    // ボーンの親子関係からチェーンを再構築する
+    const springDefs: any[] = []
+    const processedJoints = new Set<any>()
+
+    // ジョイントをボーンノードでグループ化
+    const jointsByBone = new Map<any, any>()
+    joints.forEach((joint: any) =>
+    {
+      jointsByBone.set(joint.bone, joint)
+    })
+
+    // ルートジョイント（親がジョイントでないもの）を見つけてチェーンを構築
+    joints.forEach((joint: any) =>
+    {
+      if (processedJoints.has(joint)) return
+
+      // このジョイントがチェーンのルートかどうかを確認
+      const parentBone = joint.bone.parent
+      if (parentBone && jointsByBone.has(parentBone))
+      {
+        // 親もジョイントなのでルートではない
+        return
+      }
+
+      // チェーンを構築
+      const chainJoints: any[] = []
+      let currentJoint = joint
+
+      while (currentJoint && !processedJoints.has(currentJoint))
+      {
+        processedJoints.add(currentJoint)
+        chainJoints.push(currentJoint)
+
+        // 子ボーンを持つジョイントを探す
+        const childBone = currentJoint.child
+        currentJoint = childBone ? jointsByBone.get(childBone) : null
+      }
+
+      if (chainJoints.length === 0) return
+
+      // ジョイント定義を作成
+      const jointDefs = chainJoints.map((j: any) =>
+      {
+        const nodeIndex = this.writer.nodeMap.get(j.bone)
+        return {
+          node: nodeIndex,
+          hitRadius: j.settings.hitRadius,
+          stiffness: j.settings.stiffness,
+          gravityPower: j.settings.gravityPower,
+          gravityDir: j.settings.gravityDir
+            ? [j.settings.gravityDir.x, j.settings.gravityDir.y, j.settings.gravityDir.z]
+            : [0, -1, 0],
+          dragForce: j.settings.dragForce,
+        }
+      }).filter((j: any) => j.node !== undefined)
+
+      if (jointDefs.length === 0) return
+
+      // コライダーグループのインデックスを収集
+      const colliderGroupIndices: number[] = []
+      const firstJoint = chainJoints[0]
+      if (firstJoint.colliderGroups)
+      {
+        firstJoint.colliderGroups.forEach((group: any) =>
+        {
+          const index = colliderGroupIndexMap.get(group)
+          if (index !== undefined && !colliderGroupIndices.includes(index))
+          {
+            colliderGroupIndices.push(index)
+          }
+        })
+      }
+
+      // センターノードのインデックス
+      let centerNodeIndex: number | undefined
+      if (firstJoint.center)
+      {
+        centerNodeIndex = this.writer.nodeMap.get(firstJoint.center)
+      }
+
+      const springDef: any = {
+        joints: jointDefs,
+      }
+
+      if (centerNodeIndex !== undefined)
+      {
+        springDef.center = centerNodeIndex
+      }
+
+      if (colliderGroupIndices.length > 0)
+      {
+        springDef.colliderGroups = colliderGroupIndices
+      }
+
+      springDefs.push(springDef)
+    })
+
+    // 何もエクスポートするものがなければ undefined を返す
+    if (springDefs.length === 0 && colliderDefs.length === 0)
+    {
+      return undefined
+    }
+
+    const result: any = {
+      specVersion: '1.0',
+    }
+
+    if (colliderDefs.length > 0)
+    {
+      result.colliders = colliderDefs
+    }
+
+    if (colliderGroupDefs.length > 0)
+    {
+      result.colliderGroups = colliderGroupDefs
+    }
+
+    if (springDefs.length > 0)
+    {
+      result.springs = springDefs
+    }
+
+    return result
   }
 }
