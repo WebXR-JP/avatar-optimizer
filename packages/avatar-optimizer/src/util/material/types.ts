@@ -107,6 +107,14 @@ export interface CombineMaterialOptions {
 export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
 
 /**
+ * レンダーモード（透過分離用）
+ * - opaque: 不透明（transparent === false && alphaTest === 0）
+ * - alphaTest: MASKモード（alphaTest > 0）
+ * - transparent: 半透明（transparent === true）
+ */
+export type RenderMode = 'opaque' | 'alphaTest' | 'transparent'
+
+/**
  * マテリアル情報（アウトライン情報を含む）
  */
 export interface MaterialInfo {
@@ -118,22 +126,43 @@ export interface MaterialInfo {
   hasOutline: boolean
   /** アウトライン幅モード */
   outlineWidthMode: OutlineWidthMode
+  /** レンダーモード */
+  renderMode: RenderMode
+}
+
+/**
+ * メッシュグループ（レンダーモードごとの結合結果）
+ * meshがnullの場合はexcludedMeshes専用グループ（結合メッシュなし、マテリアルのみ）
+ */
+export interface MeshGroup {
+  /** 結合されたメッシュ（excludedMeshesのみの場合はnull） */
+  mesh: Mesh | null
+  /** 使用されたMToonAtlasMaterial */
+  material: MToonAtlasMaterial
+  /** アウトライン用メッシュ */
+  outlineMesh?: Mesh
+  /** アウトライン用MToonAtlasMaterial */
+  outlineMaterial?: MToonAtlasMaterial
+}
+
+/**
+ * マテリアルスロット情報
+ */
+export interface MaterialSlotInfo {
+  /** レンダーモード */
+  renderMode: RenderMode
+  /** グループ内でのスロットインデックス */
+  slotIndex: number
 }
 
 /**
  * マテリアル結合の結果
  */
 export interface CombinedMeshResult {
-  /** 結合されたメッシュ */
-  mesh: Mesh
-  /** 使用されたMToonAtlasMaterial */
-  material: MToonAtlasMaterial
-  /** アウトライン用メッシュ（アウトラインが不要な場合はundefined） */
-  outlineMesh?: Mesh
-  /** アウトライン用MToonAtlasMaterial（アウトラインが不要な場合はundefined） */
-  outlineMaterial?: MToonAtlasMaterial
-  /** マテリアルからスロットインデックスへのマッピング */
-  materialSlotIndex: Map<MToonMaterial, number>
+  /** レンダーモードごとのメッシュグループ */
+  groups: Map<RenderMode, MeshGroup>
+  /** マテリアルからスロット情報へのマッピング */
+  materialSlotIndex: Map<MToonMaterial, MaterialSlotInfo>
   /** 統計情報 */
   statistics: {
     /** 元のメッシュ数 */

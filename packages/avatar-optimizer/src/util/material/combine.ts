@@ -1,14 +1,13 @@
 /**
  * MToonマテリアル結合モジュール
  *
- * 複数のMToonMaterialを単一のMToonInstancingMaterialに結合し、
- * ドローコールを削減します。
+ * 複数のMToonMaterialをレンダーモードごとにグループ化し、
+ * 各グループをMToonAtlasMaterialに結合してドローコールを削減します。
  *
- * 主な処理:
- * 1. マテリアルパラメータをパラメータテクスチャにパック
- * 2. テクスチャをアトラス化
- * 3. ジオメトリを結合してスロット属性を追加
- * 4. MToonInstancingMaterialを作成
+ * レンダーモード:
+ * - opaque: 不透明（transparent === false && alphaTest === 0）
+ * - alphaTest: MASKモード（alphaTest > 0）
+ * - transparent: 半透明（transparent === true）
  */
 
 import { MToonMaterial } from '@pixiv/three-vrm'
@@ -19,11 +18,20 @@ import type {
 } from '@xrift/mtoon-atlas'
 import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
-import { DataTexture, Mesh, SkinnedMesh } from 'three'
+import { BufferGeometry, DataTexture, Mesh, SkinnedMesh } from 'three'
 import type { OptimizationError } from '../../types'
 import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
 import { createParameterTexture } from '../texture'
-import type { CombinedMeshResult, CombineMaterialOptions, MaterialInfo, OutlineWidthMode } from './types'
+import { getRenderMode } from './index'
+import type {
+  CombinedMeshResult,
+  CombineMaterialOptions,
+  MaterialInfo,
+  MaterialSlotInfo,
+  MeshGroup,
+  OutlineWidthMode,
+  RenderMode,
+} from './types'
 
 /**
  * デフォルトオプション
@@ -78,6 +86,7 @@ export function combineMToonMaterials(
         meshes,
         hasOutline: material.outlineWidthMode !== 'none',
         outlineWidthMode: material.outlineWidthMode as OutlineWidthMode,
+        renderMode: getRenderMode(material),
       })
     }
   } else {
@@ -88,20 +97,50 @@ export function combineMToonMaterials(
 }
 
 /**
- * 内部実装: MaterialInfo配列を処理
+ * MaterialInfoをレンダーモードでグループ化
  */
-function combineMToonMaterialsInternal(
+function groupMaterialInfoByRenderMode(
   materialInfos: MaterialInfo[],
-  options: CombineMaterialOptions,
-  excludedMeshes?: Set<Mesh>,
-): Result<CombinedMeshResult, OptimizationError> {
-  return safeTry(function* () {
-    const opts = { ...DEFAULT_OPTIONS, ...options }
+): Map<RenderMode, MaterialInfo[]> {
+  const groups = new Map<RenderMode, MaterialInfo[]>()
 
+  for (const info of materialInfos) {
+    const mode = info.renderMode
+    if (!groups.has(mode)) {
+      groups.set(mode, [])
+    }
+    groups.get(mode)!.push(info)
+  }
+
+  return groups
+}
+
+/**
+ * 単一グループの結合結果
+ */
+interface SingleGroupResult {
+  mesh: Mesh | null
+  material: MToonAtlasMaterial
+  outlineMesh?: Mesh
+  outlineMaterial?: MToonAtlasMaterial
+  materialSlotIndex: Map<MToonMaterial, number>
+  meshCount: number
+  materialCount: number
+}
+
+/**
+ * 単一グループのマテリアル結合処理
+ */
+function processSingleGroup(
+  materialInfos: MaterialInfo[],
+  opts: Required<CombineMaterialOptions>,
+  excludedMeshes: Set<Mesh> | undefined,
+  renderMode: RenderMode,
+): Result<SingleGroupResult, OptimizationError> {
+  return safeTry(function* () {
     const materials = materialInfos.map((info) => info.material)
 
     // アウトライン情報を収集
-    // 最初のアウトライン有効なマテリアルのモードを全体に適用
     let hasAnyOutline = false
     let outlineWidthMode: OutlineWidthMode = 'worldCoordinates'
     for (const info of materialInfos) {
@@ -112,22 +151,19 @@ function combineMToonMaterialsInternal(
       }
     }
 
-    // 2. パラメータテクスチャ生成
+    // パラメータテクスチャ生成
     const parameterTexture = yield* createParameterTexture(
       materials,
       opts.texelsPerSlot,
     )
 
-    // 3. マテリアルとメッシュのマッピング
-    // 各マテリアルに対応するメッシュを集める
+    // マテリアルとメッシュのマッピング
     const materialSlotIndex = new Map<MToonMaterial, number>()
-
-    // マテリアルをスロットインデックスにマッピング
     materials.forEach((mat, index) => {
       materialSlotIndex.set(mat, index)
     })
 
-    // 4. ジオメトリ結合用マップの構築
+    // ジオメトリ結合用マップの構築
     const meshToSlotIndex = new Map<Mesh, number>()
     const meshesForMerge: Mesh[] = []
 
@@ -141,14 +177,30 @@ function combineMToonMaterialsInternal(
       }
     }
 
+    // MToonAtlasMaterialの作成（excludedMeshes用にも必要なので先に作成）
+    const atlasMaterial = createMToonAtlasMaterial(
+      materials[0],
+      parameterTexture,
+      materials.length,
+      opts.texelsPerSlot,
+      opts.slotAttributeName,
+      renderMode,
+    )
+
+    // マージ対象がない場合はマテリアルのみ返す（excludedMeshes専用グループ）
     if (meshesForMerge.length === 0) {
-      return err({
-        type: 'ASSET_ERROR',
-        message: 'マージ対象のメッシュがありません',
+      return ok({
+        mesh: null,
+        material: atlasMaterial,
+        outlineMesh: undefined,
+        outlineMaterial: undefined,
+        materialSlotIndex,
+        meshCount: 0,
+        materialCount: materials.length,
       })
     }
 
-    // 5. マテリアルスロットアトリビュートを追加してジオメトリ結合
+    // マテリアルスロットアトリビュートを追加してジオメトリ結合
     const mergedGeometries = yield* mergeGeometriesWithSlotAttribute(
       meshesForMerge,
       meshToSlotIndex,
@@ -156,83 +208,31 @@ function combineMToonMaterialsInternal(
     )
     const mergedGeometry = mergedGeometries[0]
 
-    // 6. MToonAtlasMaterialの作成
-    const atlasMaterial = createMToonAtlasMaterial(
-      materials[0], // 代表マテリアルからアトラス化されたテクスチャを取得
-      parameterTexture,
-      materials.length, // スロット数
-      opts.texelsPerSlot, // テクセル数
-      opts.slotAttributeName,
+    // 結合メッシュの作成
+    const { mesh: combinedMesh } = createCombinedMesh(
+      mergedGeometry,
+      atlasMaterial,
+      meshesForMerge,
+      `CombinedMToonMesh_${renderMode}`,
     )
 
-    // 7. 結合メッシュの作成
-    // SkinnedMeshが含まれているかチェック
-    const firstSkinnedMesh = meshesForMerge.find(
-      (mesh): mesh is SkinnedMesh => mesh instanceof SkinnedMesh,
-    )
-
-    let combinedMesh: Mesh
-    if (firstSkinnedMesh) {
-      // SkinnedMeshとして作成
-      const skinnedMesh = new SkinnedMesh(mergedGeometry, atlasMaterial)
-      skinnedMesh.name = 'CombinedMToonMesh'
-
-      // 統合されたスケルトンを使用
-      if (mergedGeometry.userData.skeleton) {
-        const skeleton = mergedGeometry.userData.skeleton
-
-        // bindMatrixは単位行列（Identity）を使用する
-        // merge-mesh.tsで各メッシュのbindMatrixを適用済みのため、
-        // 頂点はすでにスケルトン空間（bindMatrix適用後の空間）にある
-        const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-        skinnedMesh.bind(skeleton, identityMatrix)
-      }
-      // フォールバック：最初のSkinnedMeshからskeletonをコピー（通常はここには来ない）
-      else if (firstSkinnedMesh.skeleton) {
-        const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-        skinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
-      }
-
-      combinedMesh = skinnedMesh
-    } else {
-      // 通常のMeshとして作成
-      combinedMesh = new Mesh(mergedGeometry, atlasMaterial)
-      combinedMesh.name = 'CombinedMToonMesh'
-    }
-
-    // 8. アウトラインメッシュの作成（アウトラインが必要な場合）
+    // アウトラインメッシュの作成
     let outlineMesh: Mesh | undefined
     let outlineMaterial: MToonAtlasMaterial | undefined
 
     if (hasAnyOutline) {
-      // アウトライン用マテリアルを作成
       outlineMaterial = atlasMaterial.createOutlineMaterial(
         outlineWidthMode === 'screenCoordinates' ? 'screenCoordinates' : 'worldCoordinates',
       )
 
-      // アウトライン用メッシュを作成（ジオメトリは共有）
-      if (firstSkinnedMesh) {
-        const outlineSkinnedMesh = new SkinnedMesh(mergedGeometry, outlineMaterial)
-        outlineSkinnedMesh.name = 'CombinedMToonMesh_Outline'
-        // アウトラインは通常メッシュより先に描画（後ろに配置されるように）
-        outlineSkinnedMesh.renderOrder = combinedMesh.renderOrder - 1
-
-        // スケルトンをバインド
-        if (mergedGeometry.userData.skeleton) {
-          const skeleton = mergedGeometry.userData.skeleton
-          const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-          outlineSkinnedMesh.bind(skeleton, identityMatrix)
-        } else if (firstSkinnedMesh.skeleton) {
-          const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-          outlineSkinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
-        }
-
-        outlineMesh = outlineSkinnedMesh
-      } else {
-        outlineMesh = new Mesh(mergedGeometry, outlineMaterial)
-        outlineMesh.name = 'CombinedMToonMesh_Outline'
-        outlineMesh.renderOrder = combinedMesh.renderOrder - 1
-      }
+      const outlineResult = createCombinedMesh(
+        mergedGeometry,
+        outlineMaterial,
+        meshesForMerge,
+        `CombinedMToonMesh_${renderMode}_Outline`,
+      )
+      outlineMesh = outlineResult.mesh
+      outlineMesh.renderOrder = combinedMesh.renderOrder - 1
     }
 
     return ok({
@@ -241,27 +241,126 @@ function combineMToonMaterialsInternal(
       outlineMesh,
       outlineMaterial,
       materialSlotIndex,
+      meshCount: meshesForMerge.length,
+      materialCount: materials.length,
+    })
+  })
+}
+
+/**
+ * 結合メッシュを作成
+ */
+function createCombinedMesh(
+  geometry: BufferGeometry,
+  material: MToonAtlasMaterial,
+  sourceMeshes: Mesh[],
+  name: string,
+): { mesh: Mesh; firstSkinnedMesh: SkinnedMesh | undefined } {
+  const firstSkinnedMesh = sourceMeshes.find(
+    (mesh): mesh is SkinnedMesh => mesh instanceof SkinnedMesh,
+  )
+
+  let mesh: Mesh
+  if (firstSkinnedMesh) {
+    const skinnedMesh = new SkinnedMesh(geometry, material)
+    skinnedMesh.name = name
+
+    if (geometry.userData.skeleton) {
+      const skeleton = geometry.userData.skeleton
+      const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+      skinnedMesh.bind(skeleton, identityMatrix)
+    } else if (firstSkinnedMesh.skeleton) {
+      const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
+      skinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
+    }
+
+    mesh = skinnedMesh
+  } else {
+    mesh = new Mesh(geometry, material)
+    mesh.name = name
+  }
+
+  return { mesh, firstSkinnedMesh }
+}
+
+/**
+ * 内部実装: MaterialInfo配列を処理（レンダーモードごとにグループ化）
+ */
+function combineMToonMaterialsInternal(
+  materialInfos: MaterialInfo[],
+  options: CombineMaterialOptions,
+  excludedMeshes?: Set<Mesh>,
+): Result<CombinedMeshResult, OptimizationError> {
+  return safeTry(function* () {
+    const opts = { ...DEFAULT_OPTIONS, ...options }
+
+    // レンダーモードでグループ化
+    const groupedInfos = groupMaterialInfoByRenderMode(materialInfos)
+
+    // 各グループを処理
+    const groups = new Map<RenderMode, MeshGroup>()
+    const materialSlotIndex = new Map<MToonMaterial, MaterialSlotInfo>()
+
+    let totalMeshCount = 0
+    let totalMaterialCount = 0
+
+    // レンダーモードの処理順序（描画順に影響）
+    const renderModeOrder: RenderMode[] = ['opaque', 'alphaTest', 'transparent']
+
+    for (const renderMode of renderModeOrder) {
+      const infos = groupedInfos.get(renderMode)
+      if (!infos || infos.length === 0) continue
+
+      const result = yield* processSingleGroup(infos, opts, excludedMeshes, renderMode)
+
+      groups.set(renderMode, {
+        mesh: result.mesh,
+        material: result.material,
+        outlineMesh: result.outlineMesh,
+        outlineMaterial: result.outlineMaterial,
+      })
+
+      // マテリアルスロット情報を統合
+      for (const [mat, slotIndex] of result.materialSlotIndex) {
+        materialSlotIndex.set(mat, { renderMode, slotIndex })
+      }
+
+      totalMeshCount += result.meshCount
+      totalMaterialCount += result.materialCount
+    }
+
+    if (groups.size === 0) {
+      return err({
+        type: 'ASSET_ERROR',
+        message: 'マージ対象のメッシュがありません',
+      })
+    }
+
+    // 結果のドローコール数を計算
+    // meshが存在するグループにつき1ドローコール + アウトラインがあれば+1
+    let resultDrawCalls = 0
+    for (const group of groups.values()) {
+      if (group.mesh) resultDrawCalls += 1
+      if (group.outlineMesh) resultDrawCalls += 1
+    }
+
+    return ok({
+      groups,
+      materialSlotIndex,
       statistics: {
-        originalMeshCount: meshesForMerge.length,
-        originalMaterialCount: materials.length,
-        reducedDrawCalls: materials.length - 1, // 元のドローコール数 - 1（統合後）
+        originalMeshCount: totalMeshCount,
+        originalMaterialCount: totalMaterialCount,
+        reducedDrawCalls: totalMaterialCount - resultDrawCalls,
       },
     })
   })
 }
 
 /**
- * MToonInstancingMaterialを作成
+ * MToonAtlasMaterialを作成
  *
  * 代表マテリアルのアトラス化されたテクスチャを使用
  * パラメータテクスチャを設定
- *
- * @param representativeMaterial - テクスチャを取得するマテリアル
- * @param parameterTexture - パラメータテクスチャ
- * @param slotCount - マテリアルスロット数
- * @param texelsPerSlot - スロットあたりのテクセル数
- * @param slotAttributeName - スロット属性名
- * @returns MToonInstancingMaterial
  */
 function createMToonAtlasMaterial(
   representativeMaterial: MToonMaterial,
@@ -269,6 +368,7 @@ function createMToonAtlasMaterial(
   slotCount: number,
   texelsPerSlot: number,
   slotAttributeName: string,
+  renderMode: RenderMode,
 ): MToonAtlasMaterial {
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
@@ -314,11 +414,22 @@ function createMToonAtlasMaterial(
     description: 'Material slot index for instancing',
   }
 
-  // MToonInstancingMaterialを作成
+  // MToonAtlasMaterialを作成
   const material = new MToonAtlasMaterial({
     parameterTexture: parameterTextureDescriptor,
     slotAttribute,
   })
+
+  // レンダーモードに応じた設定
+  if (renderMode === 'transparent') {
+    material.transparent = true
+    material.depthWrite = false
+  } else if (renderMode === 'alphaTest') {
+    material.transparent = false
+    material.alphaTest = representativeMaterial.alphaTest
+  } else {
+    material.transparent = false
+  }
 
   return material
 }

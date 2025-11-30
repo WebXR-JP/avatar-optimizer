@@ -1,6 +1,6 @@
 import { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { BufferAttribute, Mesh, SkinnedMesh } from 'three'
+import { BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
@@ -102,8 +102,7 @@ export function optimizeModel(
     }
 
     // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
-    // このとき頂点アトリビュートに元のマテリアル識別用の情報を追加する
-    // アウトライン情報を含むmaterialInfosを渡してアウトラインメッシュも生成
+    // レンダーモード（opaque/alphaTest/transparent）ごとに別メッシュとして結合
     const combineResult = yield* combineMeshAndMaterial(
       materialInfos,
       {},
@@ -112,8 +111,10 @@ export function optimizeModel(
 
     // excludedMeshesにもMToonAtlasMaterialを適用
     // これにより、エクスポート→インポート後も正しくレンダリングされる
-    const slotAttributeName =
-      combineResult.material.slotAttribute?.name || 'mtoonMaterialSlot'
+    // 最初のグループからスロット属性名を取得
+    const firstGroup = combineResult.groups.values().next().value
+    const slotAttributeName = firstGroup?.material.slotAttribute?.name || 'mtoonMaterialSlot'
+
     for (const mesh of excludedMeshes) {
       // メッシュのマテリアルを取得
       const originalMaterial = Array.isArray(mesh.material)
@@ -122,22 +123,22 @@ export function optimizeModel(
 
       if (!(originalMaterial instanceof MToonMaterial)) continue
 
-      // スロットインデックスを取得
-      const slotIndex = combineResult.materialSlotIndex.get(originalMaterial)
-      if (slotIndex === undefined) continue
+      // スロット情報を取得
+      const slotInfo = combineResult.materialSlotIndex.get(originalMaterial)
+      if (!slotInfo) continue
+
+      // 対応するレンダーモードのグループを取得
+      const group = combineResult.groups.get(slotInfo.renderMode)
+      if (!group) continue
 
       // ジオメトリにスロット属性を追加
       const geometry = mesh.geometry
       const vertexCount = geometry.getAttribute('position').count
-      const slotArray = new Float32Array(vertexCount).fill(slotIndex)
+      const slotArray = new Float32Array(vertexCount).fill(slotInfo.slotIndex)
       geometry.setAttribute(slotAttributeName, new BufferAttribute(slotArray, 1))
 
-      // MToonAtlasMaterialを適用（同じマテリアルインスタンスを共有）
-      if (mesh instanceof SkinnedMesh) {
-        mesh.material = combineResult.material
-      } else {
-        mesh.material = combineResult.material
-      }
+      // MToonAtlasMaterialを適用（同じレンダーモードのマテリアルを共有）
+      mesh.material = group.material
     }
 
     // 元のrootNodeから既存のメッシュを削除
@@ -160,12 +161,15 @@ export function optimizeModel(
       deleteMesh(mesh)
     }
 
-    // 統合されたメッシュを元のメッシュと同じ親に追加
-    firstMeshParent.add(combineResult.mesh)
-
-    // アウトラインメッシュがある場合は追加
-    if (combineResult.outlineMesh) {
-      firstMeshParent.add(combineResult.outlineMesh)
+    // 各レンダーモードのメッシュをシーンに追加
+    for (const group of combineResult.groups.values()) {
+      // excludedMeshes専用グループの場合はmeshがnull
+      if (group.mesh) {
+        firstMeshParent.add(group.mesh)
+      }
+      if (group.outlineMesh) {
+        firstMeshParent.add(group.outlineMesh)
+      }
     }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）

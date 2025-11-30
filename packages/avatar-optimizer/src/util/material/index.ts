@@ -12,7 +12,27 @@ import { AtlasImageMap, OptimizationError } from '../../types'
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials } from './combine'
-export type { CombinedMeshResult, CombineMaterialOptions, MaterialInfo, OutlineWidthMode } from './types'
+export type {
+  CombinedMeshResult,
+  CombineMaterialOptions,
+  MaterialInfo,
+  MaterialSlotInfo,
+  MeshGroup,
+  OutlineWidthMode,
+  RenderMode,
+} from './types'
+
+/**
+ * MToonMaterialのレンダーモードを判定
+ * - transparent: true → 'transparent'
+ * - alphaTest > 0 → 'alphaTest'
+ * - それ以外 → 'opaque'
+ */
+export function getRenderMode(material: MToonMaterial): import('./types').RenderMode {
+  if (material.transparent) return 'transparent'
+  if (material.alphaTest > 0) return 'alphaTest'
+  return 'opaque'
+}
 
 /**
  * アトラス化したテクスチャ群をマテリアルにアサインする
@@ -83,6 +103,7 @@ export function getMToonMaterialInfoFromObject3D(
     meshes: Mesh[]
     hasOutline: boolean
     outlineWidthMode: import('./types').OutlineWidthMode
+    renderMode: import('./types').RenderMode
   }>()
 
   for (const mesh of meshes) {
@@ -103,6 +124,7 @@ export function getMToonMaterialInfoFromObject3D(
           meshes: [],
           hasOutline,
           outlineWidthMode,
+          renderMode: getRenderMode(material),
         })
       }
       materialInfoMap.get(material)!.meshes.push(mesh)
@@ -118,6 +140,7 @@ export function getMToonMaterialInfoFromObject3D(
           meshes: [],
           hasOutline,
           outlineWidthMode,
+          renderMode: getRenderMode(material),
         })
       }
       materialInfoMap.get(material)!.meshes.push(mesh)
@@ -139,6 +162,7 @@ export function getMToonMaterialInfoFromObject3D(
       meshes: info.meshes,
       hasOutline: info.hasOutline,
       outlineWidthMode: info.outlineWidthMode,
+      renderMode: info.renderMode,
     })
   }
 
