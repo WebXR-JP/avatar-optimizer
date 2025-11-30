@@ -114,6 +114,8 @@ interface VRMCanvasProps
   onPlayAnimation: () => Promise<void>
   debugMode: DebugMode
   onDebugModeChange: (mode: DebugMode) => void
+  springBoneEnabled: boolean
+  onSpringBoneEnabledChange: (enabled: boolean) => void
 }
 
 /**
@@ -159,6 +161,8 @@ function VRMCanvas({
   onPlayAnimation,
   debugMode,
   onDebugModeChange,
+  springBoneEnabled,
+  onSpringBoneEnabledChange,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -191,7 +195,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -287,6 +291,14 @@ function VRMCanvas({
               {debugMode === 'paramRaw' && 'R=shadingShift, G=shadingToony, B=slot'}
               {debugMode === 'litShadeRate' && '明暗グラデーション'}
             </span>
+            <label className="vrm-canvas__springbone-toggle">
+              <input
+                type="checkbox"
+                checked={springBoneEnabled}
+                onChange={(e) => onSpringBoneEnabledChange(e.target.checked)}
+              />
+              SpringBone
+            </label>
           </div>
 
           {/* 表情（モーフ）パネル */}

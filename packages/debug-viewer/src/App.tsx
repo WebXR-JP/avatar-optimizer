@@ -22,6 +22,7 @@ function App()
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [isReplacingTextures, setIsReplacingTextures] = useState(false)
   const [debugMode, setDebugMode] = useState<DebugMode>('none')
+  const [springBoneEnabled, setSpringBoneEnabled] = useState(true)
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -288,6 +289,8 @@ function App()
           onPlayAnimation={handlePlayAnimation}
           debugMode={debugMode}
           onDebugModeChange={setDebugMode}
+          springBoneEnabled={springBoneEnabled}
+          onSpringBoneEnabledChange={setSpringBoneEnabled}
         />
 
         {/* Routes でオーバーレイを管理 */}

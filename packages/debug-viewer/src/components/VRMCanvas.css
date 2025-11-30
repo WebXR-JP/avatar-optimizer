@@ -127,6 +127,20 @@
   max-width: 200px;
 }
 
+.vrm-canvas__springbone-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  margin-top: 0.25rem;
+}
+
+.vrm-canvas__springbone-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* 表情パネル */
 .vrm-canvas__expression-panel {
   position: absolute;

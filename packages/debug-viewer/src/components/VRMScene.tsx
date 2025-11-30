@@ -11,6 +11,7 @@ interface VRMSceneProps
   vrm: VRM | null
   vrmAnimation: VRMAnimation | null
   debugMode: DebugMode
+  springBoneEnabled?: boolean
 }
 
 /**
@@ -18,7 +19,7 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
@@ -75,6 +76,13 @@ function VRMScene({ vrm, vrmAnimation, debugMode }: VRMSceneProps)
     })
   }, [vrm, debugMode])
 
+  // SpringBone無効時にリセット
+  useEffect(() =>
+  {
+    if (!vrm || springBoneEnabled) return
+    vrm.springBoneManager?.reset()
+  }, [vrm, springBoneEnabled])
+
   // アニメーションループ
   useFrame((_state, delta) =>
   {
@@ -85,7 +93,18 @@ function VRMScene({ vrm, vrmAnimation, debugMode }: VRMSceneProps)
     }
     if (vrm)
     {
-      vrm.update(dt)
+      if (springBoneEnabled)
+      {
+        // 全体更新（SpringBone含む）
+        vrm.update(dt)
+      } else
+      {
+        // SpringBone以外を個別に更新
+        vrm.humanoid?.update()
+        vrm.nodeConstraintManager?.update()
+        vrm.expressionManager?.update()
+        vrm.lookAt?.update(dt)
+      }
     }
   })
 
