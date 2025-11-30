@@ -30,6 +30,13 @@ pnpm -F debug-viewer run build
 pnpm -F debug-viewer run preview
 ```
 
+### サンプルモーション
+
+開発時の動作確認用モーションとして、以下のページから VRMA ファイルをダウンロードし、`public/vrma/` に配置してください（ディレクトリがない場合は作成してください）。
+今はVRMA_03.vrmaだけ使ってます
+
+https://booth.pm/ja/items/5512385?srsltid=AfmBOop7sRKuMxeJwy_4IiEbqh4LKRcvTrI3b2AlYSh2IAC-48yIXH0Q
+
 ## 依存関係
 
 - **React 19**: UI フレームワーク

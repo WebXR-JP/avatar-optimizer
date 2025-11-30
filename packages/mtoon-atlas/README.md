@@ -13,11 +13,11 @@ MToon shader atlas optimization utilities for three-vrm WebGL applications.
 ## Features
 
 - **ShaderMaterial ベースのカスタムマテリアル**: WebGL 標準対応、WebXR 環境で動作確実
-- **パラメータテクスチャサポート**: 全19種類の数値パラメータをテクスチャからサンプリング
-  - baseColor, shadeColor, emissiveColor, emissiveIntensity
+- **パラメータテクスチャサポート**: 全20種類の数値パラメータをテクスチャからサンプリング
+  - litFactor(baseColor), opacity, shadeColor, emissiveColor, emissiveIntensity
   - shadingShift, shadingToony, shadingShiftTextureScale
   - rimLightingMix, parametricRimColor, parametricRimLift, parametricRimFresnelPower
-  - matcapColor, outlineWidth, outlineColor, outlineLightingMix
+  - matcapFactor, outlineWidth, outlineColor, outlineLightingMix
   - uvAnimationScrollX, uvAnimationScrollY, uvAnimationRotation, normalScale
 - **アトラステクスチャ自動設定**: 8種類のテクスチャマップを自動バインディング
   - baseColor, shade, shadingShift, normal, emissive, matcap, rim, uvAnimationMask
@@ -53,7 +53,7 @@ const material = new MToonAtlasMaterial()
 material.setParameterTexture({
   texture: packedParameterTexture,
   slotCount: packedSlotCount,
-  texelsPerSlot: 8,
+  texelsPerSlot: 9,  // デフォルト値: 9テクセル/スロット
 
   // アトラス化されたテクスチャを指定すると自動的にマテリアルに設定されます
   atlasedTextures: {
@@ -85,7 +85,7 @@ const material = new MToonAtlasMaterial({
   parameterTexture: {
     texture: packedParameterTexture,
     slotCount: packedSlotCount,
-    texelsPerSlot: 8,
+    texelsPerSlot: 9,  // デフォルト値
     atlasedTextures: {
       baseColor: atlasMainTexture,
       normal: atlasNormalTexture,
@@ -114,7 +114,7 @@ const material = new MToonAtlasMaterial({
   parameterTexture: {
     texture: packedParameterTexture,
     slotCount: packedSlotCount,
-    texelsPerSlot: 8,
+    texelsPerSlot: 9,  // デフォルト値
     // atlasedTextures を省略した場合は手動設定が必要
   },
 })
@@ -203,7 +203,7 @@ new MToonAtlasMaterial(options?: MToonAtlasOptions)
 interface ParameterTextureDescriptor {
   texture: Texture                    // パック済みパラメータテクスチャ
   slotCount: number                   // スロット数
-  texelsPerSlot: number               // スロットあたりのテクセル数（通常8）
+  texelsPerSlot: number               // スロットあたりのテクセル数（デフォルト: 9）
   semantics?: ParameterSemantic[]     // カスタムレイアウト（省略時はデフォルト）
   atlasedTextures?: AtlasedTextureSet // アトラステクスチャセット
 }
@@ -235,18 +235,18 @@ interface MaterialSlotAttributeConfig {
 
 ## Parameter texture layout
 
-avatar-optimizer で生成されたパラメータテクスチャは、各スロット（元マテリアル）あたり 8 texel（`texelsPerSlot = 8`）の RGBA チャンネルに、以下の順番で 19 個のパラメータを詰め込んだ構造になっています。
+avatar-optimizer で生成されたパラメータテクスチャは、各スロット（元マテリアル）あたり 9 texel（`texelsPerSlot = 9`）の RGBA チャンネルに、以下の順番で 20 個のパラメータを詰め込んだ構造になっています。
 
 `MToonAtlasMaterial` の Fragment Shader はこのレイアウトを前提にパラメータをサンプリングします：
 
 ```glsl
 // Fragment Shader でのサンプリング例
-vec4 param0 = sampleParameter(vMaterialSlot, 0.0);  // Texel 0: baseColor + shadingShift
-vec3 baseColor = param0.rgb;
-float shadingShift = param0.a;
+vec4 param0 = sampleParameter(vMaterialSlot, 0.0);  // Texel 0: litFactor + opacity
+vec3 litFactor = param0.rgb;
+float opacity = param0.a;
 
-vec4 param1 = sampleParameter(vMaterialSlot, 1.0);  // Texel 1: shadeColor + shadingShiftTextureScale
-vec3 shadeColor = param1.rgb;
+vec4 param1 = sampleParameter(vMaterialSlot, 1.0);  // Texel 1: shadeColorFactor + shadingShiftTextureScale
+vec3 shadeColorFactor = param1.rgb;
 float shadingShiftTextureScale = param1.a;
 
 // ... 以下同様に各テクセルをサンプリング
@@ -254,25 +254,26 @@ float shadingShiftTextureScale = param1.a;
 
 | Texel index | Channel(s) | Semantic | 内容 |
 | ----------- | ---------- | -------- | ---- |
-| 0 | RGB | `baseColor` | ベースディフューズカラー (linear RGB) |
-| 0 | A | `shadingShift` | シェーディングシフト係数 |
-| 1 | RGB | `shadeColor` | Shade pass 用カラー |
+| 0 | RGB | `litFactor` | ベースディフューズカラー (linear RGB) |
+| 0 | A | `opacity` | 不透明度 |
+| 1 | RGB | `shadeColorFactor` | Shade pass 用カラー |
 | 1 | A | `shadingShiftTextureScale` | Shading shift texture スケール |
-| 2 | RGB | `emissiveColor` | エミッシブカラー |
+| 2 | RGB | `emissive` | エミッシブカラー |
 | 2 | A | `emissiveIntensity` | エミッシブ強度 |
-| 3 | RGB | `matcapColor` | Matcap カラー係数 |
-| 3 | A | `outlineWidth` | アウトライン幅 |
-| 4 | RGB | `outlineColor` | アウトラインカラー |
-| 4 | A | `outlineLightingMix` | アウトラインのライティングブレンド |
-| 5 | RGB | `parametricRimColor` | Parametric rim カラー |
-| 5 | A | `parametricRimLift` | Parametric rim lift |
-| 6 | R | `parametricRimFresnelPower` | Parametric rim フレネル係数 |
-| 6 | G | `shadingToony` | Toon 化係数 |
-| 6 | B | `rimLightingMix` | ランバート/リムブレンド比 |
-| 6 | A | `uvAnimationRotation` | UV アニメーション回転速度 |
+| 3 | RGB | `matcapFactor` | Matcap カラー係数 |
+| 3 | A | `outlineWidthFactor` | アウトライン幅 |
+| 4 | RGB | `outlineColorFactor` | アウトラインカラー |
+| 4 | A | `outlineLightingMixFactor` | アウトラインのライティングブレンド |
+| 5 | RGB | `parametricRimColorFactor` | Parametric rim カラー |
+| 5 | A | `parametricRimLiftFactor` | Parametric rim lift |
+| 6 | R | `parametricRimFresnelPowerFactor` | Parametric rim フレネル係数 |
+| 6 | G | `shadingToonyFactor` | Toon 化係数 |
+| 6 | B | `rimLightingMixFactor` | ランバート/リムブレンド比 |
+| 6 | A | `uvAnimationRotationPhase` | UV アニメーション回転速度 |
 | 7 | RG | `normalScale` | ノーマルマップスケール (x, y) |
-| 7 | B | `uvAnimationScrollX` | UV アニメーション X 方向スクロール |
-| 7 | A | `uvAnimationScrollY` | UV アニメーション Y 方向スクロール |
+| 7 | B | `uvAnimationScrollXOffset` | UV アニメーション X 方向スクロール |
+| 7 | A | `uvAnimationScrollYOffset` | UV アニメーション Y 方向スクロール |
+| 8 | R | `shadingShiftFactor` | シェーディングシフト係数 |
 
 ## Development
 
@@ -282,34 +283,11 @@ float shadingShiftTextureScale = param1.a;
 pnpm -F mtoon-atlas run build
 ```
 
-現在、大枠の実装が完成しており、ビルド・型定義生成が成功しています。詳細な実装は `docs/IMPLEMENTATION_PLAN.md` を参照してください。
-
-### Implementation Status
-
-**実装完了** ✅
-- クラス構造と骨組み（`MToonAtlasMaterial`）
-- 型定義（`ParameterTextureDescriptor`, `AtlasedTextureSet` など）
-- パブリック API の定義と Getter/Setter メソッド
-- シェーダーファイル（TODO コメント付き）
-- ビルドシステム（tsup + esbuild シェーダーローダー）
-
-**実装予定** 📋
-- Uniform 初期化（THREE.UniformsLib マージ）
-- `setParameterTexture()` の完全実装
-- `copy()/clone()` メソッド
-- `update()` メソッド（UV アニメーション更新）
-- Fragment Shader のパラメータサンプリング実装
-- テストの修正・充実
-
-詳細は [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) を参照してください。
-
 ### Test
 
 ```bash
 pnpm -F mtoon-atlas run test
 ```
-
-*現在、シェーダー parse エラーで成功していません。これは vitest の設定最適化で解決予定です。*
 
 ### Watch Mode
 
