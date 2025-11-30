@@ -155,7 +155,7 @@ export interface ParameterLayout {
  */
 export const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
   { id: 'baseColor', texel: 0, channels: ['r', 'g', 'b'] },
-  { id: 'shadingShift', texel: 0, channels: ['a'] },
+  { id: 'opacity', texel: 0, channels: ['a'] },
   { id: 'shadeColor', texel: 1, channels: ['r', 'g', 'b'] },
   { id: 'shadingShiftTextureScale', texel: 1, channels: ['a'] },
   { id: 'emissiveColor', texel: 2, channels: ['r', 'g', 'b'] },
@@ -173,6 +173,7 @@ export const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
   { id: 'normalScale', texel: 7, channels: ['r', 'g'] },
   { id: 'uvAnimationScrollX', texel: 7, channels: ['b'] },
   { id: 'uvAnimationScrollY', texel: 7, channels: ['a'] },
+  { id: 'shadingShift', texel: 8, channels: ['r'] },
 ] as const
 
 /**

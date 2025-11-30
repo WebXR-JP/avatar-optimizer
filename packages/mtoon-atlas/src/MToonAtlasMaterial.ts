@@ -31,6 +31,7 @@ import type {
  * - 'shading': MToonシェーディング結果を可視化
  * - 'shadingParams': shadingShift/shadingToonyの値を可視化
  * - 'litShadeRate': 明暗のグラデーションを可視化
+ * - 'alpha': アルファ値を可視化（R=最終alpha, G=opacity, B=テクスチャalpha）
  */
 export type DebugMode =
   | 'none'
@@ -45,6 +46,7 @@ export type DebugMode =
   | 'shadingParams'
   | 'paramRaw'
   | 'litShadeRate'
+  | 'alpha'
 
 /**
  * MToonAtlasMaterial
@@ -152,7 +154,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
         // パラメータテクスチャ関連
         uParameterTexture: { value: null },
         uParameterTextureSize: { value: new THREE.Vector2(1, 1) },
-        uTexelsPerSlot: { value: 8 },
+        uTexelsPerSlot: { value: 9 },
 
         // アトラステクスチャ
         map: { value: null },
@@ -259,7 +261,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       // パラメータテクスチャをクリア
       this.uniforms.uParameterTexture.value = null
       this.uniforms.uParameterTextureSize.value.set(1, 1)
-      this.uniforms.uTexelsPerSlot.value = 8
+      this.uniforms.uTexelsPerSlot.value = 9
     }
 
     this._updateDefines()
@@ -598,6 +600,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'DEBUG_SHADING_PARAMS',
       'DEBUG_PARAM_RAW',
       'DEBUG_LITSHADERATE',
+      'DEBUG_ALPHA',
     ]
 
     for (const define of debugDefines)
@@ -619,6 +622,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'shadingParams': 'DEBUG_SHADING_PARAMS',
       'paramRaw': 'DEBUG_PARAM_RAW',
       'litShadeRate': 'DEBUG_LITSHADERATE',
+      'alpha': 'DEBUG_ALPHA',
     }
 
     const define = modeToDefine[mode]
@@ -662,6 +666,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       'shadingParams',
       'paramRaw',
       'litShadeRate',
+      'alpha',
     ]
   }
 }

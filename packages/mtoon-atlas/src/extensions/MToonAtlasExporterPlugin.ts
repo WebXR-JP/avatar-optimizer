@@ -402,7 +402,7 @@ export class MToonAtlasExporterPlugin
       version: '1.0',
       parameterTexture: {
         index: indices?.parameterTextureIndex ?? -1,
-        texelsPerSlot: material.parameterTexture?.texelsPerSlot ?? 8,
+        texelsPerSlot: material.parameterTexture?.texelsPerSlot ?? 9,
         slotCount: material.parameterTexture?.slotCount ?? 0,
       },
       slotAttributeName: '_MTOON_MATERIAL_SLOT',

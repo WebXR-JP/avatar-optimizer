@@ -327,7 +327,7 @@ void main() {
   // Sample parameters from texture
   vec4 param0 = sampleParameter(vMaterialSlot, 0.0);
   vec3 litFactor = param0.rgb;
-  float shadingShiftFactor = param0.a;
+  float opacity = param0.a;
 
   vec4 param1 = sampleParameter(vMaterialSlot, 1.0);
   vec3 shadeColorFactor = param1.rgb;
@@ -359,6 +359,9 @@ void main() {
   vec2 normalScale = param7.rg;
   float uvAnimationScrollXOffset = param7.b;
   float uvAnimationScrollYOffset = param7.a;
+
+  vec4 param8 = sampleParameter(vMaterialSlot, 8.0);
+  float shadingShiftFactor = param8.r;
   #include <clipping_planes_fragment>
 
   vec2 uv = vec2(0.5, 0.5);
@@ -648,9 +651,22 @@ void main() {
 
   #ifdef DEBUG_PARAM_RAW
     // パラメータテクスチャからの生の値を可視化
-    // R = shadingShiftFactor (param0.a), G = shadingToonyFactor (param6.g)
+    // R = shadingShiftFactor (param8.r), G = shadingToonyFactor (param6.g)
     // B = vMaterialSlot / 10.0 (スロット確認用)
     gl_FragColor = vec4( 0.5 + 0.5 * shadingShiftFactor, shadingToonyFactor, vMaterialSlot / 10.0, 1.0 );
+    return;
+  #endif
+
+  #ifdef DEBUG_ALPHA
+    // アルファ値を可視化
+    // R = diffuseColor.a (テクスチャアルファ * opacity)
+    // G = opacity (パラメータテクスチャからの値)
+    // B = sampledDiffuseColor.a (テクスチャのアルファのみ、USE_MAPの場合)
+    float texAlpha = 1.0;
+    #ifdef USE_MAP
+      texAlpha = texture2D( map, vUv ).a;
+    #endif
+    gl_FragColor = vec4( diffuseColor.a, opacity, texAlpha, 1.0 );
     return;
   #endif
 

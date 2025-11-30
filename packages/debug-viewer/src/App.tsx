@@ -123,7 +123,7 @@ function App()
     }
 
     const optimizationResult = result.value
-    if (optimizationResult.mesh)
+    if (optimizationResult.groups.size > 0)
     {
       console.log('Optimization successful:', optimizationResult.statistics)
     }

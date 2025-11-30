@@ -39,7 +39,7 @@ import type {
 const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
   atlasSize: 2048,
   slotAttributeName: 'mtoonMaterialSlot',
-  texelsPerSlot: 8,
+  texelsPerSlot: 9,
 }
 
 /**

@@ -20,6 +20,7 @@ export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
  */
 export type ParameterSemanticId =
   | 'baseColor'
+  | 'opacity'
   | 'shadeColor'
   | 'emissiveColor'
   | 'emissiveIntensity'

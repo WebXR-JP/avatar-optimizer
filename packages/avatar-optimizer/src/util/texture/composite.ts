@@ -1,17 +1,15 @@
 import { err, ok, Result } from 'neverthrow'
 import {
-  AddEquation,
   Color,
   ColorSpace,
-  CustomBlending,
   DataTexture,
   DoubleSide,
   LinearFilter,
   LinearSRGBColorSpace,
   Mesh,
   MeshBasicMaterial,
+  NoBlending,
   NoColorSpace,
-  OneFactor,
   OrthographicCamera,
   PlaneGeometry,
   RepeatWrapping,
@@ -131,6 +129,8 @@ function createRenderer(): WebGLRenderer {
     canvas: canvas as unknown as HTMLCanvasElement,
     antialias: false,
     alpha: true,
+    // premultipliedAlpha を無効化してアルファ値をそのまま保持
+    premultipliedAlpha: false,
   })
   // ガンマ補正を無効化（ソーステクスチャのデータをそのまま保持）
   renderer.outputColorSpace = LinearSRGBColorSpace
@@ -155,15 +155,12 @@ function createLayerMesh(layer: ImageMatrixPair): Mesh {
   const geometry = new PlaneGeometry()
 
   // マテリアル: テクスチャを割り当て
-  // 背景色に影響されないようカスタムブレンディングを設定
+  // アトラスでは各テクスチャが重ならない領域に配置されるため、
+  // NoBlendingでソースのRGBA値をそのまま書き込む（ブレンドなし）
   const material = new MeshBasicMaterial({
     map: texture,
     side: DoubleSide,
-    transparent: true,
-    blending: CustomBlending,
-    blendSrc: OneFactor,
-    blendDst: OneFactor,
-    blendEquation: AddEquation,
+    blending: NoBlending,
   })
 
   const mesh = new Mesh(geometry, material)

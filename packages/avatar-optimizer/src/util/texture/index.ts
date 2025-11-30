@@ -136,7 +136,7 @@ export function generateAtlasImages(
  */
 export function createParameterTexture(
   materials: MToonMaterial[],
-  texelsPerSlot: number = 8,
+  texelsPerSlot: number = 9,
 ): Result<DataTexture, OptimizationError> {
   if (materials.length === 0) {
     return err({
@@ -226,6 +226,8 @@ function extractParameterValue(
   switch (semanticId) {
     case 'baseColor':
       return colorToVector3(material.color ?? new Color(1, 1, 1))
+    case 'opacity':
+      return material.opacity ?? 1
     case 'shadeColor':
       return colorToVector3(material.shadeColorFactor ?? new Color(0, 0, 0))
     case 'emissiveColor':
