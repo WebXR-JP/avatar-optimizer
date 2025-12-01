@@ -361,7 +361,8 @@ void main() {
   float uvAnimationScrollYOffset = param7.a;
 
   vec4 param8 = sampleParameter(vMaterialSlot, 8.0);
-  float shadingShiftFactor = param8.r;
+  // shadingShiftFactor は 0〜1 で保存されているので -1〜1 に復元
+  float shadingShiftFactor = param8.r * 2.0 - 1.0;
   #include <clipping_planes_fragment>
 
   vec2 uv = vec2(0.5, 0.5);

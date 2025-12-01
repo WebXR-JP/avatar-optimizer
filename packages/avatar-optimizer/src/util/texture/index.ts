@@ -235,7 +235,9 @@ function extractParameterValue(
     case 'emissiveIntensity':
       return material.emissiveIntensity ?? 0
     case 'shadingShift':
-      return material.shadingShiftFactor ?? 0
+      // shadingShiftFactor は -1〜1 の範囲なので 0〜1 に remap
+      // シェーダー側で value * 2 - 1 で復元する
+      return ((material.shadingShiftFactor ?? 0) + 1) / 2
     case 'shadingShiftTextureScale':
       return material.shadingShiftTextureScale ?? 1
     case 'shadingToony':
