@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button, Chip, Stack } from '@mui/material';
-import { ExpandLess, ExpandMore, GridOn, LightMode } from '@mui/icons-material';
+import { ExpandLess, ExpandMore, GridOn, LightMode, Visibility, VisibilityOff } from '@mui/icons-material';
 import * as THREE from 'three';
 import { VRM } from '@pixiv/three-vrm';
 import { UVPreviewDialog } from './UVPreviewDialog';
@@ -18,12 +18,15 @@ interface SceneNodeProps
   depth: number;
   selectedObject: THREE.Object3D | null;
   onSelect: (object: THREE.Object3D) => void;
+  onVisibilityChange?: () => void;
 }
 
-const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, onSelect }) =>
+const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, onSelect, onVisibilityChange }) =>
 {
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(object.visible);
   const hasChildren = object.children.length > 0;
+  const isMesh = (object as THREE.Mesh).isMesh;
 
   const handleClick = (e: React.MouseEvent) =>
   {
@@ -38,12 +41,25 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
     onSelect(object);
   };
 
+  const handleToggleVisibility = (e: React.MouseEvent) =>
+  {
+    e.stopPropagation();
+    object.visible = !object.visible;
+    setVisible(object.visible);
+    onVisibilityChange?.();
+  };
+
   const isSelected = selectedObject === object;
 
   return (
     <>
       <ListItemButton
-        sx={{ pl: depth * 2, py: 0.5, backgroundColor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'transparent' }}
+        sx={{
+          pl: depth * 2,
+          py: 0.5,
+          backgroundColor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'transparent',
+          opacity: visible ? 1 : 0.5
+        }}
         onClick={handleSelect}
       >
         {hasChildren ? (
@@ -57,13 +73,25 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
           primary={object.name || `<${object.type}>`}
           primaryTypographyProps={{
             variant: 'body2',
-            style: { fontWeight: isSelected ? 'bold' : 'normal' },
+            style: {
+              fontWeight: isSelected ? 'bold' : 'normal',
+              textDecoration: visible ? 'none' : 'line-through'
+            },
             color: 'inherit'
           }}
         />
-        <Typography variant="caption" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
+        <Typography variant="caption" sx={{ color: 'rgba(0, 0, 0, 0.6)', mr: 1 }}>
           {object.type}
         </Typography>
+        {isMesh && (
+          <IconButton
+            size="small"
+            onClick={handleToggleVisibility}
+            sx={{ color: visible ? 'inherit' : 'rgba(0, 0, 0, 0.3)' }}
+          >
+            {visible ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+          </IconButton>
+        )}
       </ListItemButton>
       {hasChildren && (
         <Collapse in={open} timeout="auto" unmountOnExit>
@@ -75,6 +103,7 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
                 depth={depth + 1}
                 selectedObject={selectedObject}
                 onSelect={onSelect}
+                onVisibilityChange={onVisibilityChange}
               />
             ))}
           </List>
@@ -84,8 +113,23 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
   );
 };
 
-const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object }) =>
+interface InspectorPanelProps
 {
+  object: THREE.Object3D | null;
+  onVisibilityChange?: () => void;
+}
+
+const InspectorPanel: React.FC<InspectorPanelProps> = ({ object, onVisibilityChange }) =>
+{
+  const [uvPreviewOpen, setUvPreviewOpen] = useState(false);
+  const [visible, setVisible] = useState(object?.visible ?? true);
+
+  // オブジェクトが変わったら可視状態を同期
+  useEffect(() =>
+  {
+    setVisible(object?.visible ?? true);
+  }, [object]);
+
   if (!object)
   {
     return (
@@ -102,7 +146,12 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
     return (obj as THREE.Mesh).isMesh;
   };
 
-  const [uvPreviewOpen, setUvPreviewOpen] = useState(false);
+  const handleToggleVisibility = () =>
+  {
+    object.visible = !object.visible;
+    setVisible(object.visible);
+    onVisibilityChange?.();
+  };
 
   return (
     <Box sx={{ p: 2, color: 'black' }}>
@@ -116,32 +165,44 @@ const InspectorPanel: React.FC<{ object: THREE.Object3D | null }> = ({ object })
         UUID: {object.uuid}
       </Typography>
 
-      <Button
-        variant="outlined"
-        size="small"
-        onClick={() => console.log(object)}
-        sx={{ mt: 1, mb: 1 }}
-      >
-        Log to Console
-      </Button>
+      <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 1 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => console.log(object)}
+        >
+          Log to Console
+        </Button>
+
+        {isMesh(object) && (
+          <>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<GridOn />}
+              onClick={() => setUvPreviewOpen(true)}
+            >
+              Show UV
+            </Button>
+            <Button
+              variant={visible ? 'outlined' : 'contained'}
+              size="small"
+              startIcon={visible ? <Visibility /> : <VisibilityOff />}
+              onClick={handleToggleVisibility}
+              color={visible ? 'primary' : 'warning'}
+            >
+              {visible ? 'Visible' : 'Hidden'}
+            </Button>
+          </>
+        )}
+      </Stack>
 
       {isMesh(object) && (
-        <>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<GridOn />}
-            onClick={() => setUvPreviewOpen(true)}
-            sx={{ mt: 1, mb: 1, ml: 1 }}
-          >
-            Show UV
-          </Button>
-          <UVPreviewDialog
-            open={uvPreviewOpen}
-            onClose={() => setUvPreviewOpen(false)}
-            mesh={object}
-          />
-        </>
+        <UVPreviewDialog
+          open={uvPreviewOpen}
+          onClose={() => setUvPreviewOpen(false)}
+          mesh={object}
+        />
       )}
 
       <Divider sx={{ my: 2 }} />
@@ -297,6 +358,13 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
   const [selectedObject, setSelectedObject] = useState<THREE.Object3D | null>(null);
   const [sceneStats, setSceneStats] = useState<ReturnType<typeof computeSceneStats> | null>(null);
   const [vrmStats, setVrmStats] = useState<ReturnType<typeof computeSceneStats> | null>(null);
+  // 可視性変更時に再レンダリングをトリガーするためのカウンター
+  const [, setVisibilityVersion] = useState(0);
+
+  const handleVisibilityChange = () =>
+  {
+    setVisibilityVersion((v) => v + 1);
+  };
 
   // シーン統計を計算
   useEffect(() =>
@@ -375,6 +443,7 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
                   depth={0}
                   selectedObject={selectedObject}
                   onSelect={setSelectedObject}
+                  onVisibilityChange={handleVisibilityChange}
                 />
                 <Divider sx={{ my: 1 }} />
               </>
@@ -387,11 +456,12 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
               depth={0}
               selectedObject={selectedObject}
               onSelect={setSelectedObject}
+              onVisibilityChange={handleVisibilityChange}
             />
           </List>
         </Paper>
         <Box sx={{ width: '60%', overflow: 'auto', bgcolor: '#f5f5f5', color: 'black' }}>
-          <InspectorPanel object={selectedObject} />
+          <InspectorPanel object={selectedObject} onVisibilityChange={handleVisibilityChange} />
         </Box>
       </Box>
     </Box>
