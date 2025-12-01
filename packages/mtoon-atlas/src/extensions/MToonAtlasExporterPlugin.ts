@@ -1,11 +1,13 @@
 import { Mesh, Object3D, Texture } from 'three'
 import UPNG from 'upng-js'
+import { encode as encodePng16 } from 'fast-png'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {
   GLTFWriter,
   MTOON_ATLAS_EXTENSION_NAME,
   MToonAtlasExtensionSchema,
+  OutlineWidthMode,
 } from './types'
 
 /**
@@ -156,26 +158,33 @@ export class MToonAtlasExporterPlugin
     const image = texture.image as any
     if (image?.data && image.width && image.height)
     {
-      // DataTextureの生データからUPNGで直接PNGエンコード
+      // DataTextureの生データから16bit PNGをエンコード（精度向上）
       const srcData = image.data
       const isFloatData = srcData instanceof Float32Array ||
         srcData.constructor?.name === 'Float32Array'
       const pixelCount = image.width * image.height * 4
-      const uint8Data = new Uint8Array(pixelCount)
+      // 16bit PNG用にUint16Arrayを使用
+      const uint16Data = new Uint16Array(pixelCount)
 
       for (let i = 0; i < pixelCount; i++)
       {
         const value = srcData[i]
-        // Float32Array (0.0-1.0) の場合は 255 を掛ける
-        // Uint8Array (0-255) の場合はそのまま
-        uint8Data[i] = isFloatData
-          ? Math.round(Math.min(1, Math.max(0, value)) * 255)
-          : value
+        // Float32Array (0.0-1.0) の場合は 65535 を掛ける（16bit精度）
+        // Uint8Array (0-255) の場合は 257 を掛けて16bitに変換
+        uint16Data[i] = isFloatData
+          ? Math.round(Math.min(1, Math.max(0, value)) * 65535)
+          : value * 257
       }
 
-      // UPNGで直接PNGエンコード（Premultiplied Alpha問題を回避）
-      const pngData = UPNG.encode([uint8Data.buffer], image.width, image.height, 0)
-      const base64 = this.arrayBufferToBase64(pngData)
+      // fast-pngで16bit PNGエンコード（Premultiplied Alpha問題を回避、精度向上）
+      const pngData = encodePng16({
+        width: image.width,
+        height: image.height,
+        depth: 16,
+        channels: 4,
+        data: uint16Data,
+      })
+      const base64 = this.arrayBufferToBase64(pngData.buffer as ArrayBuffer)
       imageDef.uri = `data:image/png;base64,${base64}`
     } else
     {
@@ -407,6 +416,16 @@ export class MToonAtlasExporterPlugin
       },
       slotAttributeName: '_MTOON_MATERIAL_SLOT',
       atlasedTextures: {},
+    }
+
+    // アウトライン関連のプロパティを設定
+    if (material.isOutline)
+    {
+      extension.isOutline = true
+    }
+    if (material.outlineWidthMode && material.outlineWidthMode !== 'none')
+    {
+      extension.outlineWidthMode = material.outlineWidthMode as OutlineWidthMode
     }
 
     // アトラス化テクスチャのインデックスを設定

@@ -5,6 +5,11 @@ export const MTOON_ATLAS_EXTENSION_NAME = 'XRIFT_mtoon_atlas'
 /**
  * GLTF Extension Schema for XRIFT_mtoon_atlas
  */
+/**
+ * アウトライン幅モード
+ */
+export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
+
 export interface MToonAtlasExtensionSchema
 {
   version: string
@@ -24,6 +29,18 @@ export interface MToonAtlasExtensionSchema
     rim?: { index: number }
     uvAnimationMask?: { index: number }
   }
+  /**
+   * アウトラインマテリアルかどうか
+   * true の場合、このマテリアルはアウトライン描画用
+   */
+  isOutline?: boolean
+  /**
+   * アウトライン幅モード
+   * - 'none': アウトラインなし
+   * - 'worldCoordinates': ワールド座標系での固定幅
+   * - 'screenCoordinates': スクリーン座標系での固定幅
+   */
+  outlineWidthMode?: OutlineWidthMode
 }
 
 /**

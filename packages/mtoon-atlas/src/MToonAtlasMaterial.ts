@@ -442,6 +442,9 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     this._isOutline = source._isOutline
     this._outlineWidthMode = source._outlineWidthMode
 
+    // アウトラインプロパティを反映するため defines を更新
+    this._updateDefines()
+
     return this
   }
 

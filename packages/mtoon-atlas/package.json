@@ -55,6 +55,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.22.0",
   "dependencies": {
+    "fast-png": "^7.0.1",
     "upng-js": "^2.1.0"
   }
 }
