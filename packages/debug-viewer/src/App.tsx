@@ -206,15 +206,15 @@ function App()
 
           if (result instanceof ArrayBuffer)
           {
-            // Binary GLTF (.glb)
+            // Binary VRM (.vrm)
             blob = new Blob([result], { type: 'application/octet-stream' })
-            filename = `${vrm.scene.name || 'vrm-model'}.glb`
+            filename = `${vrm.scene.name || 'vrm-model'}.vrm`
           } else
           {
-            // JSON GLTF (.gltf)
+            // JSON VRM (.vrm)
             const jsonString = JSON.stringify(result, null, 2)
             blob = new Blob([jsonString], { type: 'application/json' })
-            filename = `${vrm.scene.name || 'vrm-model'}.gltf`
+            filename = `${vrm.scene.name || 'vrm-model'}.vrm`
           }
 
           const url = URL.createObjectURL(blob)
@@ -227,17 +227,17 @@ function App()
           URL.revokeObjectURL(url)
         } catch (err)
         {
-          setError(`GLTF export failed: ${String(err)}`)
+          setError(`VRM export failed: ${String(err)}`)
         }
       },
       (error) =>
       {
         // エラー時も子要素を元に戻す
         children.forEach((child) => vrm.scene.add(child))
-        setError(`GLTF export failed: ${String(error)}`)
+        setError(`VRM export failed: ${String(error)}`)
       },
       {
-        binary: true, // .glb形式で出力
+        binary: true, // .vrm形式で出力
         trs: false,
         onlyVisible: true,
       },

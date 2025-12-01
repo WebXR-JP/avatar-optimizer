@@ -229,7 +229,7 @@ function VRMCanvas({
               onClick={onExportGLTF}
               disabled={!vrm}
             >
-              Export GLTF
+              Export VRM
             </button>
             <button
               className="vrm-canvas__replace-textures-btn"
