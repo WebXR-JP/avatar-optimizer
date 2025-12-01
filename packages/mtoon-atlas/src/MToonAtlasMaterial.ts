@@ -537,6 +537,11 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     outlineMaterial._outlineWidthMode = widthMode
     outlineMaterial.isOutline = true
 
+    // アウトラインが表メッシュを貫通しないようにpolygonOffsetを設定
+    outlineMaterial.polygonOffset = true
+    outlineMaterial.polygonOffsetFactor = 1
+    outlineMaterial.polygonOffsetUnits = 1
+
     return outlineMaterial
   }
 

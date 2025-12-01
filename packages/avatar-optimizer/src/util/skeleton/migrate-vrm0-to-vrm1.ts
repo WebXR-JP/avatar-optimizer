@@ -120,8 +120,8 @@ export function migrateSkeletonVRM0ToVRM1(
 }
 
 /**
- * SkinnedMeshの頂点位置をY軸周り180度回転
- * position属性とmorphTarget(position)を変換
+ * SkinnedMeshの頂点位置と法線をY軸周り180度回転
+ * position, normal属性とmorphTarget(position, normal)を変換
  */
 export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
   const geometry = mesh.geometry
@@ -132,15 +132,26 @@ export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
   }
 
   const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
-  const vertex = new Vector3()
+  const vec = new Vector3()
 
   // 頂点位置を回転
   for (let i = 0; i < positionAttr.count; i++) {
-    vertex.set(positionAttr.getX(i), positionAttr.getY(i), positionAttr.getZ(i))
-    vertex.applyMatrix4(rotationMatrix)
-    positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z)
+    vec.set(positionAttr.getX(i), positionAttr.getY(i), positionAttr.getZ(i))
+    vec.applyMatrix4(rotationMatrix)
+    positionAttr.setXYZ(i, vec.x, vec.y, vec.z)
   }
   positionAttr.needsUpdate = true
+
+  // 法線も回転（アウトライン押し出し方向に影響）
+  const normalAttr = geometry.getAttribute('normal')
+  if (normalAttr && normalAttr instanceof BufferAttribute) {
+    for (let i = 0; i < normalAttr.count; i++) {
+      vec.set(normalAttr.getX(i), normalAttr.getY(i), normalAttr.getZ(i))
+      vec.applyMatrix4(rotationMatrix)
+      normalAttr.setXYZ(i, vec.x, vec.y, vec.z)
+    }
+    normalAttr.needsUpdate = true
+  }
 
   // morphTargetのposition属性も回転
   // morphAttributesはキー(position, normalなど)ごとにBufferAttribute配列を持つ
@@ -151,9 +162,24 @@ export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
 
       for (let i = 0; i < morphAttr.count; i++) {
         // morphTargetはデルタ（差分ベクトル）なので、同様にY軸180度回転
-        vertex.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
-        vertex.applyMatrix4(rotationMatrix)
-        morphAttr.setXYZ(i, vertex.x, vertex.y, vertex.z)
+        vec.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
+        vec.applyMatrix4(rotationMatrix)
+        morphAttr.setXYZ(i, vec.x, vec.y, vec.z)
+      }
+      morphAttr.needsUpdate = true
+    }
+  }
+
+  // morphTargetのnormal属性も回転
+  const morphNormals = geometry.morphAttributes.normal
+  if (morphNormals && Array.isArray(morphNormals)) {
+    for (const morphAttr of morphNormals) {
+      if (!(morphAttr instanceof BufferAttribute)) continue
+
+      for (let i = 0; i < morphAttr.count; i++) {
+        vec.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
+        vec.applyMatrix4(rotationMatrix)
+        morphAttr.setXYZ(i, vec.x, vec.y, vec.z)
       }
       morphAttr.needsUpdate = true
     }
