@@ -303,7 +303,7 @@ function VRMCanvas({
 
           {/* 表情（モーフ）パネル */}
           {vrm?.expressionManager && (
-            <ExpressionPanel vrm={vrm} />
+            <ExpressionPanel key={vrm.scene.uuid} vrm={vrm} />
           )}
         </>
       )}

@@ -174,33 +174,59 @@ export class VRMExporterPlugin
   {
     if (!vrm.expressionManager) return undefined
 
-    const expressions: any = {}
+    // VRM 1.0 の preset 表情名リスト
+    const presetNames = new Set([
+      'happy', 'angry', 'sad', 'relaxed', 'surprised',
+      'aa', 'ih', 'ou', 'ee', 'oh',
+      'blink', 'blinkLeft', 'blinkRight',
+      'lookUp', 'lookDown', 'lookLeft', 'lookRight',
+      'neutral',
+    ])
+
+    const preset: any = {}
+    const custom: any = {}
 
     if (vrm.expressionManager.expressions)
     {
       vrm.expressionManager.expressions.forEach((expression) =>
       {
         const expr = expression as any // Cast to access binds
-        const exprDef: any = {
-          isBinary: expr.isBinary,
-          overrideBlink: expr.overrideBlink,
-          overrideLookAt: expr.overrideLookAt,
-          overrideMouth: expr.overrideMouth,
-        }
+        const exprDef: any = {}
 
-        if (expr.morphTargetBinds && expr.morphTargetBinds.length > 0)
+        // isBinary, overrideBlink などはデフォルト値(false/none)でなければ出力
+        if (expr.isBinary) exprDef.isBinary = expr.isBinary
+        if (expr.overrideBlink && expr.overrideBlink !== 'none') exprDef.overrideBlink = expr.overrideBlink
+        if (expr.overrideLookAt && expr.overrideLookAt !== 'none') exprDef.overrideLookAt = expr.overrideLookAt
+        if (expr.overrideMouth && expr.overrideMouth !== 'none') exprDef.overrideMouth = expr.overrideMouth
+
+        // three-vrm では _binds に VRMExpressionMorphTargetBind が格納されている
+        const binds = expr._binds || expr.binds || []
+        const morphTargetBinds = binds.filter((b: any) => b.type === 'morphTarget' || b.primitives)
+        if (morphTargetBinds.length > 0)
         {
-          exprDef.morphTargetBinds = expr.morphTargetBinds
-            .map((bind: any) =>
+          // 各 bind の primitives すべてに対してエントリを作成
+          const allBinds: any[] = []
+          morphTargetBinds.forEach((bind: any) =>
+          {
+            const primitives = bind.primitives || []
+            primitives.forEach((mesh: any) =>
             {
-              const nodeIndex = this.writer.nodeMap.get(bind.node)
-              return {
-                node: nodeIndex,
-                index: bind.index,
-                weight: bind.weight,
+              const nodeIndex = this.writer.nodeMap.get(mesh)
+              if (nodeIndex !== undefined)
+              {
+                allBinds.push({
+                  node: nodeIndex,
+                  index: bind.index,
+                  weight: bind.weight,
+                })
               }
             })
-            .filter((b: any) => b.node !== undefined)
+          })
+
+          if (allBinds.length > 0)
+          {
+            exprDef.morphTargetBinds = allBinds
+          }
         }
 
         if (expr.materialColorBinds && expr.materialColorBinds.length > 0)
@@ -236,14 +262,24 @@ export class VRMExporterPlugin
           )
         }
 
-        expressions[expr.expressionName] = exprDef
+        // preset か custom かを判定して振り分け
+        const name = expr.expressionName
+        if (presetNames.has(name))
+        {
+          preset[name] = exprDef
+        } else
+        {
+          custom[name] = exprDef
+        }
       })
     }
 
-    return {
-      preset: {},
-      ...expressions,
+    const result: any = { preset }
+    if (Object.keys(custom).length > 0)
+    {
+      result.custom = custom
     }
+    return result
   }
 
   private exportLookAt(vrm: VRM)
