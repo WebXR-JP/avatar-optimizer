@@ -116,6 +116,8 @@ interface VRMCanvasProps
   onDebugModeChange: (mode: DebugMode) => void
   springBoneEnabled: boolean
   onSpringBoneEnabledChange: (enabled: boolean) => void
+  onReloadExport: () => void
+  isReloading: boolean
 }
 
 /**
@@ -163,6 +165,8 @@ function VRMCanvas({
   onDebugModeChange,
   springBoneEnabled,
   onSpringBoneEnabledChange,
+  onReloadExport,
+  isReloading,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -230,6 +234,13 @@ function VRMCanvas({
               disabled={!vrm}
             >
               Export VRM
+            </button>
+            <button
+              className="vrm-canvas__reload-export-btn"
+              onClick={onReloadExport}
+              disabled={!vrm || isReloading}
+            >
+              {isReloading ? 'Reloading...' : 'Reload Export'}
             </button>
             <button
               className="vrm-canvas__replace-textures-btn"

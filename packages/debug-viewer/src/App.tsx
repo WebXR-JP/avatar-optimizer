@@ -23,6 +23,7 @@ function App()
   const [isReplacingTextures, setIsReplacingTextures] = useState(false)
   const [debugMode, setDebugMode] = useState<DebugMode>('none')
   const [springBoneEnabled, setSpringBoneEnabled] = useState(true)
+  const [isReloading, setIsReloading] = useState(false)
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -262,6 +263,84 @@ function App()
     setIsLoading(false)
   }, [])
 
+  // Export VRM後にそのまま再読み込みする（エクスポート結果の確認用）
+  const handleReloadExport = useCallback(() =>
+  {
+    if (!vrm) return
+
+    setIsReloading(true)
+    setError(null)
+
+    const exporter = new GLTFExporter()
+    exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
+    exporter.register((writer: any) =>
+    {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
+
+    const exportScene = new Scene()
+    const children = [...vrm.scene.children].filter((child) =>
+      child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
+    )
+    children.forEach((child) => exportScene.add(child))
+
+    exporter.parse(
+      exportScene,
+      async (result) =>
+      {
+        // エクスポート後、子要素を元のvrm.sceneに戻す
+        children.forEach((child) => vrm.scene.add(child))
+
+        try
+        {
+          let blob: Blob
+          if (result instanceof ArrayBuffer)
+          {
+            blob = new Blob([result], { type: 'application/octet-stream' })
+          } else
+          {
+            const jsonString = JSON.stringify(result, null, 2)
+            blob = new Blob([jsonString], { type: 'application/json' })
+          }
+
+          const file = new File([blob], `${vrm.scene.name || 'vrm-model'}.vrm`, {
+            type: 'application/octet-stream',
+          })
+
+          const loadResult = await loadVRMFromFile(file)
+
+          if (loadResult.isErr())
+          {
+            setError(`Reload failed: ${loadResult.error.message}`)
+            setIsReloading(false)
+            return
+          }
+
+          setVRM(loadResult.value)
+          setVRMAnimation(null)
+          setIsReloading(false)
+        } catch (err)
+        {
+          setError(`Reload failed: ${String(err)}`)
+          setIsReloading(false)
+        }
+      },
+      (error) =>
+      {
+        children.forEach((child) => vrm.scene.add(child))
+        setError(`Export for reload failed: ${String(error)}`)
+        setIsReloading(false)
+      },
+      {
+        binary: true,
+        trs: false,
+        onlyVisible: true,
+      },
+    )
+  }, [vrm])
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Tabs value={currentTab} onChange={handleTabChange}>
@@ -291,6 +370,8 @@ function App()
           onDebugModeChange={setDebugMode}
           springBoneEnabled={springBoneEnabled}
           onSpringBoneEnabledChange={setSpringBoneEnabled}
+          onReloadExport={handleReloadExport}
+          isReloading={isReloading}
         />
 
         {/* Routes でオーバーレイを管理 */}
