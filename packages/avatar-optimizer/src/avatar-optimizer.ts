@@ -162,13 +162,16 @@ export function optimizeModel(
     }
 
     // 各レンダーモードのメッシュをシーンに追加
+    // アウトラインメッシュを先に追加することで、glTF/VRMエクスポート後も
+    // 正しい描画順序を維持（ノードの順序が描画順序に影響するため）
     for (const group of combineResult.groups.values()) {
+      // アウトラインを先に追加（先に描画される = 後ろに表示される）
+      if (group.outlineMesh) {
+        firstMeshParent.add(group.outlineMesh)
+      }
       // excludedMeshes専用グループの場合はmeshがnull
       if (group.mesh) {
         firstMeshParent.add(group.mesh)
-      }
-      if (group.outlineMesh) {
-        firstMeshParent.add(group.outlineMesh)
       }
     }
 
