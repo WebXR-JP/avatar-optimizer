@@ -1,4 +1,4 @@
-import { Mesh, Object3D, Texture } from 'three'
+import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
 import { encode as encodePng16 } from 'fast-png'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
@@ -125,6 +125,103 @@ export class MToonAtlasExporterPlugin
       })
     }
 
+    // morphAttributesの共有を最適化
+    // GLTFLoaderは同一アクセサに対して同じArrayBufferを共有するが、
+    // 異なるBufferAttributeオブジェクトを作成する。
+    // GLTFExporterはBufferAttributeオブジェクトをキーとしてキャッシュするため、
+    // 同一ArrayBufferを持つ属性を同一のBufferAttributeオブジェクトに統一する
+    this.optimizeMorphAttributeSharing(roots)
+
+  }
+
+  /**
+   * 属性データの重複を検出してアクセサを共有する最適化
+   *
+   * GLTFExporterには以下の問題がある：
+   * 1. morphTarget処理でattribute.clone()を毎回呼び出すため、キャッシュが効かない
+   * 2. 同一データを持つ異なる属性オブジェクトが別々にエクスポートされる
+   *
+   * この問題を回避するため、processAccessorをラップして
+   * データ内容のフィンガープリントでキャッシュを行う
+   */
+  private optimizeMorphAttributeSharing(_roots: Object3D[])
+  {
+    // データフィンガープリント -> アクセサインデックス のキャッシュ
+    const fingerprintToAccessor = new Map<string, number>()
+
+    // フィンガープリント生成関数
+    const getFingerprint = (attribute: BufferAttribute | InterleavedBufferAttribute): string =>
+    {
+      const array = attribute.array as ArrayLike<number>
+      const byteLength = attribute.array.byteLength
+      const itemSize = attribute.itemSize
+      const count = attribute.count
+      const normalized = attribute.normalized
+
+      // サイズ + itemSize + count + normalized + 先頭/中間/末尾のサンプルデータで簡易フィンガープリント
+      const len = array.length
+      if (len === 0) return `${byteLength}:${itemSize}:${count}:${normalized}:`
+
+      const sampleCount = Math.min(16, len)
+      const samples: number[] = []
+
+      // 先頭サンプル
+      for (let i = 0; i < sampleCount && i < len; i++)
+      {
+        samples.push(array[i])
+      }
+      // 中間サンプル
+      const midStart = Math.floor(len / 2) - Math.floor(sampleCount / 2)
+      for (let i = 0; i < sampleCount && midStart + i < len; i++)
+      {
+        samples.push(array[Math.max(0, midStart + i)])
+      }
+      // 末尾サンプル
+      const endStart = Math.max(0, len - sampleCount)
+      for (let i = 0; i < sampleCount && endStart + i < len; i++)
+      {
+        samples.push(array[endStart + i])
+      }
+
+      return `${byteLength}:${itemSize}:${count}:${normalized}:${samples.map(v => v.toFixed(6)).join(',')}`
+    }
+
+    // processAccessorをラップして、データ重複を回避
+    const originalProcessAccessor = this.writer.processAccessor.bind(this.writer)
+    let cacheHits = 0
+    let totalCalls = 0
+
+    this.writer.processAccessor = (
+      attribute: BufferAttribute | InterleavedBufferAttribute,
+      geometry?: BufferGeometry,
+      start?: number,
+      count?: number
+    ): number =>
+    {
+      totalCalls++
+      const fingerprint = getFingerprint(attribute)
+
+      // 同一フィンガープリントに対してすでにアクセサを作成済みならそれを返す
+      const cachedAccessor = fingerprintToAccessor.get(fingerprint)
+      if (cachedAccessor !== undefined)
+      {
+        cacheHits++
+        return cachedAccessor
+      }
+
+      // 新規作成してキャッシュに保存
+      const accessorIndex = originalProcessAccessor(attribute, geometry, start, count)
+      fingerprintToAccessor.set(fingerprint, accessorIndex)
+      return accessorIndex
+    }
+
+    // afterParseでログ出力するためのフック
+    const originalAfterParse = this.afterParse.bind(this)
+    this.afterParse = (input: Object3D | Object3D[]) =>
+    {
+      originalAfterParse(input)
+      console.log(`[MToonAtlasExporterPlugin] processAccessor cache: ${cacheHits}/${totalCalls} hits (${fingerprintToAccessor.size} unique)`)
+    }
   }
 
   /**

@@ -62,7 +62,20 @@ export interface GLTFWriter
   pending: Promise<void>[]
   byteOffset: number
   processTexture: (texture: Texture) => number
-  processAccessor: (attribute: BufferAttribute | InterleavedBufferAttribute, geometry: BufferGeometry, start?: number, count?: number) => number
+  processAccessor: (attribute: BufferAttribute | InterleavedBufferAttribute, geometry?: BufferGeometry, start?: number, count?: number) => number
   processBuffer: (buffer: ArrayBuffer) => number
   processBufferViewImage: (blob: Blob) => Promise<number>
+
+  // 内部キャッシュ（morphAttributes最適化に使用）
+  cache: {
+    meshes: Map<any, any>
+    attributes: Map<number, number>
+    attributesNormalized: Map<any, any>
+    materials: Map<any, any>
+    textures: Map<any, any>
+    images: Map<any, any>
+  }
+  uids: Map<any, Map<boolean, number>>
+  uid: number
+  getUID: (attribute: BufferAttribute | InterleavedBufferAttribute, isRelativeCopy?: boolean) => number
 }

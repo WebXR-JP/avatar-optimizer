@@ -1,6 +1,6 @@
 import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
 import { MToonAtlasExporterPlugin, MToonAtlasLoaderPlugin } from '@xrift/mtoon-atlas'
-import { Scene, SkinnedMesh } from 'three'
+import { BufferGeometry, Scene, SkinnedMesh } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -579,9 +579,327 @@ describe('File Size Comparison', () => {
         `Top duplicates usage:\n  ${duplicateUsageDetails.join('\n\n  ')}`
       ).toBeLessThan(0.6) // 60%未満を許容
     })
+
+    it('should analyze morphTargets in exported GLB', async () => {
+      const view = new DataView(exportedBuffer)
+      const jsonChunkLength = view.getUint32(12, true)
+      const jsonBytes = new Uint8Array(exportedBuffer, 20, jsonChunkLength)
+      const json = JSON.parse(new TextDecoder().decode(jsonBytes))
+
+      // BINチャンクの開始位置
+      const binChunkOffset = 20 + jsonChunkLength
+      const binChunkStart = binChunkOffset + 8
+
+      console.log('\n=== MorphTarget Analysis ===')
+
+      // meshごとのmorphTargets情報を収集
+      const morphTargetInfo: Array<{
+        meshIndex: number
+        meshName: string
+        targetCount: number
+        targets: Array<{
+          name: string
+          accessors: Record<string, number>
+        }>
+      }> = []
+
+      if (json.meshes) {
+        for (let mi = 0; mi < json.meshes.length; mi++) {
+          const mesh = json.meshes[mi]
+          const prim = mesh.primitives?.[0]
+          if (!prim?.targets || prim.targets.length === 0) continue
+
+          const info = {
+            meshIndex: mi,
+            meshName: mesh.name || `mesh_${mi}`,
+            targetCount: prim.targets.length,
+            targets: [] as Array<{ name: string; accessors: Record<string, number> }>,
+          }
+
+          for (let ti = 0; ti < prim.targets.length; ti++) {
+            const target = prim.targets[ti]
+            const targetName = mesh.extras?.targetNames?.[ti] || `target_${ti}`
+            info.targets.push({
+              name: targetName,
+              accessors: target,
+            })
+          }
+
+          morphTargetInfo.push(info)
+        }
+      }
+
+      // morphTargetsを持つメッシュの概要
+      console.log(`Meshes with morphTargets: ${morphTargetInfo.length}`)
+      for (const info of morphTargetInfo) {
+        console.log(`  mesh[${info.meshIndex}] "${info.meshName}": ${info.targetCount} targets`)
+      }
+
+      // アクセサからBufferViewへのマッピング
+      const accessorToBufferView: Record<number, { bufferView: number; type: string; count: number }> = {}
+      if (json.accessors) {
+        for (let i = 0; i < json.accessors.length; i++) {
+          const acc = json.accessors[i]
+          accessorToBufferView[i] = {
+            bufferView: acc.bufferView,
+            type: acc.type,
+            count: acc.count,
+          }
+        }
+      }
+
+      // morphTargetで使われているBufferViewの重複を調査
+      const morphTargetBufferViews = new Map<number, string[]>()
+      for (const info of morphTargetInfo) {
+        for (const target of info.targets) {
+          for (const [attr, accIdx] of Object.entries(target.accessors)) {
+            const accInfo = accessorToBufferView[accIdx as number]
+            if (accInfo) {
+              const bvIdx = accInfo.bufferView
+              if (!morphTargetBufferViews.has(bvIdx)) {
+                morphTargetBufferViews.set(bvIdx, [])
+              }
+              morphTargetBufferViews.get(bvIdx)!.push(
+                `mesh[${info.meshIndex}].${target.name}.${attr}`
+              )
+            }
+          }
+        }
+      }
+
+      // BufferViewのバイナリデータハッシュを計算
+      const bvHashes = new Map<number, string>()
+      if (json.bufferViews) {
+        for (const bvIdx of morphTargetBufferViews.keys()) {
+          const bv = json.bufferViews[bvIdx]
+          const offset = bv.byteOffset || 0
+          const length = bv.byteLength
+          const data = new Uint8Array(exportedBuffer, binChunkStart + offset, length)
+
+          // 簡易ハッシュ
+          const sampleSize = Math.min(64, length)
+          const samples: number[] = []
+          for (let j = 0; j < sampleSize; j++) samples.push(data[j])
+          const midStart = Math.floor(length / 2) - Math.floor(sampleSize / 2)
+          for (let j = 0; j < sampleSize && midStart + j < length; j++) {
+            samples.push(data[Math.max(0, midStart + j)])
+          }
+          const endStart = Math.max(0, length - sampleSize)
+          for (let j = 0; j < sampleSize && endStart + j < length; j++) {
+            samples.push(data[endStart + j])
+          }
+          bvHashes.set(bvIdx, `${length}:${samples.join(',')}`)
+        }
+      }
+
+      // 同一ハッシュのBufferViewをグループ化
+      const hashGroups = new Map<string, number[]>()
+      for (const [bvIdx, hash] of bvHashes) {
+        if (!hashGroups.has(hash)) hashGroups.set(hash, [])
+        hashGroups.get(hash)!.push(bvIdx)
+      }
+
+      // 重複グループを表示
+      console.log('\nDuplicate morphTarget BufferViews:')
+      let totalDuplicateSize = 0
+      for (const [hash, bvIndices] of hashGroups) {
+        if (bvIndices.length > 1) {
+          const size = parseInt(hash.split(':')[0])
+          const redundantSize = size * (bvIndices.length - 1)
+          totalDuplicateSize += redundantSize
+
+          console.log(`  Hash group (${bvIndices.length} copies, ${size} bytes each, ${redundantSize} bytes redundant):`)
+          for (const bvIdx of bvIndices.slice(0, 3)) {
+            const usages = morphTargetBufferViews.get(bvIdx) || []
+            console.log(`    BV[${bvIdx}]: ${usages.slice(0, 2).join(', ')}${usages.length > 2 ? '...' : ''}`)
+          }
+          if (bvIndices.length > 3) {
+            console.log(`    ... and ${bvIndices.length - 3} more`)
+          }
+        }
+      }
+
+      console.log(`\nTotal morphTarget duplicate size: ${totalDuplicateSize} bytes (${(totalDuplicateSize / 1024 / 1024).toFixed(2)} MB)`)
+
+      // Three.js読み込み直後のメッシュを確認（最適化前）
+      console.log('\n=== Meshes BEFORE optimization (from GLTFLoader) ===')
+      const response2 = await fetch(VRM_FILE_PATH)
+      const freshBuffer = await response2.arrayBuffer()
+      const { vrm: freshVRM } = await loadVRM(freshBuffer)
+
+      const freshMeshesWithMorphTargets: string[] = []
+      freshVRM.scene.traverse((obj) => {
+        if (obj instanceof SkinnedMesh && obj.morphTargetInfluences && obj.morphTargetInfluences.length > 0) {
+          const morphCount = obj.morphTargetInfluences.length
+          freshMeshesWithMorphTargets.push(`${obj.name}: ${morphCount} targets`)
+        }
+      })
+      console.log(`Fresh loaded VRM meshes with morphTargets: ${freshMeshesWithMorphTargets.length}`)
+      for (const info of freshMeshesWithMorphTargets) {
+        console.log(`  ${info}`)
+      }
+
+      // 元のVRMにどんなメッシュがあるか確認
+      console.log('\n=== Meshes AFTER optimization ===')
+      const geometryToMeshes = new Map<BufferGeometry, SkinnedMesh[]>()
+      optimizedVRM.scene.traverse((obj) => {
+        if (obj instanceof SkinnedMesh && obj.morphTargetInfluences && obj.morphTargetInfluences.length > 0) {
+          const morphCount = obj.morphTargetInfluences.length
+          const morphNames = obj.morphTargetDictionary ? Object.keys(obj.morphTargetDictionary).slice(0, 5) : []
+          console.log(`  ${obj.name}: ${morphCount} morphTargets (${morphNames.join(', ')}${morphNames.length < morphCount ? '...' : ''})`)
+
+          // geometryの共有状況を調査
+          if (!geometryToMeshes.has(obj.geometry)) {
+            geometryToMeshes.set(obj.geometry, [])
+          }
+          geometryToMeshes.get(obj.geometry)!.push(obj)
+        }
+      })
+
+      // ジオメトリ共有状況
+      console.log('\n=== Geometry Sharing ===')
+      console.log(`Unique geometries with morphTargets: ${geometryToMeshes.size}`)
+      for (const [geom, meshes] of geometryToMeshes) {
+        if (meshes.length > 1) {
+          console.log(`  Geometry shared by ${meshes.length} meshes: ${meshes.map(m => m.name).join(', ')}`)
+        }
+      }
+
+      // morphAttributes の内容を調査
+      console.log('\n=== MorphAttributes Analysis ===')
+
+      // 配列参照で共有状況を確認（同一のTypedArrayインスタンスを共有しているか）
+      const arrayToMeshes = new Map<ArrayBufferLike, string[]>()
+
+      for (const [geom, meshes] of geometryToMeshes) {
+        const mesh = meshes[0]
+        console.log(`\n${mesh.name} geometry:`)
+        console.log(`  position.count: ${geom.getAttribute('position')?.count}`)
+
+        if (geom.morphAttributes.position) {
+          console.log(`  morphAttributes.position: ${geom.morphAttributes.position.length} targets`)
+          // 各ターゲットのデータ分析
+          for (let i = 0; i < Math.min(geom.morphAttributes.position.length, 5); i++) {
+            const attr = geom.morphAttributes.position[i]
+            // 非ゼロ値をカウント
+            const arr = attr.array as Float32Array
+            let nonZeroCount = 0
+            for (let j = 0; j < arr.length; j++) {
+              if (Math.abs(arr[j]) > 0.0001) nonZeroCount++
+            }
+            console.log(`    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`)
+
+            // 配列参照で共有を追跡
+            if (!arrayToMeshes.has(arr.buffer)) arrayToMeshes.set(arr.buffer, [])
+            arrayToMeshes.get(arr.buffer)!.push(`${mesh.name}.position[${i}]`)
+          }
+        }
+        if (geom.morphAttributes.normal) {
+          console.log(`  morphAttributes.normal: ${geom.morphAttributes.normal.length} targets`)
+          // normal も同様にチェック
+          for (let i = 0; i < Math.min(geom.morphAttributes.normal.length, 5); i++) {
+            const attr = geom.morphAttributes.normal[i]
+            const arr = attr.array as Float32Array
+            let nonZeroCount = 0
+            for (let j = 0; j < arr.length; j++) {
+              if (Math.abs(arr[j]) > 0.0001) nonZeroCount++
+            }
+            console.log(`    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`)
+
+            // 配列参照で共有を追跡
+            if (!arrayToMeshes.has(arr.buffer)) arrayToMeshes.set(arr.buffer, [])
+            arrayToMeshes.get(arr.buffer)!.push(`${mesh.name}.normal[${i}]`)
+          }
+        }
+      }
+
+      // ArrayBuffer共有状況
+      console.log('\n=== ArrayBuffer Sharing (same instance) ===')
+      let sharedCount = 0
+      for (const [, usages] of arrayToMeshes) {
+        if (usages.length > 1) {
+          sharedCount++
+          console.log(`  Shared by: ${usages.slice(0, 5).join(', ')}${usages.length > 5 ? '...' : ''}`)
+        }
+      }
+      console.log(`Total shared buffers: ${sharedCount} / ${arrayToMeshes.size}`)
+
+      expect(true).toBe(true)
+    })
   })
 
   describe('roundtrip size comparison', () => {
+    it('should analyze original VRM morphTargets', async () => {
+      // 元のVRMファイルのmorphTargets重複を分析
+      const view = new DataView(originalBuffer)
+      const jsonChunkLength = view.getUint32(12, true)
+      const jsonBytes = new Uint8Array(originalBuffer, 20, jsonChunkLength)
+      const json = JSON.parse(new TextDecoder().decode(jsonBytes))
+
+      const binChunkOffset = 20 + jsonChunkLength
+      const binChunkStart = binChunkOffset + 8
+
+      console.log('\n=== Original VRM MorphTarget Analysis ===')
+
+      // morphTargetsを持つメッシュを収集
+      const meshesWithMorphTargets: Array<{ name: string; targetCount: number }> = []
+      if (json.meshes) {
+        for (const mesh of json.meshes) {
+          const prim = mesh.primitives?.[0]
+          if (prim?.targets && prim.targets.length > 0) {
+            meshesWithMorphTargets.push({
+              name: mesh.name || 'unnamed',
+              targetCount: prim.targets.length,
+            })
+          }
+        }
+      }
+
+      console.log(`Meshes with morphTargets: ${meshesWithMorphTargets.length}`)
+      for (const m of meshesWithMorphTargets) {
+        console.log(`  ${m.name}: ${m.targetCount} targets`)
+      }
+
+      // BufferViewの重複を確認
+      const dataHashes = new Map<string, { indices: number[]; size: number }>()
+      if (json.bufferViews) {
+        for (let i = 0; i < json.bufferViews.length; i++) {
+          const bv = json.bufferViews[i]
+          const offset = bv.byteOffset || 0
+          const length = bv.byteLength
+          const data = new Uint8Array(originalBuffer, binChunkStart + offset, length)
+
+          const sampleSize = Math.min(64, length)
+          const samples: number[] = []
+          for (let j = 0; j < sampleSize; j++) samples.push(data[j])
+          const midStart = Math.floor(length / 2) - Math.floor(sampleSize / 2)
+          for (let j = 0; j < sampleSize && midStart + j < length; j++) {
+            samples.push(data[Math.max(0, midStart + j)])
+          }
+          const endStart = Math.max(0, length - sampleSize)
+          for (let j = 0; j < sampleSize && endStart + j < length; j++) {
+            samples.push(data[endStart + j])
+          }
+          const hash = `${length}:${samples.join(',')}`
+
+          if (!dataHashes.has(hash)) dataHashes.set(hash, { indices: [], size: length })
+          dataHashes.get(hash)!.indices.push(i)
+        }
+      }
+
+      const duplicates = Array.from(dataHashes.entries()).filter(([, info]) => info.indices.length > 1)
+      let totalDuplicateSize = 0
+      for (const [, info] of duplicates) {
+        totalDuplicateSize += info.size * (info.indices.length - 1)
+      }
+
+      const binChunkLength = view.getUint32(binChunkOffset, true)
+      console.log(`\nOriginal VRM duplicate data: ${totalDuplicateSize} bytes (${(totalDuplicateSize / binChunkLength * 100).toFixed(1)}%)`)
+      console.log(`Total BIN size: ${binChunkLength} bytes`)
+
+      expect(true).toBe(true)
+    })
+
     it('should compare export without optimization', async () => {
       // 最適化なしでエクスポートした場合のサイズを計測
       const response = await fetch(VRM_FILE_PATH)
