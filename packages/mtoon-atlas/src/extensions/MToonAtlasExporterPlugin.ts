@@ -1,5 +1,4 @@
 import { Mesh, Object3D, Texture } from 'three'
-import UPNG from 'upng-js'
 import { encode as encodePng16 } from 'fast-png'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
@@ -12,11 +11,21 @@ import
 
 /**
  * テクスチャインデックス情報
+ * beforeParseで画像処理を開始し、afterParseで解決されたインデックスを使用
  */
 interface TextureIndexInfo
 {
   parameterTextureIndex: number
   atlasedTextureIndices: Record<string, number>
+}
+
+/**
+ * 解決待ちのテクスチャインデックス情報（beforeParse時点）
+ */
+interface PendingTextureIndexInfo
+{
+  parameterTextureIndex: Promise<number> | null
+  atlasedTextureIndices: Record<string, Promise<number>>
 }
 
 /**
@@ -33,8 +42,11 @@ export class MToonAtlasExporterPlugin
   // MToonAtlasMaterialを持つメッシュのマップ（SkinnedMeshと通常のMesh両方対応）
   private mtoonAtlasMeshes: Map<Mesh, MToonAtlasMaterial[]> = new Map()
 
-  // beforeParseで処理されたテクスチャインデックス
+  // beforeParseで処理されたテクスチャインデックス（解決済み）
   private textureIndices: Map<MToonAtlasMaterial, TextureIndexInfo> = new Map()
+
+  // beforeParseで処理中のテクスチャインデックス（Promise）
+  private pendingTextureIndices: Map<MToonAtlasMaterial, PendingTextureIndexInfo> = new Map()
 
   constructor(writer: GLTFWriter)
   {
@@ -48,6 +60,7 @@ export class MToonAtlasExporterPlugin
   {
     this.mtoonAtlasMeshes.clear()
     this.textureIndices.clear()
+    this.pendingTextureIndices.clear()
     const roots = Array.isArray(input) ? input : [input]
 
     for (const root of roots)
@@ -72,10 +85,10 @@ export class MToonAtlasExporterPlugin
           {
             this.mtoonAtlasMeshes.set(obj, mtoonMaterials)
 
-            // テクスチャを事前に処理
+            // テクスチャを事前に処理（非同期）
             for (const material of mtoonMaterials)
             {
-              if (!this.textureIndices.has(material))
+              if (!this.pendingTextureIndices.has(material))
               {
                 this.processTexturesForMaterial(material)
               }
@@ -88,20 +101,21 @@ export class MToonAtlasExporterPlugin
 
   /**
    * マテリアルのテクスチャを処理してインデックスを保存
+   * 非同期でBINチャンクに書き込み、完了後にtextureIndicesに格納
    */
   private processTexturesForMaterial(material: MToonAtlasMaterial)
   {
-    const indices: TextureIndexInfo = {
-      parameterTextureIndex: -1,
+    const pendingIndices: PendingTextureIndexInfo = {
+      parameterTextureIndex: null,
       atlasedTextureIndices: {},
     }
 
     // パラメータテクスチャを処理
     // パラメータテクスチャはRGBA全チャンネルにパラメータデータが格納されているため
-    // Canvas 2D経由ではなくUPNGで直接PNGエンコードする（Premultiplied Alpha問題回避）
+    // Canvas 2D経由ではなくfast-pngで直接PNGエンコードする（Premultiplied Alpha問題回避）
     if (material.parameterTexture?.texture)
     {
-      indices.parameterTextureIndex = this.processParameterTexture(
+      pendingIndices.parameterTextureIndex = this.processParameterTexture(
         material.parameterTexture.texture
       )
     }
@@ -114,20 +128,53 @@ export class MToonAtlasExporterPlugin
       {
         if (texture)
         {
-          indices.atlasedTextureIndices[key] = this.processTextureWithFallback(texture)
+          pendingIndices.atlasedTextureIndices[key] = this.processTextureWithFallback(texture)
         }
       }
     }
 
-    this.textureIndices.set(material, indices)
+    this.pendingTextureIndices.set(material, pendingIndices)
+
+    // 全てのPromiseを解決してtextureIndicesに格納
+    const allPromises: Promise<void>[] = []
+
+    if (pendingIndices.parameterTextureIndex)
+    {
+      allPromises.push(pendingIndices.parameterTextureIndex.then(() => { }))
+    }
+
+    for (const promise of Object.values(pendingIndices.atlasedTextureIndices))
+    {
+      allPromises.push(promise.then(() => { }))
+    }
+
+    // 全て解決後にtextureIndicesに格納し、マテリアル定義も更新するPromise
+    const resolveAllPromise = Promise.all(allPromises).then(async () =>
+    {
+      const resolvedIndices: TextureIndexInfo = {
+        parameterTextureIndex: pendingIndices.parameterTextureIndex
+          ? await pendingIndices.parameterTextureIndex
+          : -1,
+        atlasedTextureIndices: {},
+      }
+
+      for (const [key, promise] of Object.entries(pendingIndices.atlasedTextureIndices))
+      {
+        resolvedIndices.atlasedTextureIndices[key] = await promise
+      }
+
+      this.textureIndices.set(material, resolvedIndices)
+    })
+
+    this.writer.pending.push(resolveAllPromise)
   }
 
   /**
-   * パラメータテクスチャを処理（UPNGで直接PNGエンコード）
+   * パラメータテクスチャを処理（BINチャンクに書き込み）
    * Canvas 2DのPremultiplied Alpha問題を回避するため、
-   * 生のRGBAデータから直接PNGを生成する
+   * 生のRGBAデータから直接PNGを生成してBINチャンクに格納
    */
-  private processParameterTexture(texture: Texture): number
+  private processParameterTexture(texture: Texture): Promise<number>
   {
     const json = this.writer.json
     json.textures = json.textures || []
@@ -152,7 +199,17 @@ export class MToonAtlasExporterPlugin
     const imageIndex = json.images.length
     const imageDef: any = {
       name: texture.name || 'parameterTexture',
+      mimeType: 'image/png',
     }
+    json.images.push(imageDef)
+
+    // テクスチャ定義を先に追加（インデックスを確定）
+    const textureIndex = json.textures.length
+    json.textures.push({
+      sampler: nearestSamplerIndex,
+      source: imageIndex,
+      name: texture.name || 'parameterTexture',
+    })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const image = texture.image as any
@@ -184,60 +241,67 @@ export class MToonAtlasExporterPlugin
         channels: 4,
         data: uint16Data,
       })
-      const base64 = this.arrayBufferToBase64(pngData.buffer as ArrayBuffer)
-      imageDef.uri = `data:image/png;base64,${base64}`
+
+      // BlobからBINチャンクに書き込む
+      const blob = new Blob([pngData.buffer as ArrayBuffer], { type: 'image/png' })
+      const bufferViewPromise = this.writer.processBufferViewImage(blob)
+        .then(bufferViewIndex =>
+        {
+          imageDef.bufferView = bufferViewIndex
+          return textureIndex
+        })
+
+      // pendingに追加して完了を待つ
+      this.writer.pending.push(bufferViewPromise.then(() => { }))
+      return bufferViewPromise
     } else
     {
       console.warn('MToonAtlasExporterPlugin: Parameter texture has no valid data')
-      imageDef.uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+      // 1x1透明画像をBINチャンクに書き込む
+      const placeholder = new Uint8Array([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ])
+      const blob = new Blob([placeholder], { type: 'image/png' })
+      const bufferViewPromise = this.writer.processBufferViewImage(blob)
+        .then(bufferViewIndex =>
+        {
+          imageDef.bufferView = bufferViewIndex
+          return textureIndex
+        })
+
+      this.writer.pending.push(bufferViewPromise.then(() => { }))
+      return bufferViewPromise
     }
-
-    json.images.push(imageDef)
-
-    const textureIndex = json.textures.length
-    json.textures.push({
-      sampler: nearestSamplerIndex,
-      source: imageIndex,
-      name: texture.name || 'parameterTexture',
-    })
-
-    return textureIndex
-  }
-
-  /**
-   * ArrayBufferをBase64文字列に変換
-   */
-  private arrayBufferToBase64(buffer: ArrayBuffer): string
-  {
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++)
-    {
-      binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
   }
 
 /**
-   * テクスチャを処理（processTextureが使えない場合は直接JSONに追加）
+   * テクスチャを処理してBINチャンクに書き込む
    * @param texture - 処理するテクスチャ
-   * @param forceOpaqueAlpha - alpha を強制的に 255 にする（パラメータテクスチャ用）
    */
-  private processTextureWithFallback(texture: Texture, forceOpaqueAlpha = false): number
+  private processTextureWithFallback(texture: Texture): Promise<number>
   {
-    // processTextureが使える場合はそれを使用
+    // processTextureが使える場合はそれを使用（同期的に成功する場合）
     if (typeof this.writer.processTexture === 'function')
     {
       try
       {
-        return this.writer.processTexture(texture)
+        const index = this.writer.processTexture(texture)
+        return Promise.resolve(index)
       } catch
       {
-        // フォールバック処理
+        // フォールバック処理へ
       }
     }
 
-    // 直接JSONにテクスチャを追加
+    // 直接JSONにテクスチャを追加してBINチャンクに書き込む
     const json = this.writer.json
     json.textures = json.textures || []
     json.images = json.images || []
@@ -254,98 +318,15 @@ export class MToonAtlasExporterPlugin
       })
     }
 
-    // 画像を追加
+    // 画像定義を先に追加（インデックスを確定）
     const imageIndex = json.images.length
     const imageDef: any = {
       name: texture.name || 'texture',
+      mimeType: 'image/png',
     }
-
-    // テクスチャのソースを取得
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const image = texture.image as any
-    if (image)
-    {
-      // 様々な画像ソースタイプに対応
-      let dataUrl: string | null = null
-
-      if (image instanceof HTMLCanvasElement)
-      {
-        // Canvasの場合は直接toDataURLを呼び出し
-        dataUrl = image.toDataURL('image/png')
-      } else if (image instanceof ImageBitmap || image instanceof HTMLImageElement)
-      {
-        // ImageBitmap/HTMLImageElementの場合はCanvasに描画
-        const canvas = document.createElement('canvas')
-        canvas.width = image.width
-        canvas.height = image.height
-        const ctx = canvas.getContext('2d')
-        if (ctx)
-        {
-          ctx.drawImage(image, 0, 0)
-          dataUrl = canvas.toDataURL('image/png')
-        }
-      } else if (image.data && image.width && image.height)
-      {
-        // ImageDataライクなオブジェクト（例：DataTexture）
-        const canvas = document.createElement('canvas')
-        canvas.width = image.width
-        canvas.height = image.height
-        const ctx = canvas.getContext('2d')
-        if (ctx)
-        {
-          // RGBA データを ImageData に変換
-          // Float32Array の場合は 0.0-1.0 を 0-255 に変換
-          const srcData = image.data
-          const isFloatData = srcData instanceof Float32Array ||
-            srcData.constructor?.name === 'Float32Array'
-          const pixelCount = image.width * image.height * 4
-          const uint8Data = new Uint8ClampedArray(pixelCount)
-          for (let i = 0; i < pixelCount; i++)
-          {
-            const value = srcData[i]
-            // Float32Array (0.0-1.0) の場合は 255 を掛ける
-            // Uint8Array (0-255) の場合はそのまま
-            let convertedValue = isFloatData
-              ? Math.round(Math.min(1, Math.max(0, value)) * 255)
-              : value
-
-            // alpha チャンネル（i % 4 === 3）を強制的に 255 にする
-            // PNG 保存時にアルファが 0 だと RGB 値が失われるため
-            if (forceOpaqueAlpha && i % 4 === 3)
-            {
-              convertedValue = 255
-            }
-
-            uint8Data[i] = convertedValue
-          }
-          const imageData = new ImageData(uint8Data, image.width, image.height)
-          ctx.putImageData(imageData, 0, 0)
-          dataUrl = canvas.toDataURL('image/png')
-        }
-      } else if (typeof image.toDataURL === 'function')
-      {
-        dataUrl = image.toDataURL('image/png')
-      }
-
-      if (dataUrl)
-      {
-        imageDef.uri = dataUrl
-      } else
-      {
-        // フォールバック: 1x1透明画像
-        console.warn('MToonAtlasExporterPlugin: Could not convert texture image to data URL, using placeholder')
-        imageDef.uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-      }
-    } else
-    {
-      // 画像がない場合は1x1透明画像を使用
-      console.warn('MToonAtlasExporterPlugin: Texture has no image, using placeholder')
-      imageDef.uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    }
-
     json.images.push(imageDef)
 
-    // テクスチャを追加
+    // テクスチャ定義を先に追加
     const textureIndex = json.textures.length
     json.textures.push({
       sampler: 0,
@@ -353,7 +334,138 @@ export class MToonAtlasExporterPlugin
       name: texture.name || 'texture',
     })
 
-    return textureIndex
+    // テクスチャのソースを取得
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const image = texture.image as any
+    const blobPromise = this.imageToBlobAsync(image)
+
+    const bufferViewPromise = blobPromise
+      .then(blob => this.writer.processBufferViewImage(blob))
+      .then(bufferViewIndex =>
+      {
+        imageDef.bufferView = bufferViewIndex
+        return textureIndex
+      })
+
+    // pendingに追加して完了を待つ
+    this.writer.pending.push(bufferViewPromise.then(() => { }))
+    return bufferViewPromise
+  }
+
+  /**
+   * 画像をBlobに変換する（非同期）
+   */
+  private async imageToBlobAsync(image: any): Promise<Blob>
+  {
+    if (!image)
+    {
+      console.warn('MToonAtlasExporterPlugin: Texture has no image, using placeholder')
+      return this.createPlaceholderBlob()
+    }
+
+    // CanvasからBlob
+    if (image instanceof HTMLCanvasElement)
+    {
+      return new Promise((resolve) =>
+      {
+        image.toBlob((blob) =>
+        {
+          resolve(blob || this.createPlaceholderBlob())
+        }, 'image/png')
+      })
+    }
+
+    // ImageBitmap/HTMLImageElementからBlob
+    if (image instanceof ImageBitmap || image instanceof HTMLImageElement)
+    {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const ctx = canvas.getContext('2d')
+      if (ctx)
+      {
+        ctx.drawImage(image, 0, 0)
+        return new Promise((resolve) =>
+        {
+          canvas.toBlob((blob) =>
+          {
+            resolve(blob || this.createPlaceholderBlob())
+          }, 'image/png')
+        })
+      }
+    }
+
+    // DataTexture（image.data）からBlob
+    if (image.data && image.width && image.height)
+    {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const ctx = canvas.getContext('2d')
+      if (ctx)
+      {
+        const srcData = image.data
+        const isFloatData = srcData instanceof Float32Array ||
+          srcData.constructor?.name === 'Float32Array'
+        const pixelCount = image.width * image.height * 4
+        const uint8Data = new Uint8ClampedArray(pixelCount)
+
+        for (let i = 0; i < pixelCount; i++)
+        {
+          const value = srcData[i]
+          uint8Data[i] = isFloatData
+            ? Math.round(Math.min(1, Math.max(0, value)) * 255)
+            : value
+        }
+
+        const imageData = new ImageData(uint8Data, image.width, image.height)
+        ctx.putImageData(imageData, 0, 0)
+
+        return new Promise((resolve) =>
+        {
+          canvas.toBlob((blob) =>
+          {
+            resolve(blob || this.createPlaceholderBlob())
+          }, 'image/png')
+        })
+      }
+    }
+
+    // toDataURL対応オブジェクト
+    if (typeof image.toDataURL === 'function')
+    {
+      const dataUrl: string = image.toDataURL('image/png')
+      const base64 = dataUrl.split(',')[1]
+      const binary = atob(base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++)
+      {
+        bytes[i] = binary.charCodeAt(i)
+      }
+      return new Blob([bytes], { type: 'image/png' })
+    }
+
+    console.warn('MToonAtlasExporterPlugin: Could not convert texture image, using placeholder')
+    return this.createPlaceholderBlob()
+  }
+
+  /**
+   * 1x1透明プレースホルダーBlob作成
+   */
+  private createPlaceholderBlob(): Blob
+  {
+    const placeholder = new Uint8Array([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+      0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+      0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+      0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+      0x42, 0x60, 0x82,
+    ])
+    return new Blob([placeholder], { type: 'image/png' })
   }
 
   /**
@@ -361,6 +473,10 @@ export class MToonAtlasExporterPlugin
    *
    * GLTFExporterはShaderMaterialをスキップするため、
    * ここで手動でマテリアル定義を追加します。
+   *
+   * 注: テクスチャ処理のPromiseはwriter.pendingに追加済みなので、
+   * afterParse完了後にGLTFExporterがawait Promise.all(pending)で待機する。
+   * マテリアル定義内のテクスチャインデックスは、pendingのPromise内で更新される。
    */
   public afterParse(_input: Object3D | Object3D[])
   {
@@ -371,6 +487,8 @@ export class MToonAtlasExporterPlugin
     // マテリアルの処理
     // マテリアルごとにインデックスを記録
     const materialIndexMap = new Map<MToonAtlasMaterial, number>()
+    // マテリアル定義とマテリアルの対応を保存（後でテクスチャインデックスを更新するため）
+    const materialDefMap = new Map<MToonAtlasMaterial, any>()
 
     for (const [mesh, materials] of this.mtoonAtlasMeshes)
     {
@@ -378,7 +496,7 @@ export class MToonAtlasExporterPlugin
       {
         if (materialIndexMap.has(material)) continue
 
-        // マテリアル定義を作成（事前処理されたテクスチャインデックスを使用）
+        // マテリアル定義を作成（テクスチャインデックスは後で更新される）
         const materialDef = this.createMaterialDef(material)
 
         // マテリアル配列に追加
@@ -386,6 +504,7 @@ export class MToonAtlasExporterPlugin
         const materialIndex = json.materials.length
         json.materials.push(materialDef)
         materialIndexMap.set(material, materialIndex)
+        materialDefMap.set(material, materialDef)
       }
 
       // メッシュのプリミティブにマテリアルとスロット属性を設定
@@ -398,6 +517,51 @@ export class MToonAtlasExporterPlugin
     {
       json.extensionsUsed.push(MTOON_ATLAS_EXTENSION_NAME)
     }
+
+    // テクスチャ処理完了後にマテリアル定義のインデックスを更新するPromiseをpendingに追加
+    const updateMaterialDefsPromise = this.waitForAllTextureIndices().then(() =>
+    {
+      for (const [material, materialDef] of materialDefMap)
+      {
+        const indices = this.textureIndices.get(material)
+        if (indices)
+        {
+          const extension = materialDef.extensions[MTOON_ATLAS_EXTENSION_NAME]
+          if (extension.parameterTexture)
+          {
+            extension.parameterTexture.index = indices.parameterTextureIndex
+          }
+          for (const [key, index] of Object.entries(indices.atlasedTextureIndices))
+          {
+            extension.atlasedTextures[key] = { index }
+          }
+        }
+      }
+    })
+
+    this.writer.pending.push(updateMaterialDefsPromise)
+  }
+
+  /**
+   * 全てのテクスチャインデックスが解決されるのを待つ
+   */
+  private async waitForAllTextureIndices(): Promise<void>
+  {
+    const allPromises: Promise<void>[] = []
+
+    for (const pending of this.pendingTextureIndices.values())
+    {
+      if (pending.parameterTextureIndex)
+      {
+        allPromises.push(pending.parameterTextureIndex.then(() => { }))
+      }
+      for (const promise of Object.values(pending.atlasedTextureIndices))
+      {
+        allPromises.push(promise.then(() => { }))
+      }
+    }
+
+    await Promise.all(allPromises)
   }
 
   /**

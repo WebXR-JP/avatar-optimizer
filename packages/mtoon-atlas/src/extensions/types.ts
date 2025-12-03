@@ -59,6 +59,10 @@ export interface GLTFWriter
 {
   json: any
   nodeMap: Map<any, number>
+  pending: Promise<void>[]
+  byteOffset: number
   processTexture: (texture: Texture) => number
   processAccessor: (attribute: BufferAttribute | InterleavedBufferAttribute, geometry: BufferGeometry, start?: number, count?: number) => number
+  processBuffer: (buffer: ArrayBuffer) => number
+  processBufferViewImage: (blob: Blob) => Promise<number>
 }

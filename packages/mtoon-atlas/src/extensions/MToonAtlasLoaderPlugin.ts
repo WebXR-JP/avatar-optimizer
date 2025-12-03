@@ -40,8 +40,25 @@ export class MToonAtlasLoaderPlugin
   private async _loadParameterTexture16bit(textureIndex: number): Promise<DataTexture>
   {
     const json = this.parser.json
+
+    // インデックスが無効な場合はエラー
+    if (textureIndex < 0 || textureIndex >= json.textures.length)
+    {
+      throw new Error(`MToonAtlasLoaderPlugin: Invalid texture index: ${textureIndex}`)
+    }
+
     const textureDef = json.textures[textureIndex]
+    if (!textureDef)
+    {
+      throw new Error(`MToonAtlasLoaderPlugin: Texture definition not found at index ${textureIndex}`)
+    }
+
     const imageIndex = textureDef.source
+    if (imageIndex === undefined || imageIndex < 0 || imageIndex >= json.images.length)
+    {
+      throw new Error(`MToonAtlasLoaderPlugin: Invalid image index: ${imageIndex} for texture ${textureIndex}`)
+    }
+
     const imageDef = json.images[imageIndex]
 
     let pngData: ArrayBuffer
@@ -69,11 +86,9 @@ export class MToonAtlasLoaderPlugin
     } else if (imageDef.bufferView !== undefined)
     {
       // GLB 埋め込みバッファ
-      const bufferView = await this.parser.getDependency('bufferView', imageDef.bufferView)
-      pngData = bufferView.buffer.slice(
-        bufferView.byteOffset,
-        bufferView.byteOffset + bufferView.byteLength
-      )
+      // getDependency('bufferView', ...)はArrayBufferを返す
+      const bufferViewData = await this.parser.getDependency('bufferView', imageDef.bufferView) as ArrayBuffer
+      pngData = bufferViewData
     } else
     {
       throw new Error('MToonAtlasLoaderPlugin: Invalid image definition')
@@ -183,7 +198,7 @@ export class MToonAtlasLoaderPlugin
 
     // Load parameter texture (16bit対応)
     let parameterTexture: Texture | null = null
-    if (extension.parameterTexture)
+    if (extension.parameterTexture && extension.parameterTexture.index >= 0)
     {
       pending.push(
         this._loadParameterTexture16bit(extension.parameterTexture.index).then((tex) =>
@@ -204,9 +219,17 @@ export class MToonAtlasLoaderPlugin
 
     await Promise.all(pending)
 
+    // parameterTextureがない場合はダミーのDataTextureを作成
     if (!parameterTexture)
     {
-      throw new Error('MToonAtlasLoaderPlugin: parameterTexture is missing')
+      // 1x1のダミーテクスチャを作成
+      const dummyData = new Float32Array(4).fill(0)
+      parameterTexture = new DataTexture(dummyData, 1, 1, RGBAFormat, FloatType)
+      parameterTexture.flipY = false
+      parameterTexture.colorSpace = NoColorSpace
+      parameterTexture.minFilter = NearestFilter
+      parameterTexture.magFilter = NearestFilter
+      parameterTexture.needsUpdate = true
     }
 
     // Determine slot attribute name
