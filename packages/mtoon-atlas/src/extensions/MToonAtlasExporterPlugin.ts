@@ -465,9 +465,15 @@ export class MToonAtlasExporterPlugin
     json.images = json.images || []
     json.samplers = json.samplers || []
 
-    // デフォルトサンプラーを追加（なければ）
-    if (json.samplers.length === 0)
+    // アトラステクスチャ用のLINEARサンプラーを取得または作成
+    // パラメータテクスチャがNEARESTサンプラーを先に登録する可能性があるため、
+    // 常にsampler: 0を使うのではなく、LINEARサンプラーのインデックスを明示的に取得する
+    let linearSamplerIndex = json.samplers.findIndex(
+      (s: any) => s.magFilter === 9729 && s.minFilter === 9987
+    )
+    if (linearSamplerIndex === -1)
     {
+      linearSamplerIndex = json.samplers.length
       json.samplers.push({
         magFilter: 9729, // LINEAR
         minFilter: 9987, // LINEAR_MIPMAP_LINEAR
@@ -487,7 +493,7 @@ export class MToonAtlasExporterPlugin
     // テクスチャ定義を先に追加
     const textureIndex = json.textures.length
     json.textures.push({
-      sampler: 0,
+      sampler: linearSamplerIndex,
       source: imageIndex,
       name: texture.name || 'texture',
     })
