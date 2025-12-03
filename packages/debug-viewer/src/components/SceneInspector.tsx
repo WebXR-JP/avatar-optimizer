@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button, Chip, Stack } from '@mui/material';
-import { ExpandLess, ExpandMore, GridOn, LightMode, Visibility, VisibilityOff } from '@mui/icons-material';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, List, ListItemButton, ListItemText, Collapse, Typography, Paper, Divider, IconButton, Button, Chip, Stack, Slider, TextField, Autocomplete, InputAdornment } from '@mui/material';
+import { ExpandLess, ExpandMore, GridOn, LightMode, Visibility, VisibilityOff, Restore, Search } from '@mui/icons-material';
 import * as THREE from 'three';
 import { VRM } from '@pixiv/three-vrm';
 import { UVPreviewDialog } from './UVPreviewDialog';
@@ -12,6 +12,86 @@ interface SceneInspectorProps
   scene?: THREE.Scene; // Three.jsシーン全体（ライトなど含む）
 }
 
+// ノードの名前パス（name配列）を取得 - 再読み込み後も一致できるように名前を使用
+function getNodeNamePath(object: THREE.Object3D): string[] {
+  const path: string[] = [];
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    path.unshift(current.name || current.type);
+    current = current.parent;
+  }
+  return path;
+}
+
+// 名前パスからノードを検索
+function findNodeByNamePath(root: THREE.Object3D, namePath: string[]): THREE.Object3D | null {
+  if (namePath.length === 0) return null;
+
+  // ルートから順に検索
+  let current: THREE.Object3D = root;
+  const pathToMatch = [...namePath];
+
+  // ルートの名前が一致するか確認
+  const rootName = pathToMatch.shift();
+  if ((current.name || current.type) !== rootName) {
+    return null;
+  }
+
+  // 子を順に検索
+  for (const name of pathToMatch) {
+    const child: THREE.Object3D | undefined = current.children.find(c => (c.name || c.type) === name);
+    if (!child) return null;
+    current = child;
+  }
+
+  return current;
+}
+
+// ノードまでのパスに含まれるuuidを取得
+function getExpandedUuids(object: THREE.Object3D): Set<string> {
+  const uuids = new Set<string>();
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    uuids.add(current.uuid);
+    current = current.parent;
+  }
+  return uuids;
+}
+
+// localStorageキー
+const SELECTED_NODE_KEY = 'sceneInspector_selectedNodePath';
+
+// シーン内の全ノードをフラットなリストで取得
+interface NodeSearchOption {
+  object: THREE.Object3D;
+  label: string;
+  path: string;
+  type: string;
+}
+
+function collectAllNodes(root: THREE.Object3D): NodeSearchOption[] {
+  const nodes: NodeSearchOption[] = [];
+
+  function traverse(obj: THREE.Object3D, pathParts: string[]) {
+    const name = obj.name || `<${obj.type}>`;
+    const currentPath = [...pathParts, name];
+
+    nodes.push({
+      object: obj,
+      label: name,
+      path: currentPath.join(' / '),
+      type: obj.type,
+    });
+
+    for (const child of obj.children) {
+      traverse(child, currentPath);
+    }
+  }
+
+  traverse(root, []);
+  return nodes;
+}
+
 interface SceneNodeProps
 {
   object: THREE.Object3D;
@@ -19,14 +99,23 @@ interface SceneNodeProps
   selectedObject: THREE.Object3D | null;
   onSelect: (object: THREE.Object3D) => void;
   onVisibilityChange?: () => void;
+  expandedPath: Set<string>; // 展開すべきノードのuuid集合
 }
 
-const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, onSelect, onVisibilityChange }) =>
+const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, onSelect, onVisibilityChange, expandedPath }) =>
 {
-  const [open, setOpen] = useState(false);
+  // 初期展開状態: expandedPathに含まれていれば展開
+  const [open, setOpen] = useState(expandedPath.has(object.uuid));
   const [visible, setVisible] = useState(object.visible);
   const hasChildren = object.children.length > 0;
   const isMesh = (object as THREE.Mesh).isMesh;
+
+  // expandedPathが変更されたら展開状態を更新
+  useEffect(() => {
+    if (expandedPath.has(object.uuid)) {
+      setOpen(true);
+    }
+  }, [expandedPath, object.uuid]);
 
   const handleClick = (e: React.MouseEvent) =>
   {
@@ -104,6 +193,7 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
                 selectedObject={selectedObject}
                 onSelect={onSelect}
                 onVisibilityChange={onVisibilityChange}
+                expandedPath={expandedPath}
               />
             ))}
           </List>
@@ -113,22 +203,140 @@ const SceneNode: React.FC<SceneNodeProps> = ({ object, depth, selectedObject, on
   );
 };
 
+// Transform編集用のVector3エディタ
+interface Vector3EditorProps
+{
+  label: string;
+  value: THREE.Vector3 | THREE.Euler;
+  onChange: (axis: 'x' | 'y' | 'z', value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  isEuler?: boolean;
+}
+
+const Vector3Editor: React.FC<Vector3EditorProps> = ({
+  label,
+  value,
+  onChange,
+  min = -2,
+  max = 2,
+  step = 0.01,
+  isEuler = false
+}) =>
+{
+  // Eulerの場合はラジアンから度に変換して表示
+  const displayValue = (v: number) => isEuler ? (v * 180 / Math.PI) : v;
+  const toRadians = (deg: number) => deg * Math.PI / 180;
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="body2" color="inherit" sx={{ mb: 1 }}>{label}</Typography>
+      {(['x', 'y', 'z'] as const).map((axis) => (
+        <Box key={axis} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+          <Typography variant="caption" sx={{ width: 20, color: 'rgba(0, 0, 0, 0.6)' }}>
+            {axis.toUpperCase()}:
+          </Typography>
+          <Slider
+            size="small"
+            value={displayValue(value[axis])}
+            onChange={(_, newValue) => {
+              const v = isEuler ? toRadians(newValue as number) : (newValue as number);
+              onChange(axis, v);
+            }}
+            min={isEuler ? -180 : min}
+            max={isEuler ? 180 : max}
+            step={isEuler ? 1 : step}
+            sx={{ mx: 1, flex: 1 }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            value={displayValue(value[axis]).toFixed(isEuler ? 1 : 4)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value) || 0;
+              onChange(axis, isEuler ? toRadians(v) : v);
+            }}
+            inputProps={{
+              step: isEuler ? 1 : step,
+              style: { padding: '4px 8px', width: 70, fontSize: 12 }
+            }}
+            sx={{ width: 90 }}
+          />
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
 interface InspectorPanelProps
 {
   object: THREE.Object3D | null;
   onVisibilityChange?: () => void;
+  onTransformChange?: () => void;
 }
 
-const InspectorPanel: React.FC<InspectorPanelProps> = ({ object, onVisibilityChange }) =>
+const InspectorPanel: React.FC<InspectorPanelProps> = ({ object, onVisibilityChange, onTransformChange }) =>
 {
   const [uvPreviewOpen, setUvPreviewOpen] = useState(false);
   const [visible, setVisible] = useState(object?.visible ?? true);
+  // Transform値を追跡して再レンダリングをトリガー
+  const [, setTransformVersion] = useState(0);
+  // 初期Transform値を保存
+  const [initialTransform, setInitialTransform] = useState<{
+    position: THREE.Vector3;
+    rotation: THREE.Euler;
+    scale: THREE.Vector3;
+  } | null>(null);
 
-  // オブジェクトが変わったら可視状態を同期
+  // オブジェクトが変わったら可視状態を同期し、初期Transform値を保存
   useEffect(() =>
   {
     setVisible(object?.visible ?? true);
+    if (object) {
+      setInitialTransform({
+        position: object.position.clone(),
+        rotation: object.rotation.clone(),
+        scale: object.scale.clone(),
+      });
+    }
   }, [object]);
+
+  // Transform変更ハンドラ
+  const handlePositionChange = useCallback((axis: 'x' | 'y' | 'z', value: number) => {
+    if (!object) return;
+    object.position[axis] = value;
+    object.updateMatrixWorld(true);
+    setTransformVersion(v => v + 1);
+    onTransformChange?.();
+  }, [object, onTransformChange]);
+
+  const handleRotationChange = useCallback((axis: 'x' | 'y' | 'z', value: number) => {
+    if (!object) return;
+    object.rotation[axis] = value;
+    object.updateMatrixWorld(true);
+    setTransformVersion(v => v + 1);
+    onTransformChange?.();
+  }, [object, onTransformChange]);
+
+  const handleScaleChange = useCallback((axis: 'x' | 'y' | 'z', value: number) => {
+    if (!object) return;
+    object.scale[axis] = value;
+    object.updateMatrixWorld(true);
+    setTransformVersion(v => v + 1);
+    onTransformChange?.();
+  }, [object, onTransformChange]);
+
+  // Transformリセット
+  const handleResetTransform = useCallback(() => {
+    if (!object || !initialTransform) return;
+    object.position.copy(initialTransform.position);
+    object.rotation.copy(initialTransform.rotation);
+    object.scale.copy(initialTransform.scale);
+    object.updateMatrixWorld(true);
+    setTransformVersion(v => v + 1);
+    onTransformChange?.();
+  }, [object, initialTransform, onTransformChange]);
 
   if (!object)
   {
@@ -207,40 +415,43 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({ object, onVisibilityCha
 
       <Divider sx={{ my: 2 }} />
 
-      <Typography variant="subtitle2" color="inherit">Transform</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <Typography variant="subtitle2" color="inherit" sx={{ flex: 1 }}>Transform</Typography>
+        <Button
+          size="small"
+          startIcon={<Restore />}
+          onClick={handleResetTransform}
+          sx={{ fontSize: 11 }}
+        >
+          Reset
+        </Button>
+      </Box>
+
       <Box sx={{ ml: 1, mt: 1 }}>
-        <Typography variant="body2" color="inherit">Position</Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          X: {object.position.x.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Y: {object.position.y.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Z: {object.position.z.toFixed(4)}
-        </Typography>
+        <Vector3Editor
+          label="Position"
+          value={object.position}
+          onChange={handlePositionChange}
+          min={-2}
+          max={2}
+          step={0.001}
+        />
 
-        <Typography variant="body2" sx={{ mt: 1 }} color="inherit">Rotation (Euler)</Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          X: {object.rotation.x.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Y: {object.rotation.y.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Z: {object.rotation.z.toFixed(4)}
-        </Typography>
+        <Vector3Editor
+          label="Rotation (degrees)"
+          value={object.rotation}
+          onChange={handleRotationChange}
+          isEuler
+        />
 
-        <Typography variant="body2" sx={{ mt: 1 }} color="inherit">Scale</Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          X: {object.scale.x.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Y: {object.scale.y.toFixed(4)}
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-          Z: {object.scale.z.toFixed(4)}
-        </Typography>
+        <Vector3Editor
+          label="Scale"
+          value={object.scale}
+          onChange={handleScaleChange}
+          min={0}
+          max={3}
+          step={0.01}
+        />
       </Box>
 
       <Divider sx={{ my: 2 }} />
@@ -360,11 +571,86 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
   const [vrmStats, setVrmStats] = useState<ReturnType<typeof computeSceneStats> | null>(null);
   // 可視性変更時に再レンダリングをトリガーするためのカウンター
   const [, setVisibilityVersion] = useState(0);
+  // 展開すべきノードのuuid集合
+  const [expandedPath, setExpandedPath] = useState<Set<string>>(new Set());
+
+  // 検索用のノードリストをメモ化
+  const searchableNodes = useMemo(() => {
+    if (!vrm) return [];
+    return collectAllNodes(vrm.scene);
+  }, [vrm]);
 
   const handleVisibilityChange = () =>
   {
     setVisibilityVersion((v) => v + 1);
   };
+
+  // 検索で選択されたときのハンドラ
+  const handleSearchSelect = useCallback((option: NodeSearchOption | null) => {
+    if (!option) return;
+    setSelectedObject(option.object);
+    // 名前パスを保存
+    const namePath = getNodeNamePath(option.object);
+    localStorage.setItem(SELECTED_NODE_KEY, JSON.stringify(namePath));
+    // 選択されたノードまでのパスを展開
+    setExpandedPath(getExpandedUuids(option.object));
+  }, []);
+
+  // ノード選択時にlocalStorageに保存
+  const handleSelect = useCallback((object: THREE.Object3D) => {
+    setSelectedObject(object);
+    // 名前パスを保存
+    const namePath = getNodeNamePath(object);
+    localStorage.setItem(SELECTED_NODE_KEY, JSON.stringify(namePath));
+    // 選択されたノードまでのパスを展開
+    setExpandedPath(getExpandedUuids(object));
+  }, []);
+
+  // コンポーネントマウント時またはVRM変更時に以前選択していたノードを復元
+  // マウント時にも復元するため、空の依存配列を持つ別のuseEffectで処理
+  useEffect(() => {
+    if (!vrm) return;
+
+    const restoreSelection = () => {
+      const savedPath = localStorage.getItem(SELECTED_NODE_KEY);
+      if (!savedPath) return;
+
+      try {
+        const namePath = JSON.parse(savedPath) as string[];
+        // VRMシーンから検索
+        const found = findNodeByNamePath(vrm.scene, namePath);
+        if (found) {
+          setSelectedObject(found);
+          setExpandedPath(getExpandedUuids(found));
+        }
+      } catch {
+        // パースエラーは無視
+      }
+    };
+
+    restoreSelection();
+  }, [vrm]);
+
+  // タブ切り替え等でコンポーネントが再マウントされた時も復元
+  // vrm.scene.uuidを使って、同じVRMでも再マウント時に復元を試みる
+  useEffect(() => {
+    if (!vrm || selectedObject) return; // 既に選択されている場合はスキップ
+
+    const savedPath = localStorage.getItem(SELECTED_NODE_KEY);
+    if (!savedPath) return;
+
+    try {
+      const namePath = JSON.parse(savedPath) as string[];
+      const found = findNodeByNamePath(vrm.scene, namePath);
+      if (found) {
+        setSelectedObject(found);
+        setExpandedPath(getExpandedUuids(found));
+      }
+    } catch {
+      // パースエラーは無視
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // シーン統計を計算
   useEffect(() =>
@@ -426,6 +712,49 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
             </Typography>
           </Box>
         )}
+
+        {/* ノード検索 */}
+        <Autocomplete
+          size="small"
+          options={searchableNodes}
+          getOptionLabel={(option) => option.label}
+          renderOption={(props, option) => (
+            <Box component="li" {...props} key={option.object.uuid}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Typography variant="body2" noWrap>{option.label}</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }} noWrap>
+                  {option.path}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+          filterOptions={(options, { inputValue }) => {
+            const search = inputValue.toLowerCase();
+            return options.filter(opt =>
+              opt.label.toLowerCase().includes(search) ||
+              opt.path.toLowerCase().includes(search)
+            ).slice(0, 50); // 最大50件
+          }}
+          onChange={(_, value) => handleSearchSelect(value)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Search nodes..."
+              sx={{ mt: 1 }}
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          )}
+          sx={{ mt: 1 }}
+          clearOnBlur={false}
+          blurOnSelect
+        />
       </Paper>
 
       {/* メインコンテンツ */}
@@ -442,8 +771,9 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
                   object={scene}
                   depth={0}
                   selectedObject={selectedObject}
-                  onSelect={setSelectedObject}
+                  onSelect={handleSelect}
                   onVisibilityChange={handleVisibilityChange}
+                  expandedPath={expandedPath}
                 />
                 <Divider sx={{ my: 1 }} />
               </>
@@ -455,8 +785,9 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({ vrm, scene }) =>
               object={vrm.scene}
               depth={0}
               selectedObject={selectedObject}
-              onSelect={setSelectedObject}
+              onSelect={handleSelect}
               onVisibilityChange={handleVisibilityChange}
+              expandedPath={expandedPath}
             />
           </List>
         </Paper>

@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VRM } from '@pixiv/three-vrm'
-import { Object3D } from 'three'
+import { Bone, Object3D, Vector3 } from 'three'
 
 export class VRMExporterPlugin
 {
   public readonly name = 'VRMC_vrm'
   private writer: any
   private vrm: VRM | null = null
+  // 動的に作成されたtailノードを追跡（エクスポート後にクリーンアップするため）
+  private createdTailNodes: Bone[] = []
 
   constructor(writer: any)
   {
@@ -33,6 +35,85 @@ export class VRMExporterPlugin
         this.vrm = obj.userData.vrm as VRM
       }
     })
+
+    // SpringBone末端ジョイントに仮想tailノードを作成
+    // VRM1.0仕様ではjointsの最後にtailノードが必要だが、
+    // VRM0.xモデルや一部のVRM1.0モデルでは末端ボーンに子がない
+    this.createVirtualTailNodes()
+  }
+
+  /**
+   * SpringBone末端ジョイントに仮想tailノードを作成
+   * three-vrmと同様に、ボーン方向に7cmのオフセットを持つ仮想ノードを追加
+   */
+  private createVirtualTailNodes(): void
+  {
+    if (!this.vrm?.springBoneManager) return
+
+    const springBoneManager = this.vrm.springBoneManager
+    const joints = springBoneManager.joints
+    if (!joints || joints.size === 0) return
+
+    // ジョイントをボーンでマッピング
+    const jointsByBone = new Map<any, any>()
+    joints.forEach((joint: any) =>
+    {
+      jointsByBone.set(joint.bone, joint)
+    })
+
+    // 末端ジョイント（childを持たないジョイント）を見つける
+    joints.forEach((joint: any) =>
+    {
+      const bone = joint.bone
+      if (!bone) return
+
+      // joint.childがなく、bone.childrenにBoneがない場合は末端
+      const hasJointChild = joint.child != null
+      const hasBoneChild = bone.children.some(
+        (child: any) => child.type === 'Bone' || child.isBone,
+      )
+
+      if (!hasJointChild && !hasBoneChild)
+      {
+        // 仮想tailノードを作成
+        const tailBone = new Bone()
+        tailBone.name = `${bone.name}_tail`
+
+        // three-vrmと同様のロジック: ボーン方向に7cmオフセット
+        // bone.positionを正規化して0.07を掛ける
+        const direction = new Vector3().copy(bone.position)
+        if (direction.lengthSq() > 0)
+        {
+          direction.normalize().multiplyScalar(0.07)
+        } else
+        {
+          // positionがゼロの場合はY軸方向に7cm
+          direction.set(0, 0.07, 0)
+        }
+        tailBone.position.copy(direction)
+
+        // 親ボーンに追加
+        bone.add(tailBone)
+        tailBone.updateMatrixWorld(true)
+
+        this.createdTailNodes.push(tailBone)
+      }
+    })
+  }
+
+  /**
+   * エクスポート後に作成した仮想tailノードをクリーンアップ
+   */
+  public cleanupTailNodes(): void
+  {
+    for (const tailNode of this.createdTailNodes)
+    {
+      if (tailNode.parent)
+      {
+        tailNode.parent.remove(tailNode)
+      }
+    }
+    this.createdTailNodes = []
   }
 
   public afterParse(_input: any)
@@ -480,10 +561,15 @@ export class VRMExporterPlugin
       if (chainJoints.length === 0) return
 
       // ジョイント定義を作成
-      const jointDefs = chainJoints.map((j: any) =>
+      const jointDefs: any[] = []
+
+      for (let i = 0; i < chainJoints.length; i++)
       {
+        const j = chainJoints[i]
         const nodeIndex = this.writer.nodeMap.get(j.bone)
-        return {
+        if (nodeIndex === undefined) continue
+
+        jointDefs.push({
           node: nodeIndex,
           hitRadius: j.settings.hitRadius,
           stiffness: j.settings.stiffness,
@@ -492,8 +578,39 @@ export class VRMExporterPlugin
             ? [j.settings.gravityDir.x, j.settings.gravityDir.y, j.settings.gravityDir.z]
             : [0, -1, 0],
           dragForce: j.settings.dragForce,
+        })
+      }
+
+      // 末端ノード（tail）を追加
+      // VRM1.0仕様: SpringBoneチェーンの最後にはtailノードが必要
+      // beforeParseで仮想tailノードを作成済みなので、bone.childrenから取得できる
+      const lastJoint = chainJoints[chainJoints.length - 1]
+      let tailNode = lastJoint?.child
+
+      // child がない場合、bone.children から子ボーンを探す
+      // (beforeParseで作成した仮想tailノードを含む)
+      if (!tailNode && lastJoint?.bone)
+      {
+        const boneChildren = lastJoint.bone.children.filter(
+          (child: any) => child.type === 'Bone' || child.isBone,
+        )
+        if (boneChildren.length > 0)
+        {
+          tailNode = boneChildren[0]
         }
-      }).filter((j: any) => j.node !== undefined)
+      }
+
+      if (tailNode)
+      {
+        const tailNodeIndex = this.writer.nodeMap.get(tailNode)
+        if (tailNodeIndex !== undefined)
+        {
+          // tailノードをjointsに追加（nodeのみ、物理パラメータなし）
+          jointDefs.push({
+            node: tailNodeIndex,
+          })
+        }
+      }
 
       if (jointDefs.length === 0) return
 

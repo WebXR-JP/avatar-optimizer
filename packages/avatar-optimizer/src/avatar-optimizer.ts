@@ -13,6 +13,7 @@ import {
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
+import { createVirtualTailNodes } from './util/springbone'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -178,6 +179,10 @@ export function optimizeModel(
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
     if (options.migrateVRM0ToVRM1) {
       yield* migrateSkeletonVRM0ToVRM1(rootNode)
+
+      // 末端ジョイントに仮想tailノードを作成
+      // setInitState()が正しく_initialLocalChildPositionを計算できるようにする
+      createVirtualTailNodes(vrm)
 
       // SpringBoneの初期状態を再設定（ボーン変換後の状態を記録）
       vrm.springBoneManager?.setInitState()

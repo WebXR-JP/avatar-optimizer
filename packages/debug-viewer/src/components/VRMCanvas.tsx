@@ -116,6 +116,8 @@ interface VRMCanvasProps
   onDebugModeChange: (mode: DebugMode) => void
   springBoneEnabled: boolean
   onSpringBoneEnabledChange: (enabled: boolean) => void
+  showBones: boolean
+  onShowBonesChange: (show: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
 }
@@ -165,6 +167,8 @@ function VRMCanvas({
   onDebugModeChange,
   springBoneEnabled,
   onSpringBoneEnabledChange,
+  showBones,
+  onShowBonesChange,
   onReloadExport,
   isReloading,
 }: VRMCanvasProps)
@@ -199,7 +203,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -309,6 +313,14 @@ function VRMCanvas({
                 onChange={(e) => onSpringBoneEnabledChange(e.target.checked)}
               />
               SpringBone
+            </label>
+            <label className="vrm-canvas__bones-toggle">
+              <input
+                type="checkbox"
+                checked={showBones}
+                onChange={(e) => onShowBonesChange(e.target.checked)}
+              />
+              Show Bones
             </label>
           </div>
 

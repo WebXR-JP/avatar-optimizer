@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh } from 'three'
+import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
 import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
+import { createBonePointsHelper, updateBonePointsHelper } from '../utils/skeleton-helper'
 
 interface VRMSceneProps
 {
@@ -12,6 +13,7 @@ interface VRMSceneProps
   vrmAnimation: VRMAnimation | null
   debugMode: DebugMode
   springBoneEnabled?: boolean
+  showBones?: boolean
 }
 
 /**
@@ -19,10 +21,12 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
+  const skeletonHelperRef = useRef<SkeletonHelper | null>(null)
+  const bonePointsRef = useRef<Group | null>(null)
 
   // VRMをシーンに追加/削除
   useEffect(() =>
@@ -83,6 +87,56 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true }: VR
     vrm.springBoneManager?.reset()
   }, [vrm, springBoneEnabled])
 
+  // ボーン可視化ヘルパーの管理
+  useEffect(() =>
+  {
+    if (!vrm) return
+
+    // 古いヘルパーを削除
+    if (skeletonHelperRef.current)
+    {
+      scene.remove(skeletonHelperRef.current)
+      skeletonHelperRef.current = null
+    }
+    if (bonePointsRef.current)
+    {
+      scene.remove(bonePointsRef.current)
+      bonePointsRef.current = null
+    }
+
+    if (showBones)
+    {
+      // SkeletonHelperを作成
+      const skeletonHelper = new SkeletonHelper(vrm.scene)
+      skeletonHelper.visible = true
+      const material = skeletonHelper.material as LineBasicMaterial
+      material.color.setHex(0x00ff00)
+      material.depthTest = false
+      material.depthWrite = false
+      scene.add(skeletonHelper)
+      skeletonHelperRef.current = skeletonHelper
+
+      // ボーンポイントを作成
+      const bonePoints = createBonePointsHelper(vrm)
+      scene.add(bonePoints)
+      bonePointsRef.current = bonePoints
+    }
+
+    return () =>
+    {
+      if (skeletonHelperRef.current)
+      {
+        scene.remove(skeletonHelperRef.current)
+        skeletonHelperRef.current = null
+      }
+      if (bonePointsRef.current)
+      {
+        scene.remove(bonePointsRef.current)
+        bonePointsRef.current = null
+      }
+    }
+  }, [vrm, showBones, scene])
+
   // アニメーションループ
   useFrame((_state, delta) =>
   {
@@ -104,6 +158,12 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true }: VR
         vrm.nodeConstraintManager?.update()
         vrm.expressionManager?.update()
         vrm.lookAt?.update(dt)
+      }
+
+      // ボーンポイントの位置を更新
+      if (bonePointsRef.current)
+      {
+        updateBonePointsHelper(vrm, bonePointsRef.current)
       }
     }
   })

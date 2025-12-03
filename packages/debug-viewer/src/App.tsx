@@ -9,6 +9,7 @@ import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
 import { optimizeModel, VRMExporterPlugin } from '@xrift/avatar-optimizer'
 import { MToonAtlasExporterPlugin, type DebugMode } from '@xrift/mtoon-atlas'
+import { captureSpringBoneSnapshot, compareSnapshots, dumpProblematicBones } from './utils/springbone-debug'
 import './App.css'
 
 function App()
@@ -23,6 +24,7 @@ function App()
   const [isReplacingTextures, setIsReplacingTextures] = useState(false)
   const [debugMode, setDebugMode] = useState<DebugMode>('none')
   const [springBoneEnabled, setSpringBoneEnabled] = useState(true)
+  const [showBones, setShowBones] = useState(false)
   const [isReloading, setIsReloading] = useState(false)
 
   // URLに基づいて現在のタブインデックスを決定
@@ -112,6 +114,9 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
+    // 最適化前の SpringBone 状態をキャプチャ
+    const beforeSnapshot = captureSpringBoneSnapshot(vrm, 'Before Optimize')
+
     const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true })
 
     if (result.isErr())
@@ -122,6 +127,10 @@ function App()
       setIsOptimizing(false)
       return
     }
+
+    // 最適化後の SpringBone 状態をキャプチャして比較
+    const afterSnapshot = captureSpringBoneSnapshot(vrm, 'After Optimize')
+    compareSnapshots(beforeSnapshot, afterSnapshot)
 
     const optimizationResult = result.value
     if (optimizationResult.groups.size > 0)
@@ -174,6 +183,12 @@ function App()
   const handleExportGLTF = useCallback(() =>
   {
     if (!vrm) return
+
+    // SpringBone を初期状態にリセット（エクスポート時の回転状態を正しく保存するため）
+    vrm.springBoneManager?.reset()
+
+    // 現在のボーン状態を SpringBone の初期状態として記録
+    vrm.springBoneManager?.setInitState()
 
     const exporter = new GLTFExporter()
     exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
@@ -271,6 +286,58 @@ function App()
     setIsReloading(true)
     setError(null)
 
+    // エクスポート中の SpringBone 更新を停止（非同期処理中にボーンが動くのを防ぐ）
+    const wasSpringBoneEnabled = springBoneEnabled
+    setSpringBoneEnabled(false)
+
+    // エクスポート前の SpringBone 状態をキャプチャ
+    const beforeExportSnapshot = captureSpringBoneSnapshot(vrm, 'Before Export (pre-reset)')
+
+    // SpringBone を初期状態にリセット（エクスポート時の回転状態を正しく保存するため）
+    vrm.springBoneManager?.reset()
+
+    // 現在のボーン状態を SpringBone の初期状態として記録
+    // これにより、エクスポート後に読み込んだ際に同じ初期状態が再現される
+    vrm.springBoneManager?.setInitState()
+
+    // リセット後の状態もキャプチャ
+    const afterResetSnapshot = captureSpringBoneSnapshot(vrm, 'After Reset & SetInitState (pre-export)')
+    compareSnapshots(beforeExportSnapshot, afterResetSnapshot)
+
+    // 詳細な transform 情報をダンプ（デバッグ用）
+    dumpProblematicBones(vrm, 'Pre-export')
+
+    // 元のVRMの末端ジョイントの情報をダンプ
+    console.group('🔬 Original SpringBone End Joints')
+    if (vrm.springBoneManager)
+    {
+      let jointIndex = 0
+      vrm.springBoneManager.joints.forEach((joint: any) =>
+      {
+        // 末端ジョイント（childがないもの）のみ
+        if (!joint.child && jointIndex < 5)
+        {
+          const initChildPos = joint._initialLocalChildPosition
+          console.log(`End Joint: ${joint.bone?.name}`, {
+            child: 'null',
+            _initialLocalChildPosition: initChildPos ? `(${initChildPos.x.toFixed(4)}, ${initChildPos.y.toFixed(4)}, ${initChildPos.z.toFixed(4)})` : null,
+            bonePosition: joint.bone?.position ? `(${joint.bone.position.x.toFixed(4)}, ${joint.bone.position.y.toFixed(4)}, ${joint.bone.position.z.toFixed(4)})` : null,
+          })
+          jointIndex++
+        }
+      })
+    }
+    console.groupEnd()
+
+    // エクスポート完了後に SpringBone を復元する関数
+    const restoreSpringBone = () =>
+    {
+      if (wasSpringBoneEnabled)
+      {
+        setSpringBoneEnabled(true)
+      }
+    }
+
     const exporter = new GLTFExporter()
     exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
     exporter.register((writer: any) =>
@@ -285,6 +352,64 @@ function App()
       child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
     )
     children.forEach((child) => exportScene.add(child))
+
+    // まず JSON 形式でエクスポートしてノードの rotation を確認
+    const jsonExporter = new GLTFExporter()
+    jsonExporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
+    jsonExporter.register((writer: any) =>
+    {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
+
+    // JSON形式でエクスポートしてノード情報をダンプ
+    jsonExporter.parse(
+      exportScene,
+      (jsonResult: any) =>
+      {
+        console.group('🔍 Exported GLTF Node Rotations')
+        const targetBones = ['hair_03_01', 'hair_03_02', 'skirt_01_01', 'skirt_01_02']
+        jsonResult.nodes?.forEach((node: any, index: number) =>
+        {
+          if (targetBones.includes(node.name))
+          {
+            console.log(`Node ${index} (${node.name}):`, {
+              rotation: node.rotation,
+              translation: node.translation,
+              scale: node.scale,
+              matrix: node.matrix,
+            })
+          }
+        })
+        console.groupEnd()
+
+        // SpringBone拡張の内容をダンプ
+        console.group('🔍 Exported SpringBone Extension')
+        const springBone = jsonResult.extensions?.VRMC_springBone
+        if (springBone)
+        {
+          console.log('specVersion:', springBone.specVersion)
+          console.log('springs count:', springBone.springs?.length)
+          // 最初のspringの詳細
+          if (springBone.springs?.[0])
+          {
+            const firstSpring = springBone.springs[0]
+            console.log('First spring joints:', firstSpring.joints?.map((j: any) => ({
+              node: j.node,
+              nodeName: jsonResult.nodes?.[j.node]?.name,
+              hasSettings: j.stiffness !== undefined,
+            })))
+          }
+        } else
+        {
+          console.log('No VRMC_springBone extension')
+        }
+        console.groupEnd()
+      },
+      (error) => console.error('JSON export failed:', error),
+      { binary: false, trs: true },
+    )
 
     exporter.parse(
       exportScene,
@@ -315,16 +440,49 @@ function App()
           {
             setError(`Reload failed: ${loadResult.error.message}`)
             setIsReloading(false)
+            restoreSpringBone()
             return
           }
+
+          // 再読み込み後の SpringBone 状態をキャプチャして比較
+          const afterReloadSnapshot = captureSpringBoneSnapshot(loadResult.value, 'After Reload')
+          compareSnapshots(afterResetSnapshot, afterReloadSnapshot)
+
+          // 詳細な transform 情報をダンプ（デバッグ用）
+          dumpProblematicBones(loadResult.value, 'After Reload')
+
+          // リロード後のSpringBone設定を詳細ダンプ
+          console.group('🔬 Reloaded SpringBone Settings')
+          const reloadedManager = loadResult.value.springBoneManager
+          if (reloadedManager)
+          {
+            let jointIndex = 0
+            reloadedManager.joints.forEach((joint: any) =>
+            {
+              if (jointIndex < 6)
+              {
+                const childPos = joint.child?.position
+                const initChildPos = joint._initialLocalChildPosition
+                console.log(`Joint ${jointIndex}: ${joint.bone?.name}`, {
+                  child: joint.child?.name || 'null',
+                  childLocalPos: childPos ? `(${childPos.x.toFixed(4)}, ${childPos.y.toFixed(4)}, ${childPos.z.toFixed(4)})` : null,
+                  _initialLocalChildPosition: initChildPos ? `(${initChildPos.x.toFixed(4)}, ${initChildPos.y.toFixed(4)}, ${initChildPos.z.toFixed(4)})` : null,
+                })
+              }
+              jointIndex++
+            })
+          }
+          console.groupEnd()
 
           setVRM(loadResult.value)
           setVRMAnimation(null)
           setIsReloading(false)
+          restoreSpringBone()
         } catch (err)
         {
           setError(`Reload failed: ${String(err)}`)
           setIsReloading(false)
+          restoreSpringBone()
         }
       },
       (error) =>
@@ -332,6 +490,7 @@ function App()
         children.forEach((child) => vrm.scene.add(child))
         setError(`Export for reload failed: ${String(error)}`)
         setIsReloading(false)
+        restoreSpringBone()
       },
       {
         binary: true,
@@ -339,7 +498,7 @@ function App()
         onlyVisible: true,
       },
     )
-  }, [vrm])
+  }, [vrm, springBoneEnabled])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -370,6 +529,8 @@ function App()
           onDebugModeChange={setDebugMode}
           springBoneEnabled={springBoneEnabled}
           onSpringBoneEnabledChange={setSpringBoneEnabled}
+          showBones={showBones}
+          onShowBonesChange={setShowBones}
           onReloadExport={handleReloadExport}
           isReloading={isReloading}
         />

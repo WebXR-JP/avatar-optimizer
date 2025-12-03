@@ -173,7 +173,7 @@ describe('skeleton-migration', () => {
   })
 
   describe('rebuildBoneTransformsPositionOnly', () => {
-    it('should rebuild bone positions while preserving rotation', () => {
+    it('should rebuild bone positions and reset rotation to identity (VRM1.0 spec)', () => {
       const rootBone = new Bone()
       rootBone.name = 'root'
       rootBone.position.set(1, 0, 0)
@@ -186,10 +186,6 @@ describe('skeleton-migration', () => {
       rootBone.add(childBone)
 
       rootBone.updateMatrixWorld(true)
-
-      // 回転前の回転値を記録
-      const rootRotationBefore = rootBone.rotation.clone()
-      const childRotationBefore = childBone.rotation.clone()
 
       // 新しい位置を設定（Y軸180度回転後）
       const rotatedPositions = new Map<Bone, Vector3>()
@@ -204,18 +200,173 @@ describe('skeleton-migration', () => {
       expect(rootBone.position.y).toBeCloseTo(0)
       expect(rootBone.position.z).toBeCloseTo(0)
 
-      // 回転は維持されている
-      expect(rootBone.rotation.x).toBeCloseTo(rootRotationBefore.x)
-      expect(rootBone.rotation.y).toBeCloseTo(rootRotationBefore.y)
-      expect(rootBone.rotation.z).toBeCloseTo(rootRotationBefore.z)
+      // VRM1.0仕様: 回転はidentityにリセットされている
+      expect(rootBone.rotation.x).toBeCloseTo(0)
+      expect(rootBone.rotation.y).toBeCloseTo(0)
+      expect(rootBone.rotation.z).toBeCloseTo(0)
 
-      expect(childBone.rotation.x).toBeCloseTo(childRotationBefore.x)
-      expect(childBone.rotation.y).toBeCloseTo(childRotationBefore.y)
-      expect(childBone.rotation.z).toBeCloseTo(childRotationBefore.z)
+      expect(childBone.rotation.x).toBeCloseTo(0)
+      expect(childBone.rotation.y).toBeCloseTo(0)
+      expect(childBone.rotation.z).toBeCloseTo(0)
+
+      // 子ボーンの位置も正しく計算されている
+      // ワールド位置が(-1, 1, 0)、親が(-1, 0, 0)なので、ローカル位置は(0, 1, 0)
+      expect(childBone.position.x).toBeCloseTo(0)
+      expect(childBone.position.y).toBeCloseTo(1)
+      expect(childBone.position.z).toBeCloseTo(0)
     })
   })
 
   describe('migrateSkeletonVRM0ToVRM1', () => {
+    it('should correctly rotate bone world positions by 180 degrees around Y axis', () => {
+      // 複雑なボーン階層を作成（VRMの髪の毛のような分岐構造）
+      // Root -> Spine -> Head -> Hair1 -> Hair1_end
+      //                       -> Hair2 -> Hair2_end
+      const rootBone = new Bone()
+      rootBone.name = 'root'
+      rootBone.position.set(0, 0, 0)
+
+      const spineBone = new Bone()
+      spineBone.name = 'spine'
+      spineBone.position.set(0, 1, 0) // 上方向
+      rootBone.add(spineBone)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0) // さらに上方向
+      spineBone.add(headBone)
+
+      // 髪の毛1（斜め前方）
+      const hair1Bone = new Bone()
+      hair1Bone.name = 'hair1'
+      hair1Bone.position.set(0.2, 0.1, 0.3) // 前方斜め
+      headBone.add(hair1Bone)
+
+      const hair1EndBone = new Bone()
+      hair1EndBone.name = 'hair1_end'
+      hair1EndBone.position.set(0.1, -0.2, 0.15) // 下方に垂れる
+      hair1Bone.add(hair1EndBone)
+
+      // 髪の毛2（斜め後方）
+      const hair2Bone = new Bone()
+      hair2Bone.name = 'hair2'
+      hair2Bone.position.set(-0.1, 0.05, -0.25) // 後方斜め
+      headBone.add(hair2Bone)
+
+      const hair2EndBone = new Bone()
+      hair2EndBone.name = 'hair2_end'
+      hair2EndBone.position.set(-0.05, -0.15, -0.1) // 下方に垂れる
+      hair2Bone.add(hair2EndBone)
+
+      const bones = [rootBone, spineBone, headBone, hair1Bone, hair1EndBone, hair2Bone, hair2EndBone]
+      const skeleton = new Skeleton(bones)
+
+      // ジオメトリ作成
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
+      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(12).fill(0), 4))
+      geometry.setAttribute('skinIndex', new BufferAttribute(new Float32Array(12).fill(0), 4))
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(rootBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      rootBone.updateMatrixWorld(true)
+      const beforePositions = new Map<string, Vector3>()
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        beforePositions.set(bone.name, worldPos.clone())
+      }
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後のワールド座標を確認
+      rootBone.updateMatrixWorld(true)
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const beforePos = beforePositions.get(bone.name)!
+
+        // Y軸180度回転後の期待値：X -> -X, Z -> -Z, Y -> Y
+        expect(worldPos.x).toBeCloseTo(-beforePos.x, 5, `${bone.name} X座標が正しく回転されていない`)
+        expect(worldPos.y).toBeCloseTo(beforePos.y, 5, `${bone.name} Y座標が変わってしまっている`)
+        expect(worldPos.z).toBeCloseTo(-beforePos.z, 5, `${bone.name} Z座標が正しく回転されていない`)
+      }
+    })
+
+    it('should correctly rotate bones with initial rotation', () => {
+      // 回転を持つボーン階層（VRMの髪の毛で起こりうる）
+      const rootBone = new Bone()
+      rootBone.name = 'root'
+      rootBone.position.set(0, 0, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 1.5, 0)
+      rootBone.add(headBone)
+
+      // Y軸周りに45度回転している髪の毛
+      const hairBone = new Bone()
+      hairBone.name = 'hair'
+      hairBone.position.set(0.3, 0, 0.3)
+      hairBone.rotation.set(0, Math.PI / 4, 0) // Y軸45度回転
+      headBone.add(hairBone)
+
+      // 髪の毛の先端（ローカルZ方向に伸びる）
+      const hairEndBone = new Bone()
+      hairEndBone.name = 'hair_end'
+      hairEndBone.position.set(0, -0.2, 0.1)
+      hairBone.add(hairEndBone)
+
+      const bones = [rootBone, headBone, hairBone, hairEndBone]
+      const skeleton = new Skeleton(bones)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
+      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(12).fill(0), 4))
+      geometry.setAttribute('skinIndex', new BufferAttribute(new Float32Array(12).fill(0), 4))
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(rootBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      rootBone.updateMatrixWorld(true)
+      const beforePositions = new Map<string, Vector3>()
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        beforePositions.set(bone.name, worldPos.clone())
+      }
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後のワールド座標を確認
+      rootBone.updateMatrixWorld(true)
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const beforePos = beforePositions.get(bone.name)!
+
+        // Y軸180度回転後の期待値
+        expect(worldPos.x).toBeCloseTo(-beforePos.x, 5, `${bone.name} X座標が正しく回転されていない`)
+        expect(worldPos.y).toBeCloseTo(beforePos.y, 5, `${bone.name} Y座標が変わってしまっている`)
+        expect(worldPos.z).toBeCloseTo(-beforePos.z, 5, `${bone.name} Z座標が正しく回転されていない`)
+      }
+    })
+
     it('should migrate skeleton from VRM0.x to VRM1.0 format', () => {
       const { mesh, skeleton } = createSimpleSkinnedMesh()
 
