@@ -48,6 +48,11 @@ export class MToonAtlasExporterPlugin
   // beforeParseで処理中のテクスチャインデックス（Promise）
   private pendingTextureIndices: Map<MToonAtlasMaterial, PendingTextureIndexInfo> = new Map()
 
+  // テクスチャUUIDからインデックスへのキャッシュ（重複登録防止）
+  // Three.jsのShaderMaterial.copyがuniformsをディープクローンするため、
+  // オブジェクト参照ではなくUUIDでキャッシュする必要がある
+  private textureCache: Map<string, Promise<number>> = new Map()
+
   constructor(writer: GLTFWriter)
   {
     this.writer = writer
@@ -61,6 +66,7 @@ export class MToonAtlasExporterPlugin
     this.mtoonAtlasMeshes.clear()
     this.textureIndices.clear()
     this.pendingTextureIndices.clear()
+    this.textureCache.clear()
     const roots = Array.isArray(input) ? input : [input]
 
     for (const root of roots)
@@ -97,6 +103,7 @@ export class MToonAtlasExporterPlugin
         }
       })
     }
+
   }
 
   /**
@@ -115,7 +122,7 @@ export class MToonAtlasExporterPlugin
     // Canvas 2D経由ではなくfast-pngで直接PNGエンコードする（Premultiplied Alpha問題回避）
     if (material.parameterTexture?.texture)
     {
-      pendingIndices.parameterTextureIndex = this.processParameterTexture(
+      pendingIndices.parameterTextureIndex = this.processParameterTextureWithCache(
         material.parameterTexture.texture
       )
     }
@@ -128,12 +135,13 @@ export class MToonAtlasExporterPlugin
       {
         if (texture)
         {
-          pendingIndices.atlasedTextureIndices[key] = this.processTextureWithFallback(texture)
+          pendingIndices.atlasedTextureIndices[key] = this.processTextureWithCache(texture)
         }
       }
     }
 
     this.pendingTextureIndices.set(material, pendingIndices)
+
 
     // 全てのPromiseを解決してtextureIndicesに格納
     const allPromises: Promise<void>[] = []
@@ -148,7 +156,8 @@ export class MToonAtlasExporterPlugin
       allPromises.push(promise.then(() => { }))
     }
 
-    // 全て解決後にtextureIndicesに格納し、マテリアル定義も更新するPromise
+    // 全て解決後にtextureIndicesに格納するPromise
+    // このPromiseは後でwaitForAllTextureIndicesで待機される
     const resolveAllPromise = Promise.all(allPromises).then(async () =>
     {
       const resolvedIndices: TextureIndexInfo = {
@@ -166,7 +175,46 @@ export class MToonAtlasExporterPlugin
       this.textureIndices.set(material, resolvedIndices)
     })
 
+    // pendingTextureIndicesにresolveAllPromiseも保存して、waitForAllTextureIndicesで待機できるようにする
+    ; (pendingIndices as any).resolvePromise = resolveAllPromise
+
     this.writer.pending.push(resolveAllPromise)
+  }
+
+  /**
+   * パラメータテクスチャをキャッシュ付きで処理
+   * 同じUUIDのテクスチャは1回だけ処理される
+   */
+  private processParameterTextureWithCache(texture: Texture): Promise<number>
+  {
+    const uuid = texture.uuid
+    const cached = this.textureCache.get(uuid)
+    if (cached)
+    {
+      return cached
+    }
+
+    const promise = this.processParameterTexture(texture)
+    this.textureCache.set(uuid, promise)
+    return promise
+  }
+
+  /**
+   * 通常テクスチャをキャッシュ付きで処理
+   * 同じUUIDのテクスチャは1回だけ処理される
+   */
+  private processTextureWithCache(texture: Texture): Promise<number>
+  {
+    const uuid = texture.uuid
+    const cached = this.textureCache.get(uuid)
+    if (cached)
+    {
+      return cached
+    }
+
+    const promise = this.processTextureWithFallback(texture)
+    this.textureCache.set(uuid, promise)
+    return promise
   }
 
   /**
@@ -285,22 +333,14 @@ export class MToonAtlasExporterPlugin
 /**
    * テクスチャを処理してBINチャンクに書き込む
    * @param texture - 処理するテクスチャ
+   *
+   * 注: writer.processTextureは使用しない。
+   * GLTFExporter内部でテクスチャがキャッシュされないため、
+   * 同じテクスチャオブジェクトでも毎回新しいエントリが作成されてしまう。
+   * 代わりに手動でテクスチャを登録することで、キャッシュを正しく機能させる。
    */
   private processTextureWithFallback(texture: Texture): Promise<number>
   {
-    // processTextureが使える場合はそれを使用（同期的に成功する場合）
-    if (typeof this.writer.processTexture === 'function')
-    {
-      try
-      {
-        const index = this.writer.processTexture(texture)
-        return Promise.resolve(index)
-      } catch
-      {
-        // フォールバック処理へ
-      }
-    }
-
     // 直接JSONにテクスチャを追加してBINチャンクに書き込む
     const json = this.writer.json
     json.textures = json.textures || []
@@ -543,7 +583,7 @@ export class MToonAtlasExporterPlugin
   }
 
   /**
-   * 全てのテクスチャインデックスが解決されるのを待つ
+   * 全てのテクスチャインデックスが解決され、textureIndicesに登録されるのを待つ
    */
   private async waitForAllTextureIndices(): Promise<void>
   {
@@ -551,13 +591,11 @@ export class MToonAtlasExporterPlugin
 
     for (const pending of this.pendingTextureIndices.values())
     {
-      if (pending.parameterTextureIndex)
+      // resolvePromiseを待つことで、textureIndicesへの登録も確実に完了する
+      const resolvePromise = (pending as any).resolvePromise
+      if (resolvePromise)
       {
-        allPromises.push(pending.parameterTextureIndex.then(() => { }))
-      }
-      for (const promise of Object.values(pending.atlasedTextureIndices))
-      {
-        allPromises.push(promise.then(() => { }))
+        allPromises.push(resolvePromise)
       }
     }
 
