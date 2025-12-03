@@ -275,10 +275,10 @@ describe('File Size Comparison', () => {
           }
         }
         console.log(`\nUsed texture indices (by XRIFT_mtoon_atlas): ${Array.from(usedTextureIndices).sort((a, b) => a - b).join(', ')}`)
-        console.log(`Unused texture indices: ${Array.from({length: json.textures.length}, (_, i) => i).filter(i => !usedTextureIndices.has(i)).join(', ')}`)
+        console.log(`Unused texture indices: ${Array.from({ length: json.textures.length }, (_, i) => i).filter(i => !usedTextureIndices.has(i)).join(', ')}`)
 
         // 未使用テクスチャの詳細
-        const unusedIndices = Array.from({length: json.textures.length}, (_, i) => i).filter(i => !usedTextureIndices.has(i))
+        const unusedIndices = Array.from({ length: json.textures.length }, (_, i) => i).filter(i => !usedTextureIndices.has(i))
         if (unusedIndices.length > 0) {
           console.log('\nUnused texture details:')
           for (const idx of unusedIndices) {
@@ -354,8 +354,8 @@ describe('File Size Comparison', () => {
 
         for (const [target, info] of Object.entries(byTarget)) {
           const targetName = target === '34962' ? 'ARRAY_BUFFER' :
-                            target === '34963' ? 'ELEMENT_ARRAY_BUFFER' :
-                            target === '0' ? 'none (images etc)' : `unknown (${target})`
+            target === '34963' ? 'ELEMENT_ARRAY_BUFFER' :
+              target === '0' ? 'none (images etc)' : `unknown (${target})`
           analysis.bufferViews.byTarget[targetName] = info
         }
 
@@ -480,7 +480,7 @@ describe('File Size Comparison', () => {
         duplicateDataSize += redundantSize
 
         duplicateDetails.push(
-          `BufferViews ${info.indices.join(', ')}: ${info.size} bytes x ${info.indices.length} = ${redundantSize} bytes redundant`
+          `BufferViews ${info.indices.join(', ')}: ${info.size} bytes x ${info.indices.length} = ${redundantSize} bytes redundant`,
         )
       }
 
@@ -562,7 +562,7 @@ describe('File Size Comparison', () => {
       const totalBinSize = binChunkLength
       const duplicateRatio = duplicateDataSize / totalBinSize
 
-      console.log(`\n=== Binary Duplicate Analysis ===`)
+      console.log('\n=== Binary Duplicate Analysis ===')
       console.log(`Total BIN size: ${totalBinSize} bytes`)
       console.log(`Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)`)
       console.log(`Top duplicates:\n  ${duplicateUsageDetails.slice(0, 3).join('\n  ')}`)
@@ -573,10 +573,10 @@ describe('File Size Comparison', () => {
       // 今後の改善で削減を目指す
       expect(
         duplicateRatio,
-        `Duplicate binary data found:\n` +
+        'Duplicate binary data found:\n' +
         `Total BIN size: ${totalBinSize} bytes\n` +
         `Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)\n` +
-        `Top duplicates usage:\n  ${duplicateUsageDetails.join('\n\n  ')}`
+        `Top duplicates usage:\n  ${duplicateUsageDetails.join('\n\n  ')}`,
       ).toBeLessThan(0.6) // 60%未満を許容
     })
 
@@ -660,7 +660,7 @@ describe('File Size Comparison', () => {
                 morphTargetBufferViews.set(bvIdx, [])
               }
               morphTargetBufferViews.get(bvIdx)!.push(
-                `mesh[${info.meshIndex}].${target.name}.${attr}`
+                `mesh[${info.meshIndex}].${target.name}.${attr}`,
               )
             }
           }

@@ -354,27 +354,27 @@ export class VRMExporterPlugin {
       type: lookAt.applier?.type ?? 'bone', // 'bone' or 'expression'
       rangeMapHorizontalInner: lookAt.rangeMapHorizontalInner
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalInner.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalInner.outputScale,
+        }
         : defaultRangeMap,
       rangeMapHorizontalOuter: lookAt.rangeMapHorizontalOuter
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalDown: lookAt.rangeMapVerticalDown
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalDown.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalDown.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalUp: lookAt.rangeMapVerticalUp
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalUp.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalUp.outputScale,
+        }
         : defaultRangeMap,
     }
   }
@@ -541,10 +541,10 @@ export class VRMExporterPlugin {
           gravityPower: j.settings.gravityPower,
           gravityDir: j.settings.gravityDir
             ? [
-                j.settings.gravityDir.x,
-                j.settings.gravityDir.y,
-                j.settings.gravityDir.z,
-              ]
+              j.settings.gravityDir.x,
+              j.settings.gravityDir.y,
+              j.settings.gravityDir.z,
+            ]
             : [0, -1, 0],
           dragForce: j.settings.dragForce,
         })

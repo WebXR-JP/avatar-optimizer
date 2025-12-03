@@ -220,3 +220,65 @@
   text-align: right;
   font-family: monospace;
 }
+
+/* アトラス設定パネル */
+.vrm-canvas__atlas-panel {
+  position: absolute;
+  top: 70px;
+  right: 10px;
+  padding: 0.75rem 1rem;
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  border-radius: 6px;
+  z-index: 100;
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.vrm-canvas__atlas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  gap: 1rem;
+}
+
+.vrm-canvas__file-size {
+  font-size: 0.75rem;
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.vrm-canvas__atlas-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vrm-canvas__atlas-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.vrm-canvas__atlas-options select {
+  padding: 0.25rem 0.4rem;
+  background-color: #2a2a2a;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.vrm-canvas__atlas-options select:hover {
+  border-color: #777;
+}
+
+.vrm-canvas__atlas-options select:focus {
+  outline: none;
+  border-color: #0066cc;
+}

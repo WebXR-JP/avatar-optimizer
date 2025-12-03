@@ -5,6 +5,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
+import type { AtlasGenerationOptions } from '@xrift/avatar-optimizer'
 
 import './VRMCanvas.css'
 
@@ -124,6 +125,9 @@ interface VRMCanvasProps
   onShowCollidersChange: (show: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
+  atlasOptions: AtlasGenerationOptions
+  onAtlasOptionsChange: (options: AtlasGenerationOptions) => void
+  lastExportSize: number | null
 }
 
 /**
@@ -179,6 +183,9 @@ function VRMCanvas({
   onShowCollidersChange,
   onReloadExport,
   isReloading,
+  atlasOptions,
+  onAtlasOptionsChange,
+  lastExportSize,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -354,6 +361,101 @@ function VRMCanvas({
               />
               Show Colliders
             </label>
+          </div>
+
+          {/* アトラス解像度設定パネル */}
+          <div className="vrm-canvas__atlas-panel">
+            <div className="vrm-canvas__atlas-header">
+              <span>Atlas Resolution</span>
+              {lastExportSize !== null && (
+                <span className="vrm-canvas__file-size">
+                  Last export: {(lastExportSize / 1024 / 1024).toFixed(2)} MB
+                </span>
+              )}
+            </div>
+            <div className="vrm-canvas__atlas-options">
+              <label>
+                Default:
+                <select
+                  value={atlasOptions.defaultResolution ?? 2048}
+                  onChange={(e) => onAtlasOptionsChange({
+                    ...atlasOptions,
+                    defaultResolution: Number(e.target.value),
+                  })}
+                >
+                  <option value={512}>512</option>
+                  <option value={1024}>1024</option>
+                  <option value={2048}>2048</option>
+                  <option value={4096}>4096</option>
+                </select>
+              </label>
+              <label>
+                map:
+                <select
+                  value={atlasOptions.slotResolutions?.map ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const newSlots = { ...atlasOptions.slotResolutions }
+                    if (val === '') {
+                      delete newSlots.map
+                    } else {
+                      newSlots.map = Number(val)
+                    }
+                    onAtlasOptionsChange({ ...atlasOptions, slotResolutions: newSlots })
+                  }}
+                >
+                  <option value="">default</option>
+                  <option value={512}>512</option>
+                  <option value={1024}>1024</option>
+                  <option value={2048}>2048</option>
+                  <option value={4096}>4096</option>
+                </select>
+              </label>
+              <label>
+                normalMap:
+                <select
+                  value={atlasOptions.slotResolutions?.normalMap ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const newSlots = { ...atlasOptions.slotResolutions }
+                    if (val === '') {
+                      delete newSlots.normalMap
+                    } else {
+                      newSlots.normalMap = Number(val)
+                    }
+                    onAtlasOptionsChange({ ...atlasOptions, slotResolutions: newSlots })
+                  }}
+                >
+                  <option value="">default</option>
+                  <option value={512}>512</option>
+                  <option value={1024}>1024</option>
+                  <option value={2048}>2048</option>
+                  <option value={4096}>4096</option>
+                </select>
+              </label>
+              <label>
+                emissiveMap:
+                <select
+                  value={atlasOptions.slotResolutions?.emissiveMap ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const newSlots = { ...atlasOptions.slotResolutions }
+                    if (val === '') {
+                      delete newSlots.emissiveMap
+                    } else {
+                      newSlots.emissiveMap = Number(val)
+                    }
+                    onAtlasOptionsChange({ ...atlasOptions, slotResolutions: newSlots })
+                  }}
+                >
+                  <option value="">default</option>
+                  <option value={512}>512</option>
+                  <option value={1024}>1024</option>
+                  <option value={2048}>2048</option>
+                  <option value={4096}>4096</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           {/* 表情（モーフ）パネル */}

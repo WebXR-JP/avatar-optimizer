@@ -205,11 +205,11 @@ describe('MToonAtlas Roundtrip', () => {
         originalMaterials[0].parameterTexture?.atlasedTextures
       const originalTextureKeys = originalAtlasedTextures
         ? Object.keys(originalAtlasedTextures).filter(
-            (key) =>
-              originalAtlasedTextures[
+          (key) =>
+            originalAtlasedTextures[
                 key as keyof typeof originalAtlasedTextures
-              ] != null,
-          )
+            ] != null,
+        )
         : []
 
       const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
@@ -479,10 +479,10 @@ function captureMaterialState(
     alphaTest: material.alphaTest,
     parameterTexture: material.parameterTexture
       ? {
-          slotCount: material.parameterTexture.slotCount,
-          texelsPerSlot: material.parameterTexture.texelsPerSlot,
-          textureExists: !!material.parameterTexture.texture,
-        }
+        slotCount: material.parameterTexture.slotCount,
+        texelsPerSlot: material.parameterTexture.texelsPerSlot,
+        textureExists: !!material.parameterTexture.texture,
+      }
       : null,
     slotAttribute: material.slotAttribute,
   }
