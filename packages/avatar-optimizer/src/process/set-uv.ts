@@ -1,6 +1,6 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { Result } from 'neverthrow'
-import { BufferGeometry, Mesh, Object3D } from 'three'
+import { BufferAttribute, BufferGeometry, Mesh, Object3D } from 'three'
 import { OffsetScale, OptimizationError } from '../types'
 import { remapGeometryUVs } from '../util/mesh/uv'
 
@@ -53,11 +53,17 @@ export function applyPlacementsToGeometries(
       return
     }
 
-    // uvアトリビュートを共有している場合があるため、BufferGeometryをcloneすることで独立させている
-    // 無駄にattribute bufferが長くなっている可能性があるため効率化したい
-    const clonedGeometry = obj.geometry.clone()
-    obj.geometry.dispose()
-    obj.geometry = clonedGeometry
+    // UV属性のみを独立させる
+    // 以前は geometry.clone() で全属性をコピーしていたが、
+    // POSITION, NORMAL などの共有を維持することでエクスポートサイズを削減
+    const uvAttr = obj.geometry.getAttribute('uv')
+    if (uvAttr) {
+      // UV属性の配列をコピーして新しいBufferAttributeを作成
+      const newUvArray = new Float32Array(uvAttr.array.length)
+      newUvArray.set(uvAttr.array as Float32Array)
+      const newUvAttr = new BufferAttribute(newUvArray, uvAttr.itemSize, uvAttr.normalized)
+      obj.geometry.setAttribute('uv', newUvAttr)
+    }
 
     targets.set(obj.geometry, placement)
   })

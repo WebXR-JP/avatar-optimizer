@@ -60,6 +60,7 @@ export class MToonAtlasExporterPlugin
 
   /**
    * beforeParseでシーン内のMToonAtlasMaterialを収集し、テクスチャを処理
+   * また、スロット属性名をGLTFExporterが正しい名前でエクスポートするようにリネーム
    */
   public beforeParse(input: Object3D | Object3D[])
   {
@@ -90,6 +91,26 @@ export class MToonAtlasExporterPlugin
           if (mtoonMaterials.length > 0)
           {
             this.mtoonAtlasMeshes.set(obj, mtoonMaterials)
+
+            // スロット属性名をリネーム
+            // GLTFExporterは属性名を大文字化し_プレフィックスを付けるため、
+            // 'mtoon_material_slot' → '_MTOON_MATERIAL_SLOT' としてエクスポートされる
+            // これにより、addSlotAttributeで重複してデータを追加する必要がなくなる
+            const material = mtoonMaterials[0]
+            const originalAttrName = material.slotAttribute?.name || 'mtoonMaterialSlot'
+            // GLTFExporterは'foo' -> '_FOO'に変換するため、'mtoon_material_slot'を使用
+            const targetAttrName = 'mtoon_material_slot'
+
+            if (originalAttrName !== targetAttrName)
+            {
+              const attr = obj.geometry.getAttribute(originalAttrName)
+              if (attr)
+              {
+                // 元の属性は削除せず、新しい名前でも参照できるようにする
+                // これにより、他のコードが元の名前で参照しても動作する
+                obj.geometry.setAttribute(targetAttrName, attr)
+              }
+            }
 
             // テクスチャを事前に処理（非同期）
             for (const material of mtoonMaterials)
@@ -696,13 +717,14 @@ export class MToonAtlasExporterPlugin
     {
       primitive.material = materialIndex
 
-      // スロット属性を追加
-      const attributeName = material.slotAttribute?.name || 'mtoonMaterialSlot'
-      const attribute = mesh.geometry.getAttribute(attributeName)
-
-      if (attribute)
+      // スロット属性の確認
+      // beforeParseで属性名を'mtoon_material_slot'にリネーム済みなので、
+      // GLTFExporterが'_MTOON_MATERIAL_SLOT'として出力しているはず
+      // 既に存在する場合は何もしない（重複登録を防ぐ）
+      if (primitive.attributes['_MTOON_MATERIAL_SLOT'] === undefined)
       {
-        // processAccessorもafterParseでは使えない場合があるので直接処理
+        // フォールバック: 万が一GLTFExporterが出力していない場合のみ新規追加
+        const attributeName = 'mtoon_material_slot'
         this.addSlotAttribute(primitive, mesh, attributeName)
       }
     }
