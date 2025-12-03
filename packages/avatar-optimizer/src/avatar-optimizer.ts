@@ -57,6 +57,7 @@ export function optimizeModel(
       materials,
       patternMappings,
       packLayouts.packed,
+      options.atlas,
     )
 
     // アトラス画像をマテリアルにそれぞれアサインする

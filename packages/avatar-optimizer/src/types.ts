@@ -39,6 +39,11 @@ export interface OptimizeModelOptions {
    * Y軸周り180度回転を適用してモデルの向きを+Z前向きに変更
    */
   migrateVRM0ToVRM1?: boolean
+  /**
+   * アトラス生成オプション
+   * スロットごとの解像度指定などを行う
+   */
+  atlas?: AtlasGenerationOptions
 }
 
 /**
@@ -185,6 +190,28 @@ export const PARAMETER_LAYOUT: readonly ParameterLayout[] = [
   { id: 'uvAnimationScrollY', texel: 7, channels: ['a'] },
   { id: 'shadingShift', texel: 8, channels: ['r'] },
 ] as const
+
+/**
+ * スロットごとのアトラス解像度設定
+ * 指定されていないスロットはデフォルト値（2048）を使用
+ */
+export type SlotAtlasResolution = Partial<Record<MToonTextureSlot, number>>
+
+/**
+ * アトラス生成オプション
+ */
+export interface AtlasGenerationOptions {
+  /**
+   * デフォルトのアトラス解像度（各辺のピクセル数）
+   * @default 2048
+   */
+  defaultResolution?: number
+  /**
+   * スロットごとの解像度オーバーライド
+   * 例: { map: 2048, normalMap: 1024, emissiveMap: 512 }
+   */
+  slotResolutions?: SlotAtlasResolution
+}
 
 /**
  * エラー型 (全体)

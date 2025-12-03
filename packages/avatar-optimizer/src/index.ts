@@ -18,10 +18,12 @@ export type {
 
 // Root types
 export type {
+  AtlasGenerationOptions,
   AtlasTextureDescriptor,
   OptimizationError,
   OptimizationOptions,
   OptimizeModelOptions,
+  SlotAtlasResolution,
   TextureSlotInfo,
   ThreeVRMDocument,
 } from './types'

@@ -2,14 +2,30 @@ import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import { OptimizationError } from '..'
 import {
+  AtlasGenerationOptions,
   AtlasImageMap,
   MTOON_TEXTURE_SLOT_COLOR_SPACES,
   MTOON_TEXTURE_SLOTS,
+  MToonTextureSlot,
   OffsetScale,
   PatternMaterialMapping,
 } from '../types'
 import { composeImagesToAtlas } from '../util/texture/composite'
 import { ImageMatrixPair } from '../util/texture/types'
+
+/** デフォルトのアトラス解像度 */
+const DEFAULT_ATLAS_RESOLUTION = 2048
+
+/**
+ * スロットのアトラス解像度を取得
+ */
+function getSlotResolution(
+  slot: MToonTextureSlot,
+  options?: AtlasGenerationOptions,
+): number {
+  const defaultRes = options?.defaultResolution ?? DEFAULT_ATLAS_RESOLUTION
+  return options?.slotResolutions?.[slot] ?? defaultRes
+}
 
 /**
  * テクスチャ組み合わせパターンに基づいてアトラス画像を生成
@@ -18,12 +34,14 @@ import { ImageMatrixPair } from '../util/texture/types'
  * @param materials - 全マテリアル配列
  * @param patternMappings - パターンとマテリアルのマッピング
  * @param patternPlacements - パターンごとのUV変換行列
+ * @param options - アトラス生成オプション（スロットごとの解像度指定など）
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
 export function generateAtlasImagesFromPatterns(
   materials: MToonMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[],
+  options?: AtlasGenerationOptions,
 ): Result<AtlasImageMap, OptimizationError> {
   return safeTry(function* () {
     if (patternMappings.length !== patternPlacements.length) {
@@ -56,9 +74,10 @@ export function generateAtlasImagesFromPatterns(
         }
       }
 
+      const resolution = getSlotResolution(slot, options)
       const atlas = yield* composeImagesToAtlas(layers, {
-        width: 2048,
-        height: 2048,
+        width: resolution,
+        height: resolution,
         colorSpace: MTOON_TEXTURE_SLOT_COLOR_SPACES[slot],
       })
 
