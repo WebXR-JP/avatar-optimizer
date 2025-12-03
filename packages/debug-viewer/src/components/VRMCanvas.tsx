@@ -120,6 +120,8 @@ interface VRMCanvasProps
   onSpringBoneEnabledChange: (enabled: boolean) => void
   showBones: boolean
   onShowBonesChange: (show: boolean) => void
+  showColliders: boolean
+  onShowCollidersChange: (show: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
 }
@@ -173,6 +175,8 @@ function VRMCanvas({
   onSpringBoneEnabledChange,
   showBones,
   onShowBonesChange,
+  showColliders,
+  onShowCollidersChange,
   onReloadExport,
   isReloading,
 }: VRMCanvasProps)
@@ -207,7 +211,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -341,6 +345,14 @@ function VRMCanvas({
                 onChange={(e) => onShowBonesChange(e.target.checked)}
               />
               Show Bones
+            </label>
+            <label className="vrm-canvas__colliders-toggle">
+              <input
+                type="checkbox"
+                checked={showColliders}
+                onChange={(e) => onShowCollidersChange(e.target.checked)}
+              />
+              Show Colliders
             </label>
           </div>
 

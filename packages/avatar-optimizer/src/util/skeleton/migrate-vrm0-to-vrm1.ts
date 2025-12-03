@@ -12,14 +12,16 @@ import {
 import { OptimizationError } from '../../types'
 
 /**
- * マイグレーションのデバッグオプション
+ * マイグレーションオプション
  */
-export interface MigrationDebugOptions {
-  /** 頂点回転をスキップ */
+export interface MigrationOptions {
+  /** Humanoid Boneのセット（これらのボーンのみ回転をidentityにする） */
+  humanoidBones?: Set<Bone>
+  /** 頂点回転をスキップ（デバッグ用） */
   skipVertexRotation?: boolean
-  /** ボーン位置回転をスキップ */
+  /** ボーン位置回転をスキップ（デバッグ用） */
   skipBoneTransform?: boolean
-  /** bindMatrix更新をスキップ */
+  /** bindMatrix更新をスキップ（デバッグ用） */
   skipBindMatrix?: boolean
 }
 
@@ -30,17 +32,18 @@ export interface MigrationDebugOptions {
  * 処理内容:
  * 1. 全メッシュの頂点位置をY軸180度回転
  * 2. 各ボーンのワールド座標を記録し、Y軸180度回転
- * 3. 全ボーンのrotationをidentityにリセット（VRM1.0仕様）
+ * 3. Humanoid Boneのrotationをidentityにリセット（VRM1.0仕様）
+ *    - 非Humanoid Bone（髪、服など）は相対的な回転を保持
  * 4. ルートからツリーを下りながらローカル位置を再計算
  * 5. InverseBoneMatrix（boneInverses）を再計算
  *
  * @param rootNode - VRMモデルのルートノード（VRM.scene）
- * @param debug - デバッグオプション
+ * @param options - マイグレーションオプション
  * @returns 変換結果
  */
 export function migrateSkeletonVRM0ToVRM1(
   rootNode: Object3D,
-  debug: MigrationDebugOptions = {},
+  options: MigrationOptions = {},
 ): Result<void, OptimizationError> {
   return safeTry(function* () {
     // 1. 全SkinnedMeshを収集
@@ -62,7 +65,7 @@ export function migrateSkeletonVRM0ToVRM1(
     // 同じ BufferAttribute を共有するメッシュが複数回処理されないようにするため、
     // 処理済み position 属性を追跡
     // 注意: VRMでは geometry は異なるが position 属性は共有されることがある
-    if (!debug.skipVertexRotation) {
+    if (!options.skipVertexRotation) {
       const processedPositionAttrs = new Set<BufferAttribute>()
       for (const mesh of skinnedMeshes) {
         const positionAttr = mesh.geometry.getAttribute('position')
@@ -76,7 +79,7 @@ export function migrateSkeletonVRM0ToVRM1(
     // 3. 全ボーンのワールド座標を記録（重複排除）
     // 複数のスケルトンが同じボーンを共有している場合があるため、
     // 先にすべてのボーンの座標を記録してから変換を適用する
-    if (!debug.skipBoneTransform) {
+    if (!options.skipBoneTransform) {
       const allBonePositions = new Map<Bone, Vector3>()
       const processedSkeletons = new Set<Skeleton>()
 
@@ -119,7 +122,7 @@ export function migrateSkeletonVRM0ToVRM1(
 
       // 7. 各ルートボーンからボーン変換を再構築
       for (const rootBone of allRootBones) {
-        rebuildBoneTransformsPositionOnly(rootBone, rotatedPositions)
+        rebuildBoneTransforms(rootBone, rotatedPositions, options.humanoidBones)
       }
 
       // 8. すべてのスケルトンのInverseBoneMatrixを再計算
@@ -129,7 +132,7 @@ export function migrateSkeletonVRM0ToVRM1(
     }
 
     // 9. bindMatrixの更新
-    if (!debug.skipBindMatrix) {
+    if (!options.skipBindMatrix) {
       for (const mesh of skinnedMeshes) {
         mesh.skeleton.calculateInverses()
       }
@@ -260,22 +263,30 @@ export function findRootBone(skeleton: Skeleton): Bone | null {
 }
 
 /**
- * ルートからツリーを下りながらボーンのローカル位置を再計算
- * VRM1.0仕様に準拠するため、全ボーンのrotationをidentityにリセット
- * ボーン階層はpositionのみで構築
+ * ルートからツリーを下りながらボーンのローカル変換を再計算
  *
- * rotatedPositionsに含まれないボーン（SpringBone専用ボーンなど）も
- * 現在のワールド位置を基準にY軸180度回転して処理
+ * VRM1.0仕様では Humanoid Bone のみ rotation が identity である必要がある。
+ * 非Humanoid Bone（髪、服、SpringBone制御のボーンなど）は相対的な回転を保持する。
+ *
+ * @param rootBone - ルートボーン
+ * @param rotatedPositions - Y軸180度回転後のワールド座標
+ * @param humanoidBones - Humanoid Boneのセット（これらのみidentityにする）
  */
-export function rebuildBoneTransformsPositionOnly(
+export function rebuildBoneTransforms(
   rootBone: Bone,
   rotatedPositions: Map<Bone, Vector3>,
+  humanoidBones?: Set<Bone>,
 ): void {
-  // identityのQuaternion
   const identityQuat = new Quaternion()
   const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
+  const rotationQuat = new Quaternion().setFromRotationMatrix(rotationMatrix)
 
-  function processBone(bone: Bone, parentWorldPos: Vector3): void {
+  /**
+   * ボーンを処理する再帰関数
+   * @param bone - 処理対象のボーン
+   * @param parentWorldMatrix - 親のワールド行列
+   */
+  function processBone(bone: Bone, parentWorldMatrix: Matrix4): void {
     let targetWorldPos = rotatedPositions.get(bone)
 
     // rotatedPositionsに含まれないボーン（SpringBone専用ボーンなど）は
@@ -287,35 +298,70 @@ export function rebuildBoneTransformsPositionOnly(
       targetWorldPos = currentWorldPos.applyMatrix4(rotationMatrix)
     }
 
-    // VRM1.0仕様: rotationをidentityにリセット
-    bone.quaternion.copy(identityQuat)
+    // 親のワールド行列の逆行列を計算
+    const parentWorldMatrixInverse = parentWorldMatrix.clone().invert()
 
-    // ローカル位置 = ワールド位置 - 親のワールド位置
-    // （rotationがidentityなので、単純な差分で計算できる）
-    const localPos = targetWorldPos.clone().sub(parentWorldPos)
-    bone.position.copy(localPos)
+    // Humanoid Boneかどうかで処理を分岐
+    const isHumanoidBone = humanoidBones?.has(bone) ?? true
+
+    if (isHumanoidBone) {
+      // Humanoid Bone: VRM1.0仕様に従い rotation を identity にする
+      bone.quaternion.copy(identityQuat)
+
+      // ローカル位置 = ワールド位置を親のローカル座標系に変換
+      // 親の rotation が identity なので、単純な差分で計算できる
+      const parentWorldPos = new Vector3().setFromMatrixPosition(
+        parentWorldMatrix,
+      )
+      const localPos = targetWorldPos.clone().sub(parentWorldPos)
+      bone.position.copy(localPos)
+    } else {
+      // 非Humanoid Bone: 相対的な回転を保持
+      // マイグレーション前の rotation を Y軸180度回転で調整
+      // VRM0のローカル座標系はY軸180度回転しているため、
+      // rotation も同様に調整する必要がある
+
+      // 現在の回転を取得（マイグレーション前のVRM0での回転）
+      const originalLocalQuat = bone.quaternion.clone()
+
+      // VRM0→VRM1でローカル座標系がY軸180度回転するため、
+      // 元の回転を新しい座標系に変換: q' = R * q * R^-1
+      // ここで R は Y軸180度回転
+      const newLocalQuat = rotationQuat
+        .clone()
+        .multiply(originalLocalQuat)
+        .multiply(rotationQuat.clone().invert())
+      bone.quaternion.copy(newLocalQuat)
+
+      // ローカル位置を計算
+      // ワールド位置から親のワールド行列の逆行列を適用してローカル位置を求める
+      const localPos = targetWorldPos
+        .clone()
+        .applyMatrix4(parentWorldMatrixInverse)
+      bone.position.copy(localPos)
+    }
 
     // 行列を更新
     bone.updateMatrix()
     bone.updateMatrixWorld(true)
 
-    // 子ボーンを再帰処理
+    // 子ボーンを再帰処理（更新後のワールド行列を渡す）
     for (const child of bone.children) {
       if (child instanceof Bone) {
-        processBone(child, targetWorldPos)
+        processBone(child, bone.matrixWorld)
       }
     }
   }
 
   // ルートボーンから開始
-  // 親のワールド位置を取得（親がない場合は原点）
-  const parentWorldPos = new Vector3()
+  // 親のワールド行列を取得（親がない場合は単位行列）
+  let parentWorldMatrix = new Matrix4()
   if (rootBone.parent) {
     rootBone.parent.updateMatrixWorld(true)
-    rootBone.parent.getWorldPosition(parentWorldPos)
+    parentWorldMatrix = rootBone.parent.matrixWorld.clone()
   }
 
-  processBone(rootBone, parentWorldPos)
+  processBone(rootBone, parentWorldMatrix)
 }
 
 /**

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findRootBone,
   migrateSkeletonVRM0ToVRM1,
-  rebuildBoneTransformsPositionOnly,
+  rebuildBoneTransforms,
   recordBoneWorldPositions,
   rotateBonePositions,
   rotateVertexPositionsAroundYAxis,
@@ -24,27 +24,27 @@ function createSimpleSkinnedMesh(): {
   mesh: SkinnedMesh
   skeleton: Skeleton
   rootBone: Bone
-  } {
+} {
   // ジオメトリ作成（三角形1つ）
   const geometry = new BufferGeometry()
   const positions = new Float32Array([
-    1, 0, 0, // vertex 0: X軸正方向
-    0, 1, 0, // vertex 1: Y軸正方向
-    0, 0, 1, // vertex 2: Z軸正方向
+    1,
+    0,
+    0, // vertex 0: X軸正方向
+    0,
+    1,
+    0, // vertex 1: Y軸正方向
+    0,
+    0,
+    1, // vertex 2: Z軸正方向
   ])
   geometry.setAttribute('position', new BufferAttribute(positions, 3))
 
   // スキンウェイトとインデックス
   const skinWeights = new Float32Array([
-    1.0, 0.0, 0.0, 0.0,
-    1.0, 0.0, 0.0, 0.0,
-    1.0, 0.0, 0.0, 0.0,
+    1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
   ])
-  const skinIndices = new Float32Array([
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-  ])
+  const skinIndices = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   geometry.setAttribute('skinWeight', new BufferAttribute(skinWeights, 4))
   geometry.setAttribute('skinIndex', new BufferAttribute(skinIndices, 4))
 
@@ -172,8 +172,8 @@ describe('skeleton-migration', () => {
     })
   })
 
-  describe('rebuildBoneTransformsPositionOnly', () => {
-    it('should rebuild bone positions and reset rotation to identity (VRM1.0 spec)', () => {
+  describe('rebuildBoneTransforms', () => {
+    it('should rebuild bone positions and reset rotation to identity for humanoid bones', () => {
       const rootBone = new Bone()
       rootBone.name = 'root'
       rootBone.position.set(1, 0, 0)
@@ -192,8 +192,8 @@ describe('skeleton-migration', () => {
       rotatedPositions.set(rootBone, new Vector3(-1, 0, 0))
       rotatedPositions.set(childBone, new Vector3(-1, 1, 0))
 
-      // 再構築
-      rebuildBoneTransformsPositionOnly(rootBone, rotatedPositions)
+      // 再構築（humanoidBonesを渡さない場合、全てのボーンがhumanoidとして扱われる）
+      rebuildBoneTransforms(rootBone, rotatedPositions)
 
       // 位置が更新されている
       expect(rootBone.position.x).toBeCloseTo(-1)
@@ -214,6 +214,45 @@ describe('skeleton-migration', () => {
       expect(childBone.position.x).toBeCloseTo(0)
       expect(childBone.position.y).toBeCloseTo(1)
       expect(childBone.position.z).toBeCloseTo(0)
+    })
+
+    it('should preserve rotation for non-humanoid bones', () => {
+      const rootBone = new Bone()
+      rootBone.name = 'hips' // Humanoid bone
+      rootBone.position.set(0, 1, 0)
+
+      const hairBone = new Bone()
+      hairBone.name = 'hair' // Non-humanoid bone
+      hairBone.position.set(0, 0.1, 0)
+      hairBone.rotation.set(Math.PI / 6, 0, 0) // X軸30度回転
+      rootBone.add(hairBone)
+
+      rootBone.updateMatrixWorld(true)
+
+      // 位置を記録
+      const rotatedPositions = new Map<Bone, Vector3>()
+      rotatedPositions.set(rootBone, new Vector3(0, 1, 0))
+      rotatedPositions.set(hairBone, new Vector3(0, 1.1, 0))
+
+      // Humanoid boneのセット（hipsのみ）
+      const humanoidBones = new Set<Bone>([rootBone])
+
+      // 再構築
+      rebuildBoneTransforms(rootBone, rotatedPositions, humanoidBones)
+
+      // Humanoid bone (hips) は回転がidentity
+      expect(rootBone.rotation.x).toBeCloseTo(0)
+      expect(rootBone.rotation.y).toBeCloseTo(0)
+      expect(rootBone.rotation.z).toBeCloseTo(0)
+
+      // Non-humanoid bone (hair) は回転を保持（Y軸180度回転で調整される）
+      // 元の回転がX軸30度、Y軸180度回転後もX軸30度を維持
+      // ただしY軸180度回転の影響で、回転の表現が変わる可能性がある
+      // 重要なのはワールド座標が正しいこと
+      hairBone.updateMatrixWorld(true)
+      const hairWorldPos = new Vector3()
+      hairBone.getWorldPosition(hairWorldPos)
+      expect(hairWorldPos.y).toBeCloseTo(1.1, 4)
     })
   })
 
@@ -258,14 +297,31 @@ describe('skeleton-migration', () => {
       hair2EndBone.position.set(-0.05, -0.15, -0.1) // 下方に垂れる
       hair2Bone.add(hair2EndBone)
 
-      const bones = [rootBone, spineBone, headBone, hair1Bone, hair1EndBone, hair2Bone, hair2EndBone]
+      const bones = [
+        rootBone,
+        spineBone,
+        headBone,
+        hair1Bone,
+        hair1EndBone,
+        hair2Bone,
+        hair2EndBone,
+      ]
       const skeleton = new Skeleton(bones)
 
       // ジオメトリ作成
       const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
-      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(12).fill(0), 4))
-      geometry.setAttribute('skinIndex', new BufferAttribute(new Float32Array(12).fill(0), 4))
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
 
       const mesh = new SkinnedMesh(geometry)
       mesh.add(rootBone)
@@ -295,9 +351,21 @@ describe('skeleton-migration', () => {
         const beforePos = beforePositions.get(bone.name)!
 
         // Y軸180度回転後の期待値：X -> -X, Z -> -Z, Y -> Y
-        expect(worldPos.x).toBeCloseTo(-beforePos.x, 5, `${bone.name} X座標が正しく回転されていない`)
-        expect(worldPos.y).toBeCloseTo(beforePos.y, 5, `${bone.name} Y座標が変わってしまっている`)
-        expect(worldPos.z).toBeCloseTo(-beforePos.z, 5, `${bone.name} Z座標が正しく回転されていない`)
+        expect(worldPos.x).toBeCloseTo(
+          -beforePos.x,
+          5,
+          `${bone.name} X座標が正しく回転されていない`,
+        )
+        expect(worldPos.y).toBeCloseTo(
+          beforePos.y,
+          5,
+          `${bone.name} Y座標が変わってしまっている`,
+        )
+        expect(worldPos.z).toBeCloseTo(
+          -beforePos.z,
+          5,
+          `${bone.name} Z座標が正しく回転されていない`,
+        )
       }
     })
 
@@ -329,9 +397,18 @@ describe('skeleton-migration', () => {
       const skeleton = new Skeleton(bones)
 
       const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
-      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(12).fill(0), 4))
-      geometry.setAttribute('skinIndex', new BufferAttribute(new Float32Array(12).fill(0), 4))
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
 
       const mesh = new SkinnedMesh(geometry)
       mesh.add(rootBone)
@@ -361,9 +438,21 @@ describe('skeleton-migration', () => {
         const beforePos = beforePositions.get(bone.name)!
 
         // Y軸180度回転後の期待値
-        expect(worldPos.x).toBeCloseTo(-beforePos.x, 5, `${bone.name} X座標が正しく回転されていない`)
-        expect(worldPos.y).toBeCloseTo(beforePos.y, 5, `${bone.name} Y座標が変わってしまっている`)
-        expect(worldPos.z).toBeCloseTo(-beforePos.z, 5, `${bone.name} Z座標が正しく回転されていない`)
+        expect(worldPos.x).toBeCloseTo(
+          -beforePos.x,
+          5,
+          `${bone.name} X座標が正しく回転されていない`,
+        )
+        expect(worldPos.y).toBeCloseTo(
+          beforePos.y,
+          5,
+          `${bone.name} Y座標が変わってしまっている`,
+        )
+        expect(worldPos.z).toBeCloseTo(
+          -beforePos.z,
+          5,
+          `${bone.name} Z座標が正しく回転されていない`,
+        )
       }
     })
 
@@ -465,6 +554,195 @@ describe('skeleton-migration', () => {
       // mesh2: (2, 0, 0) -> (-2, 0, 0)
       expect(pos2.getX(0)).toBeCloseTo(-2)
       expect(pos2.getZ(0)).toBeCloseTo(0)
+    })
+
+    it('should set humanoid bone quaternion to identity', () => {
+      // Humanoid Bone: hips, spine, head
+      // Non-humanoid Bone: hair
+      const hipsBone = new Bone()
+      hipsBone.name = 'hips'
+      hipsBone.position.set(0, 1, 0)
+      hipsBone.rotation.set(0.1, 0.2, 0.3) // 初期回転あり
+
+      const spineBone = new Bone()
+      spineBone.name = 'spine'
+      spineBone.position.set(0, 0.3, 0)
+      spineBone.rotation.set(0.05, 0.1, 0) // 初期回転あり
+      hipsBone.add(spineBone)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.4, 0)
+      headBone.rotation.set(0, 0, 0.1) // 初期回転あり
+      spineBone.add(headBone)
+
+      // 髪の毛（非Humanoid）
+      const hairBone = new Bone()
+      hairBone.name = 'hair'
+      hairBone.position.set(0, 0.1, -0.1)
+      hairBone.rotation.set(0.3, 0, 0) // X軸回転
+      headBone.add(hairBone)
+
+      const bones = [hipsBone, spineBone, headBone, hairBone]
+      const skeleton = new Skeleton(bones)
+
+      // ジオメトリ作成
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(hipsBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // Humanoid Boneのセットを作成
+      const humanoidBones = new Set<Bone>([hipsBone, spineBone, headBone])
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, { humanoidBones })
+      expect(result.isOk()).toBe(true)
+
+      // Humanoid Boneの回転がidentityになっていることを確認
+      const identityTolerance = 1e-6
+
+      // hips
+      expect(hipsBone.quaternion.x).toBeCloseTo(0, 5)
+      expect(hipsBone.quaternion.y).toBeCloseTo(0, 5)
+      expect(hipsBone.quaternion.z).toBeCloseTo(0, 5)
+      expect(hipsBone.quaternion.w).toBeCloseTo(1, 5)
+
+      // spine
+      expect(spineBone.quaternion.x).toBeCloseTo(0, 5)
+      expect(spineBone.quaternion.y).toBeCloseTo(0, 5)
+      expect(spineBone.quaternion.z).toBeCloseTo(0, 5)
+      expect(spineBone.quaternion.w).toBeCloseTo(1, 5)
+
+      // head
+      expect(headBone.quaternion.x).toBeCloseTo(0, 5)
+      expect(headBone.quaternion.y).toBeCloseTo(0, 5)
+      expect(headBone.quaternion.z).toBeCloseTo(0, 5)
+      expect(headBone.quaternion.w).toBeCloseTo(1, 5)
+
+      // 非Humanoid Bone（hair）は回転を保持（ただし座標系変換で調整される）
+      // quaternionがidentityではないことを確認
+      const hairQuatLengthSq =
+        hairBone.quaternion.x ** 2 +
+        hairBone.quaternion.y ** 2 +
+        hairBone.quaternion.z ** 2
+      // x, y, zのいずれかが0でなければ回転がある
+      expect(hairQuatLengthSq).toBeGreaterThan(identityTolerance)
+    })
+
+    it('should preserve world positions for non-humanoid bones with rotation', () => {
+      // Humanoid Bone: hips, head
+      // Non-humanoid Bone: hair（回転あり）
+      const hipsBone = new Bone()
+      hipsBone.name = 'hips'
+      hipsBone.position.set(0, 1, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      hipsBone.add(headBone)
+
+      // 髪の毛（非Humanoid、X軸周りに30度回転）
+      const hairBone = new Bone()
+      hairBone.name = 'hair'
+      hairBone.position.set(0, 0.1, -0.1)
+      hairBone.rotation.set(Math.PI / 6, 0, 0)
+      headBone.add(hairBone)
+
+      // 髪の先端
+      const hairEndBone = new Bone()
+      hairEndBone.name = 'hair_end'
+      hairEndBone.position.set(0, -0.15, 0)
+      hairBone.add(hairEndBone)
+
+      const bones = [hipsBone, headBone, hairBone, hairEndBone]
+      const skeleton = new Skeleton(bones)
+
+      // ジオメトリ作成
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(hipsBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      hipsBone.updateMatrixWorld(true)
+      const beforePositions = new Map<string, Vector3>()
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        beforePositions.set(bone.name, worldPos.clone())
+      }
+
+      // Humanoid Boneのセットを作成
+      const humanoidBones = new Set<Bone>([hipsBone, headBone])
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, { humanoidBones })
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後のワールド座標を確認
+      hipsBone.updateMatrixWorld(true)
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const beforePos = beforePositions.get(bone.name)!
+
+        // Y軸180度回転後の期待値：X -> -X, Z -> -Z, Y -> Y
+        expect(worldPos.x).toBeCloseTo(
+          -beforePos.x,
+          4,
+          `${bone.name} X座標が正しく回転されていない`,
+        )
+        expect(worldPos.y).toBeCloseTo(
+          beforePos.y,
+          4,
+          `${bone.name} Y座標が変わってしまっている`,
+        )
+        expect(worldPos.z).toBeCloseTo(
+          -beforePos.z,
+          4,
+          `${bone.name} Z座標が正しく回転されていない`,
+        )
+      }
+
+      // 非Humanoid Boneが回転を保持していることを確認
+      const hairQuatLengthSq =
+        hairBone.quaternion.x ** 2 +
+        hairBone.quaternion.y ** 2 +
+        hairBone.quaternion.z ** 2
+      expect(hairQuatLengthSq).toBeGreaterThan(1e-6)
     })
   })
 })

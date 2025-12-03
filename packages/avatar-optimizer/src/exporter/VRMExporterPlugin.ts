@@ -2,36 +2,30 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { Bone, Object3D, Vector3 } from 'three'
 
-export class VRMExporterPlugin
-{
+export class VRMExporterPlugin {
   public readonly name = 'VRMC_vrm'
   private writer: any
   private vrm: VRM | null = null
   // 動的に作成されたtailノードを追跡（エクスポート後にクリーンアップするため）
   private createdTailNodes: Bone[] = []
 
-  constructor(writer: any)
-  {
+  constructor(writer: any) {
     this.writer = writer
   }
 
-  public setVRM(vrm: VRM)
-  {
+  public setVRM(vrm: VRM) {
     this.vrm = vrm
   }
 
-  public beforeParse(input: Object3D | Object3D[])
-  {
+  public beforeParse(input: Object3D | Object3D[]) {
     const root = Array.isArray(input) ? input[0] : input
     if (!root) return
 
     // Find VRM instance in userData
     // This assumes the input object or its children have userData.vrm set
     // which is common when loading via VRMLoaderPlugin
-    root.traverse((obj: any) =>
-    {
-      if (obj.userData && obj.userData.vrm && !this.vrm)
-      {
+    root.traverse((obj: any) => {
+      if (obj.userData && obj.userData.vrm && !this.vrm) {
         this.vrm = obj.userData.vrm as VRM
       }
     })
@@ -46,8 +40,7 @@ export class VRMExporterPlugin
    * SpringBone末端ジョイントに仮想tailノードを作成
    * three-vrmと同様に、ボーン方向に7cmのオフセットを持つ仮想ノードを追加
    */
-  private createVirtualTailNodes(): void
-  {
+  private createVirtualTailNodes(): void {
     if (!this.vrm?.springBoneManager) return
 
     const springBoneManager = this.vrm.springBoneManager
@@ -56,14 +49,12 @@ export class VRMExporterPlugin
 
     // ジョイントをボーンでマッピング
     const jointsByBone = new Map<any, any>()
-    joints.forEach((joint: any) =>
-    {
+    joints.forEach((joint: any) => {
       jointsByBone.set(joint.bone, joint)
     })
 
     // 末端ジョイント（childを持たないジョイント）を見つける
-    joints.forEach((joint: any) =>
-    {
+    joints.forEach((joint: any) => {
       const bone = joint.bone
       if (!bone) return
 
@@ -73,8 +64,7 @@ export class VRMExporterPlugin
         (child: any) => child.type === 'Bone' || child.isBone,
       )
 
-      if (!hasJointChild && !hasBoneChild)
-      {
+      if (!hasJointChild && !hasBoneChild) {
         // 仮想tailノードを作成
         const tailBone = new Bone()
         tailBone.name = `${bone.name}_tail`
@@ -82,11 +72,9 @@ export class VRMExporterPlugin
         // three-vrmと同様のロジック: ボーン方向に7cmオフセット
         // bone.positionを正規化して0.07を掛ける
         const direction = new Vector3().copy(bone.position)
-        if (direction.lengthSq() > 0)
-        {
+        if (direction.lengthSq() > 0) {
           direction.normalize().multiplyScalar(0.07)
-        } else
-        {
+        } else {
           // positionがゼロの場合はY軸方向に7cm
           direction.set(0, 0.07, 0)
         }
@@ -104,22 +92,17 @@ export class VRMExporterPlugin
   /**
    * エクスポート後に作成した仮想tailノードをクリーンアップ
    */
-  public cleanupTailNodes(): void
-  {
-    for (const tailNode of this.createdTailNodes)
-    {
-      if (tailNode.parent)
-      {
+  public cleanupTailNodes(): void {
+    for (const tailNode of this.createdTailNodes) {
+      if (tailNode.parent) {
         tailNode.parent.remove(tailNode)
       }
     }
     this.createdTailNodes = []
   }
 
-  public afterParse(_input: any)
-  {
-    if (!this.vrm)
-    {
+  public afterParse(_input: any) {
+    if (!this.vrm) {
       return
     }
 
@@ -139,25 +122,21 @@ export class VRMExporterPlugin
     }
 
     json.extensionsUsed = json.extensionsUsed || []
-    if (!json.extensionsUsed.includes('VRMC_vrm'))
-    {
+    if (!json.extensionsUsed.includes('VRMC_vrm')) {
       json.extensionsUsed.push('VRMC_vrm')
     }
 
     // SpringBone拡張をエクスポート
     const springBoneExtension = this.exportSpringBone(vrm)
-    if (springBoneExtension)
-    {
+    if (springBoneExtension) {
       json.extensions.VRMC_springBone = springBoneExtension
-      if (!json.extensionsUsed.includes('VRMC_springBone'))
-      {
+      if (!json.extensionsUsed.includes('VRMC_springBone')) {
         json.extensionsUsed.push('VRMC_springBone')
       }
     }
   }
 
-  private exportMeta(vrm: VRM)
-  {
+  private exportMeta(vrm: VRM) {
     if (!vrm.meta) return undefined
 
     const meta = vrm.meta as any // Cast to any to handle both VRM 0.0 and 1.0 meta types
@@ -167,8 +146,7 @@ export class VRMExporterPlugin
 
     // VRM 0.0のライセンス名をVRM 1.0のライセンスURLに変換
     let licenseUrl = meta.licenseUrl
-    if (!licenseUrl && meta.licenseName)
-    {
+    if (!licenseUrl && meta.licenseName) {
       // VRM 0.0のライセンス名からVRM 1.0のURLへマッピング
       const licenseMapping: Record<string, string> = {
         Redistribution_Prohibited: 'https://vrm.dev/licenses/1.0/',
@@ -181,12 +159,12 @@ export class VRMExporterPlugin
         CC_BY_NC_ND: 'https://creativecommons.org/licenses/by-nc-nd/4.0/',
         Other: 'https://vrm.dev/licenses/1.0/',
       }
-      licenseUrl = licenseMapping[meta.licenseName] ?? 'https://vrm.dev/licenses/1.0/'
+      licenseUrl =
+        licenseMapping[meta.licenseName] ?? 'https://vrm.dev/licenses/1.0/'
     }
 
     // licenseUrlが未定義の場合はデフォルトを設定
-    if (!licenseUrl)
-    {
+    if (!licenseUrl) {
       licenseUrl = 'https://vrm.dev/licenses/1.0/'
     }
 
@@ -207,7 +185,8 @@ export class VRMExporterPlugin
       allowExcessivelyViolentUsage: meta.allowExcessivelyViolentUsage ?? false,
       allowExcessivelySexualUsage: meta.allowExcessivelySexualUsage ?? false,
       commercialUsage: meta.commercialUsage ?? 'personalNonProfit',
-      allowPoliticalOrReligiousUsage: meta.allowPoliticalOrReligiousUsage ?? false,
+      allowPoliticalOrReligiousUsage:
+        meta.allowPoliticalOrReligiousUsage ?? false,
       allowAntisocialOrHateUsage: meta.allowAntisocialOrHateUsage ?? false,
       creditNotation: meta.creditNotation ?? 'required',
       allowRedistribution: meta.allowRedistribution ?? false,
@@ -215,17 +194,14 @@ export class VRMExporterPlugin
     }
   }
 
-  private exportHumanoid(vrm: VRM)
-  {
+  private exportHumanoid(vrm: VRM) {
     if (!vrm.humanoid) return undefined
 
     const humanBones: any = {}
 
     // Iterate over all possible human bone names
-    Object.entries(vrm.humanoid.humanBones).forEach(([name, bone]) =>
-    {
-      if (bone && bone.node)
-      {
+    Object.entries(vrm.humanoid.humanBones).forEach(([name, bone]) => {
+      if (bone && bone.node) {
         // Find the node index in the exported GLTF
         // The writer should have a map of Object3D to node index
         // However, standard GLTFExporter doesn't expose this easily in public API
@@ -239,8 +215,7 @@ export class VRMExporterPlugin
         // We can use writer.nodeMap if it exists (it's a Map<Object3D, number>)
         // In Three.js GLTFExporter, it uses a Map called `nodeMap`.
         const nodeIndex = this.writer.nodeMap.get(bone.node)
-        if (nodeIndex !== undefined)
-        {
+        if (nodeIndex !== undefined) {
           humanBones[name] = { node: nodeIndex }
         }
       }
@@ -251,50 +226,61 @@ export class VRMExporterPlugin
     }
   }
 
-  private exportExpressions(vrm: VRM)
-  {
+  private exportExpressions(vrm: VRM) {
     if (!vrm.expressionManager) return undefined
 
     // VRM 1.0 の preset 表情名リスト
     const presetNames = new Set([
-      'happy', 'angry', 'sad', 'relaxed', 'surprised',
-      'aa', 'ih', 'ou', 'ee', 'oh',
-      'blink', 'blinkLeft', 'blinkRight',
-      'lookUp', 'lookDown', 'lookLeft', 'lookRight',
+      'happy',
+      'angry',
+      'sad',
+      'relaxed',
+      'surprised',
+      'aa',
+      'ih',
+      'ou',
+      'ee',
+      'oh',
+      'blink',
+      'blinkLeft',
+      'blinkRight',
+      'lookUp',
+      'lookDown',
+      'lookLeft',
+      'lookRight',
       'neutral',
     ])
 
     const preset: any = {}
     const custom: any = {}
 
-    if (vrm.expressionManager.expressions)
-    {
-      vrm.expressionManager.expressions.forEach((expression) =>
-      {
+    if (vrm.expressionManager.expressions) {
+      vrm.expressionManager.expressions.forEach((expression) => {
         const expr = expression as any // Cast to access binds
         const exprDef: any = {}
 
         // isBinary, overrideBlink などはデフォルト値(false/none)でなければ出力
         if (expr.isBinary) exprDef.isBinary = expr.isBinary
-        if (expr.overrideBlink && expr.overrideBlink !== 'none') exprDef.overrideBlink = expr.overrideBlink
-        if (expr.overrideLookAt && expr.overrideLookAt !== 'none') exprDef.overrideLookAt = expr.overrideLookAt
-        if (expr.overrideMouth && expr.overrideMouth !== 'none') exprDef.overrideMouth = expr.overrideMouth
+        if (expr.overrideBlink && expr.overrideBlink !== 'none')
+          exprDef.overrideBlink = expr.overrideBlink
+        if (expr.overrideLookAt && expr.overrideLookAt !== 'none')
+          exprDef.overrideLookAt = expr.overrideLookAt
+        if (expr.overrideMouth && expr.overrideMouth !== 'none')
+          exprDef.overrideMouth = expr.overrideMouth
 
         // three-vrm では _binds に VRMExpressionMorphTargetBind が格納されている
         const binds = expr._binds || expr.binds || []
-        const morphTargetBinds = binds.filter((b: any) => b.type === 'morphTarget' || b.primitives)
-        if (morphTargetBinds.length > 0)
-        {
+        const morphTargetBinds = binds.filter(
+          (b: any) => b.type === 'morphTarget' || b.primitives,
+        )
+        if (morphTargetBinds.length > 0) {
           // 各 bind の primitives すべてに対してエントリを作成
           const allBinds: any[] = []
-          morphTargetBinds.forEach((bind: any) =>
-          {
+          morphTargetBinds.forEach((bind: any) => {
             const primitives = bind.primitives || []
-            primitives.forEach((mesh: any) =>
-            {
+            primitives.forEach((mesh: any) => {
               const nodeIndex = this.writer.nodeMap.get(mesh)
-              if (nodeIndex !== undefined)
-              {
+              if (nodeIndex !== undefined) {
                 allBinds.push({
                   node: nodeIndex,
                   index: bind.index,
@@ -304,17 +290,14 @@ export class VRMExporterPlugin
             })
           })
 
-          if (allBinds.length > 0)
-          {
+          if (allBinds.length > 0) {
             exprDef.morphTargetBinds = allBinds
           }
         }
 
-        if (expr.materialColorBinds && expr.materialColorBinds.length > 0)
-        {
+        if (expr.materialColorBinds && expr.materialColorBinds.length > 0) {
           exprDef.materialColorBinds = expr.materialColorBinds.map(
-            (bind: any) =>
-            {
+            (bind: any) => {
               const materialIndex = this.writer.processMaterial(bind.material)
               return {
                 material: materialIndex,
@@ -328,11 +311,9 @@ export class VRMExporterPlugin
         if (
           expr.textureTransformBinds &&
           expr.textureTransformBinds.length > 0
-        )
-        {
+        ) {
           exprDef.textureTransformBinds = expr.textureTransformBinds.map(
-            (bind: any) =>
-            {
+            (bind: any) => {
               const materialIndex = this.writer.processMaterial(bind.material)
               return {
                 material: materialIndex,
@@ -345,26 +326,22 @@ export class VRMExporterPlugin
 
         // preset か custom かを判定して振り分け
         const name = expr.expressionName
-        if (presetNames.has(name))
-        {
+        if (presetNames.has(name)) {
           preset[name] = exprDef
-        } else
-        {
+        } else {
           custom[name] = exprDef
         }
       })
     }
 
     const result: any = { preset }
-    if (Object.keys(custom).length > 0)
-    {
+    if (Object.keys(custom).length > 0) {
       result.custom = custom
     }
     return result
   }
 
-  private exportLookAt(vrm: VRM)
-  {
+  private exportLookAt(vrm: VRM) {
     if (!vrm.lookAt) return undefined
 
     const lookAt = vrm.lookAt as any
@@ -377,40 +354,37 @@ export class VRMExporterPlugin
       type: lookAt.applier?.type ?? 'bone', // 'bone' or 'expression'
       rangeMapHorizontalInner: lookAt.rangeMapHorizontalInner
         ? {
-          inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
-          outputScale: lookAt.rangeMapHorizontalInner.outputScale,
-        }
+            inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
+            outputScale: lookAt.rangeMapHorizontalInner.outputScale,
+          }
         : defaultRangeMap,
       rangeMapHorizontalOuter: lookAt.rangeMapHorizontalOuter
         ? {
-          inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
-          outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
-        }
+            inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
+            outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
+          }
         : defaultRangeMap,
       rangeMapVerticalDown: lookAt.rangeMapVerticalDown
         ? {
-          inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
-          outputScale: lookAt.rangeMapVerticalDown.outputScale,
-        }
+            inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
+            outputScale: lookAt.rangeMapVerticalDown.outputScale,
+          }
         : defaultRangeMap,
       rangeMapVerticalUp: lookAt.rangeMapVerticalUp
         ? {
-          inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
-          outputScale: lookAt.rangeMapVerticalUp.outputScale,
-        }
+            inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
+            outputScale: lookAt.rangeMapVerticalUp.outputScale,
+          }
         : defaultRangeMap,
     }
   }
 
-  private exportFirstPerson(vrm: VRM)
-  {
+  private exportFirstPerson(vrm: VRM) {
     if (!vrm.firstPerson) return undefined
 
     const meshAnnotations: any[] = []
-    if (vrm.firstPerson.meshAnnotations)
-    {
-      vrm.firstPerson.meshAnnotations.forEach((annotation) =>
-      {
+    if (vrm.firstPerson.meshAnnotations) {
+      vrm.firstPerson.meshAnnotations.forEach((annotation) => {
         const ann = annotation as any
         // In three-vrm, annotation might hold 'mesh' (Object3D) instead of 'node' index
         // If it holds 'mesh', we need to find its node index.
@@ -418,8 +392,7 @@ export class VRMExporterPlugin
         // Usually in loaded VRM, it holds the Mesh object.
         const mesh = ann.mesh || ann.node
         const nodeIndex = this.writer.nodeMap.get(mesh)
-        if (nodeIndex !== undefined)
-        {
+        if (nodeIndex !== undefined) {
           meshAnnotations.push({
             node: nodeIndex,
             type: ann.type,
@@ -437,8 +410,7 @@ export class VRMExporterPlugin
    * VRMC_springBone 拡張をエクスポート
    * three-vrm の VRMSpringBoneManager から SpringBone データを抽出
    */
-  private exportSpringBone(vrm: VRM)
-  {
+  private exportSpringBone(vrm: VRM) {
     const springBoneManager = vrm.springBoneManager
     if (!springBoneManager) return undefined
 
@@ -450,33 +422,35 @@ export class VRMExporterPlugin
     const colliderIndexMap = new Map<any, number>()
     const colliderDefs: any[] = []
 
-    colliders.forEach((collider: any) =>
-    {
+    colliders.forEach((collider: any) => {
       const nodeIndex = this.writer.nodeMap.get(collider)
       if (nodeIndex === undefined) return
 
       const shape = collider.shape
       let shapeDef: any
 
-      if (shape.type === 'sphere')
-      {
+      if (shape.type === 'sphere') {
         shapeDef = {
           sphere: {
-            offset: shape.offset ? [shape.offset.x, shape.offset.y, shape.offset.z] : [0, 0, 0],
+            offset: shape.offset
+              ? [shape.offset.x, shape.offset.y, shape.offset.z]
+              : [0, 0, 0],
             radius: shape.radius ?? 0,
           },
         }
-      } else if (shape.type === 'capsule')
-      {
+      } else if (shape.type === 'capsule') {
         shapeDef = {
           capsule: {
-            offset: shape.offset ? [shape.offset.x, shape.offset.y, shape.offset.z] : [0, 0, 0],
+            offset: shape.offset
+              ? [shape.offset.x, shape.offset.y, shape.offset.z]
+              : [0, 0, 0],
             radius: shape.radius ?? 0,
-            tail: shape.tail ? [shape.tail.x, shape.tail.y, shape.tail.z] : [0, 0, 0],
+            tail: shape.tail
+              ? [shape.tail.x, shape.tail.y, shape.tail.z]
+              : [0, 0, 0],
           },
         }
-      } else
-      {
+      } else {
         // plane などその他のシェイプはスキップ
         return
       }
@@ -494,20 +468,16 @@ export class VRMExporterPlugin
     const colliderGroupIndexMap = new Map<any, number>()
     const colliderGroupDefs: any[] = []
 
-    colliderGroups.forEach((group: any) =>
-    {
+    colliderGroups.forEach((group: any) => {
       const colliderIndices: number[] = []
-      group.colliders.forEach((collider: any) =>
-      {
+      group.colliders.forEach((collider: any) => {
         const index = colliderIndexMap.get(collider)
-        if (index !== undefined)
-        {
+        if (index !== undefined) {
           colliderIndices.push(index)
         }
       })
 
-      if (colliderIndices.length > 0)
-      {
+      if (colliderIndices.length > 0) {
         const groupIndex = colliderGroupDefs.length
         colliderGroupIndexMap.set(group, groupIndex)
         colliderGroupDefs.push({
@@ -526,20 +496,17 @@ export class VRMExporterPlugin
 
     // ジョイントをボーンノードでグループ化
     const jointsByBone = new Map<any, any>()
-    joints.forEach((joint: any) =>
-    {
+    joints.forEach((joint: any) => {
       jointsByBone.set(joint.bone, joint)
     })
 
     // ルートジョイント（親がジョイントでないもの）を見つけてチェーンを構築
-    joints.forEach((joint: any) =>
-    {
+    joints.forEach((joint: any) => {
       if (processedJoints.has(joint)) return
 
       // このジョイントがチェーンのルートかどうかを確認
       const parentBone = joint.bone.parent
-      if (parentBone && jointsByBone.has(parentBone))
-      {
+      if (parentBone && jointsByBone.has(parentBone)) {
         // 親もジョイントなのでルートではない
         return
       }
@@ -548,8 +515,7 @@ export class VRMExporterPlugin
       const chainJoints: any[] = []
       let currentJoint = joint
 
-      while (currentJoint && !processedJoints.has(currentJoint))
-      {
+      while (currentJoint && !processedJoints.has(currentJoint)) {
         processedJoints.add(currentJoint)
         chainJoints.push(currentJoint)
 
@@ -563,8 +529,7 @@ export class VRMExporterPlugin
       // ジョイント定義を作成
       const jointDefs: any[] = []
 
-      for (let i = 0; i < chainJoints.length; i++)
-      {
+      for (let i = 0; i < chainJoints.length; i++) {
         const j = chainJoints[i]
         const nodeIndex = this.writer.nodeMap.get(j.bone)
         if (nodeIndex === undefined) continue
@@ -575,7 +540,11 @@ export class VRMExporterPlugin
           stiffness: j.settings.stiffness,
           gravityPower: j.settings.gravityPower,
           gravityDir: j.settings.gravityDir
-            ? [j.settings.gravityDir.x, j.settings.gravityDir.y, j.settings.gravityDir.z]
+            ? [
+                j.settings.gravityDir.x,
+                j.settings.gravityDir.y,
+                j.settings.gravityDir.z,
+              ]
             : [0, -1, 0],
           dragForce: j.settings.dragForce,
         })
@@ -589,22 +558,18 @@ export class VRMExporterPlugin
 
       // child がない場合、bone.children から子ボーンを探す
       // (beforeParseで作成した仮想tailノードを含む)
-      if (!tailNode && lastJoint?.bone)
-      {
+      if (!tailNode && lastJoint?.bone) {
         const boneChildren = lastJoint.bone.children.filter(
           (child: any) => child.type === 'Bone' || child.isBone,
         )
-        if (boneChildren.length > 0)
-        {
+        if (boneChildren.length > 0) {
           tailNode = boneChildren[0]
         }
       }
 
-      if (tailNode)
-      {
+      if (tailNode) {
         const tailNodeIndex = this.writer.nodeMap.get(tailNode)
-        if (tailNodeIndex !== undefined)
-        {
+        if (tailNodeIndex !== undefined) {
           // tailノードをjointsに追加（nodeのみ、物理パラメータなし）
           jointDefs.push({
             node: tailNodeIndex,
@@ -617,13 +582,10 @@ export class VRMExporterPlugin
       // コライダーグループのインデックスを収集
       const colliderGroupIndices: number[] = []
       const firstJoint = chainJoints[0]
-      if (firstJoint.colliderGroups)
-      {
-        firstJoint.colliderGroups.forEach((group: any) =>
-        {
+      if (firstJoint.colliderGroups) {
+        firstJoint.colliderGroups.forEach((group: any) => {
           const index = colliderGroupIndexMap.get(group)
-          if (index !== undefined && !colliderGroupIndices.includes(index))
-          {
+          if (index !== undefined && !colliderGroupIndices.includes(index)) {
             colliderGroupIndices.push(index)
           }
         })
@@ -631,8 +593,7 @@ export class VRMExporterPlugin
 
       // センターノードのインデックス
       let centerNodeIndex: number | undefined
-      if (firstJoint.center)
-      {
+      if (firstJoint.center) {
         centerNodeIndex = this.writer.nodeMap.get(firstJoint.center)
       }
 
@@ -640,13 +601,11 @@ export class VRMExporterPlugin
         joints: jointDefs,
       }
 
-      if (centerNodeIndex !== undefined)
-      {
+      if (centerNodeIndex !== undefined) {
         springDef.center = centerNodeIndex
       }
 
-      if (colliderGroupIndices.length > 0)
-      {
+      if (colliderGroupIndices.length > 0) {
         springDef.colliderGroups = colliderGroupIndices
       }
 
@@ -654,8 +613,7 @@ export class VRMExporterPlugin
     })
 
     // 何もエクスポートするものがなければ undefined を返す
-    if (springDefs.length === 0 && colliderDefs.length === 0)
-    {
+    if (springDefs.length === 0 && colliderDefs.length === 0) {
       return undefined
     }
 
@@ -663,18 +621,15 @@ export class VRMExporterPlugin
       specVersion: '1.0',
     }
 
-    if (colliderDefs.length > 0)
-    {
+    if (colliderDefs.length > 0) {
       result.colliders = colliderDefs
     }
 
-    if (colliderGroupDefs.length > 0)
-    {
+    if (colliderGroupDefs.length > 0) {
       result.colliderGroups = colliderGroupDefs
     }
 
-    if (springDefs.length > 0)
-    {
+    if (springDefs.length > 0) {
       result.springs = springDefs
     }
 

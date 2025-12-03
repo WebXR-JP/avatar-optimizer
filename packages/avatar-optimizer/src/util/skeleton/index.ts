@@ -1,8 +1,8 @@
-export type { MigrationDebugOptions } from './migrate-vrm0-to-vrm1'
+export type { MigrationOptions } from './migrate-vrm0-to-vrm1'
 export {
   findRootBone,
   migrateSkeletonVRM0ToVRM1,
-  rebuildBoneTransformsPositionOnly,
+  rebuildBoneTransforms,
   recalculateBoneInverses,
   recordBoneWorldPositions,
   rotateBonePositions,

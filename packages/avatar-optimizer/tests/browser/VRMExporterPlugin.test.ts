@@ -10,8 +10,7 @@ const VRM10_LICENSE_URL = 'https://vrm.dev/licenses/1.0/'
 /**
  * テスト用のVRMオブジェクトを作成する
  */
-function createTestVRM()
-{
+function createTestVRM() {
   const scene = new Scene()
   const vrmRoot = new Group()
   vrmRoot.name = 'VRMRoot'
@@ -50,7 +49,8 @@ function createTestVRM()
   // Expressions
   const expressionManager = {
     expressions: new Set<VRMExpression>(),
-    getExpression: (name: string) => null,
+    getExpression: (_name: string) => null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
 
   const happyExpr = new VRMExpression('happy')
@@ -68,16 +68,20 @@ function createTestVRM()
     rangeMapHorizontalOuter: { inputMaxValue: 10, outputScale: 10 },
     rangeMapVerticalDown: { inputMaxValue: 10, outputScale: 10 },
     rangeMapVerticalUp: { inputMaxValue: 10, outputScale: 10 },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
 
   // FirstPerson
   const firstPerson = {
     meshAnnotations: [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
 
   const vrm = new VRM({
     scene: vrmRoot,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     humanoid: { humanBones } as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     meta: meta as any,
     expressionManager: expressionManager,
     lookAt: lookAt,
@@ -90,22 +94,19 @@ function createTestVRM()
   return { scene, vrmRoot, vrm, hips, head }
 }
 
-describe('VRMExporterPlugin', () =>
-{
-  it('should export VRMC_vrm extension in JSON output', async () =>
-  {
+describe('VRMExporterPlugin', () => {
+  it('should export VRMC_vrm extension in JSON output', async () => {
     const { scene, vrm } = createTestVRM()
 
     const exporter = new GLTFExporter()
-    exporter.register((writer) =>
-    {
+    exporter.register((writer) => {
       const plugin = new VRMExporterPlugin(writer)
       plugin.setVRM(vrm)
       return plugin
     })
 
-    const jsonOutput = await new Promise<any>((resolve, reject) =>
-    {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jsonOutput = await new Promise<any>((resolve, reject) => {
       exporter.parse(
         scene,
         (result) => resolve(result),
@@ -122,30 +123,24 @@ describe('VRMExporterPlugin', () =>
     expect(jsonOutput.extensionsUsed).toContain('VRMC_vrm')
   })
 
-  it('should export GLB binary with VRMC_vrm extension', async () =>
-  {
+  it('should export GLB binary with VRMC_vrm extension', async () => {
     const { scene, vrm } = createTestVRM()
 
     // エクスポート
     const exporter = new GLTFExporter()
-    exporter.register((writer) =>
-    {
+    exporter.register((writer) => {
       const plugin = new VRMExporterPlugin(writer)
       plugin.setVRM(vrm)
       return plugin
     })
 
-    const glbBuffer = await new Promise<ArrayBuffer>((resolve, reject) =>
-    {
+    const glbBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
       exporter.parse(
         scene,
-        (result) =>
-        {
-          if (result instanceof ArrayBuffer)
-          {
+        (result) => {
+          if (result instanceof ArrayBuffer) {
             resolve(result)
-          } else
-          {
+          } else {
             reject(new Error('Expected ArrayBuffer (binary) output'))
           }
         },
@@ -162,12 +157,12 @@ describe('VRMExporterPlugin', () =>
 
     // GLBヘッダー: magic (4) + version (4) + length (4) = 12 bytes
     const magic = dataView.getUint32(0, true)
-    expect(magic).toBe(0x46546C67) // 'glTF'
+    expect(magic).toBe(0x46546c67) // 'glTF'
 
     // JSONチャンク: length (4) + type (4) + data
     const jsonChunkLength = dataView.getUint32(12, true)
     const jsonChunkType = dataView.getUint32(16, true)
-    expect(jsonChunkType).toBe(0x4E4F534A) // 'JSON'
+    expect(jsonChunkType).toBe(0x4e4f534a) // 'JSON'
 
     // JSONデータを抽出
     const jsonBytes = new Uint8Array(glbBuffer, 20, jsonChunkLength)

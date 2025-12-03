@@ -28,7 +28,9 @@ export type {
  * - alphaTest > 0 → 'alphaTest'
  * - それ以外 → 'opaque'
  */
-export function getRenderMode(material: MToonMaterial): import('./types').RenderMode {
+export function getRenderMode(
+  material: MToonMaterial,
+): import('./types').RenderMode {
   if (material.transparent) return 'transparent'
   if (material.alphaTest > 0) return 'alphaTest'
   return 'opaque'
@@ -99,12 +101,15 @@ export function getMToonMaterialInfoFromObject3D(
   })
 
   // マテリアルごとの情報を収集
-  const materialInfoMap = new Map<MToonMaterial, {
-    meshes: Mesh[]
-    hasOutline: boolean
-    outlineWidthMode: import('./types').OutlineWidthMode
-    renderMode: import('./types').RenderMode
-  }>()
+  const materialInfoMap = new Map<
+    MToonMaterial,
+    {
+      meshes: Mesh[]
+      hasOutline: boolean
+      outlineWidthMode: import('./types').OutlineWidthMode
+      renderMode: import('./types').RenderMode
+    }
+  >()
 
   for (const mesh of meshes) {
     if (Array.isArray(mesh.material)) {
@@ -117,7 +122,8 @@ export function getMToonMaterialInfoFromObject3D(
 
       // アウトライン情報を取得
       const hasOutline = material.outlineWidthMode !== 'none'
-      const outlineWidthMode = material.outlineWidthMode as import('./types').OutlineWidthMode
+      const outlineWidthMode =
+        material.outlineWidthMode as import('./types').OutlineWidthMode
 
       if (!materialInfoMap.has(material)) {
         materialInfoMap.set(material, {
@@ -133,7 +139,8 @@ export function getMToonMaterialInfoFromObject3D(
 
       // アウトライン情報を取得
       const hasOutline = material.outlineWidthMode !== 'none'
-      const outlineWidthMode = material.outlineWidthMode as import('./types').OutlineWidthMode
+      const outlineWidthMode =
+        material.outlineWidthMode as import('./types').OutlineWidthMode
 
       if (!materialInfoMap.has(material)) {
         materialInfoMap.set(material, {

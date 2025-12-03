@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial } from 'three'
+import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial, type Material } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
+import { VRMSpringBoneColliderHelper } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
 import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
 import { createBonePointsHelper, updateBonePointsHelper } from '../utils/skeleton-helper'
@@ -14,6 +15,7 @@ interface VRMSceneProps
   debugMode: DebugMode
   springBoneEnabled?: boolean
   showBones?: boolean
+  showColliders?: boolean
 }
 
 /**
@@ -21,12 +23,13 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
   const skeletonHelperRef = useRef<SkeletonHelper | null>(null)
   const bonePointsRef = useRef<Group | null>(null)
+  const colliderHelpersRef = useRef<VRMSpringBoneColliderHelper[]>([])
 
   // VRMをシーンに追加/削除
   useEffect(() =>
@@ -137,6 +140,48 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
     }
   }, [vrm, showBones, scene])
 
+  // コライダー可視化ヘルパーの管理
+  useEffect(() =>
+  {
+    if (!vrm) return
+
+    // 古いヘルパーを削除
+    colliderHelpersRef.current.forEach(helper => scene.remove(helper))
+    colliderHelpersRef.current = []
+
+    if (showColliders && vrm.springBoneManager)
+    {
+      // 各コライダーに対してヘルパーを作成
+      vrm.springBoneManager.colliders.forEach(collider =>
+      {
+        const helper = new VRMSpringBoneColliderHelper(collider)
+        // 常に手前に表示されるようにdepthTestを無効化
+        helper.traverse(child =>
+        {
+          const mesh = child as Mesh
+          if (mesh.isMesh && mesh.material)
+          {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            materials.forEach((mat: Material) =>
+            {
+              mat.depthTest = false
+              mat.depthWrite = false
+            })
+          }
+        })
+        helper.renderOrder = 999
+        scene.add(helper)
+        colliderHelpersRef.current.push(helper)
+      })
+    }
+
+    return () =>
+    {
+      colliderHelpersRef.current.forEach(helper => scene.remove(helper))
+      colliderHelpersRef.current = []
+    }
+  }, [vrm, showColliders, scene])
+
   // アニメーションループ
   useFrame((_state, delta) =>
   {
@@ -165,6 +210,9 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
       {
         updateBonePointsHelper(vrm, bonePointsRef.current)
       }
+
+      // コライダーヘルパーの位置を更新
+      colliderHelpersRef.current.forEach(helper => helper.updateMatrixWorld(true))
     }
   })
 

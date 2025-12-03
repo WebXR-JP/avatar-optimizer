@@ -1,6 +1,6 @@
 import { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { BufferAttribute, Mesh } from 'three'
+import { Bone, BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
@@ -13,7 +13,7 @@ import {
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
-import { createVirtualTailNodes } from './util/springbone'
+import { migrateSpringBone } from './util/springbone'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -114,7 +114,8 @@ export function optimizeModel(
     // これにより、エクスポート→インポート後も正しくレンダリングされる
     // 最初のグループからスロット属性名を取得
     const firstGroup = combineResult.groups.values().next().value
-    const slotAttributeName = firstGroup?.material.slotAttribute?.name || 'mtoonMaterialSlot'
+    const slotAttributeName =
+      firstGroup?.material.slotAttribute?.name || 'mtoonMaterialSlot'
 
     for (const mesh of excludedMeshes) {
       // メッシュのマテリアルを取得
@@ -136,7 +137,10 @@ export function optimizeModel(
       const geometry = mesh.geometry
       const vertexCount = geometry.getAttribute('position').count
       const slotArray = new Float32Array(vertexCount).fill(slotInfo.slotIndex)
-      geometry.setAttribute(slotAttributeName, new BufferAttribute(slotArray, 1))
+      geometry.setAttribute(
+        slotAttributeName,
+        new BufferAttribute(slotArray, 1),
+      )
 
       // MToonAtlasMaterialを適用（同じレンダーモードのマテリアルを共有）
       mesh.material = group.material
@@ -178,15 +182,43 @@ export function optimizeModel(
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
     if (options.migrateVRM0ToVRM1) {
-      yield* migrateSkeletonVRM0ToVRM1(rootNode)
+      // SpringBoneManagerを一時的に退避
+      // マイグレーション中に外部からvrm.update()が呼ばれても
+      // SpringBoneが動かないようにする
+      const springBoneManager = vrm.springBoneManager
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(vrm as any).springBoneManager = null
 
-      // 末端ジョイントに仮想tailノードを作成
-      // マイグレーション後のbone.positionはVRM1.0形式（回転がidentity）なので
-      // bone.positionから正しい方向を計算できる
-      createVirtualTailNodes(vrm)
+      // SpringBoneを初期姿勢にリセット（物理演算による変形を排除）
+      // マイグレーションはボーンのワールド座標を記録するため、
+      // 物理演算で変形した状態だと正しい座標が記録されない
+      springBoneManager?.reset()
 
-      // SpringBoneの初期状態を再設定（ボーン変換後の状態を記録）
-      vrm.springBoneManager?.setInitState()
+      // Humanoid Boneのセットを構築
+      // VRM1.0仕様ではHumanoid Boneのみ回転がidentityである必要がある
+      // 非Humanoid Bone（髪、服、SpringBone制御のボーンなど）は回転を保持
+      const humanoidBones = new Set<Bone>()
+      if (vrm.humanoid) {
+        Object.values(vrm.humanoid.humanBones).forEach((humanBone) => {
+          const node = humanBone.node
+          if (node instanceof Bone) {
+            humanoidBones.add(node)
+          }
+        })
+      }
+
+      yield* migrateSkeletonVRM0ToVRM1(rootNode, { humanoidBones })
+
+      // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(vrm as any).springBoneManager = springBoneManager
+
+      // SpringBone関連の調整を一括で実行
+      // - 末端ジョイントに仮想tailノードを作成
+      // - 重力方向（gravityDir）をY軸180度回転
+      // - コライダーオフセットをY軸180度回転
+      // - SpringBoneの初期状態を再設定
+      migrateSpringBone(vrm)
     }
 
     return ok(combineResult)

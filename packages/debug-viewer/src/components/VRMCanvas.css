@@ -128,7 +128,8 @@
 }
 
 .vrm-canvas__springbone-toggle,
-.vrm-canvas__bones-toggle {
+.vrm-canvas__bones-toggle,
+.vrm-canvas__colliders-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -137,7 +138,8 @@
 }
 
 .vrm-canvas__springbone-toggle input[type="checkbox"],
-.vrm-canvas__bones-toggle input[type="checkbox"] {
+.vrm-canvas__bones-toggle input[type="checkbox"],
+.vrm-canvas__colliders-toggle input[type="checkbox"] {
   width: 16px;
   height: 16px;
   cursor: pointer;

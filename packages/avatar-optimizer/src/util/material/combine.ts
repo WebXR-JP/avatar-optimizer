@@ -222,7 +222,9 @@ function processSingleGroup(
 
     if (hasAnyOutline) {
       outlineMaterial = atlasMaterial.createOutlineMaterial(
-        outlineWidthMode === 'screenCoordinates' ? 'screenCoordinates' : 'worldCoordinates',
+        outlineWidthMode === 'screenCoordinates'
+          ? 'screenCoordinates'
+          : 'worldCoordinates',
       )
 
       const outlineResult = createCombinedMesh(
@@ -311,7 +313,12 @@ function combineMToonMaterialsInternal(
       const infos = groupedInfos.get(renderMode)
       if (!infos || infos.length === 0) continue
 
-      const result = yield* processSingleGroup(infos, opts, excludedMeshes, renderMode)
+      const result = yield* processSingleGroup(
+        infos,
+        opts,
+        excludedMeshes,
+        renderMode,
+      )
 
       groups.set(renderMode, {
         mesh: result.mesh,

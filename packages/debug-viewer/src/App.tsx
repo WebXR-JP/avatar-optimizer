@@ -7,7 +7,7 @@ import { Scene } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, VRMExporterPlugin, migrateSkeletonVRM0ToVRM1, createVirtualTailNodes } from '@xrift/avatar-optimizer'
+import { optimizeModel, VRMExporterPlugin, migrateSkeletonVRM0ToVRM1, migrateSpringBone } from '@xrift/avatar-optimizer'
 import { MToonAtlasExporterPlugin, type DebugMode } from '@xrift/mtoon-atlas'
 import { captureSpringBoneSnapshot, compareSnapshots, dumpProblematicBones } from './utils/springbone-debug'
 import './App.css'
@@ -25,6 +25,7 @@ function App()
   const [debugMode, setDebugMode] = useState<DebugMode>('none')
   const [springBoneEnabled, setSpringBoneEnabled] = useState(true)
   const [showBones, setShowBones] = useState(false)
+  const [showColliders, setShowColliders] = useState(false)
   const [isReloading, setIsReloading] = useState(false)
 
   // URLに基づいて現在のタブインデックスを決定
@@ -178,8 +179,46 @@ function App()
 
     const beforeSnapshot = captureSpringBoneSnapshot(vrm, 'Before Migration')
 
+    // VRMバージョン情報をログ出力
+    console.log('🔍 VRM Info:', {
+      'meta.metaVersion': (vrm.meta as any)?.metaVersion,
+      'meta.name': (vrm.meta as any)?.name,
+      'meta.version': vrm.meta?.version,
+      // VRM0.xにはexporterVersionがある
+      'meta.exporterVersion': (vrm.meta as any)?.exporterVersion,
+      // シーン全体の回転
+      'scene.rotation.y': vrm.scene.rotation.y,
+      'scene.rotation.y (degrees)': (vrm.scene.rotation.y * 180 / Math.PI).toFixed(1) + '°',
+    })
+
+    // マイグレーション前のSpringBone内部状態をログ出力
+    console.group('🔍 SpringBone state BEFORE migration')
+    let preJointIndex = 0
+    vrm.springBoneManager?.joints.forEach((joint: any) => {
+      if (preJointIndex < 5) {
+        const bone = joint.bone
+        const center = joint._center || joint.center
+        console.log(`Joint ${preJointIndex}: ${bone?.name}`, {
+          'bone.quaternion': bone?.quaternion?.toArray(),
+          'bone.position': bone?.position?.toArray(),
+          '_initialLocalRotation': joint._initialLocalRotation?.toArray(),
+          '_boneAxis': joint._boneAxis?.toArray(),
+          '_initialLocalChildPosition': joint._initialLocalChildPosition?.toArray(),
+          'settings.gravityDir': joint.settings?.gravityDir?.toArray(),
+          'center': center?.name || 'null',
+          'centerPosition': center?.position?.toArray() || 'N/A',
+        })
+      }
+      preJointIndex++
+    })
+    console.groupEnd()
+
+    // SpringBoneManagerを一時的に退避（useFrameでのupdate呼び出しを防ぐ）
+    const springBoneManager = vrm.springBoneManager
+    ;(vrm as any).springBoneManager = null
+
     // SpringBoneを初期姿勢にリセット
-    vrm.springBoneManager?.reset()
+    springBoneManager?.reset()
 
     // マイグレーション実行
     const result = migrateSkeletonVRM0ToVRM1(vrm.scene)
@@ -189,17 +228,72 @@ function App()
       const err = result.error
       console.error(err)
       setError(`Migration failed (${err.type}): ${err.message}`)
+      // SpringBoneManagerを復元
+      ;(vrm as any).springBoneManager = springBoneManager
       return
     }
 
-    // 末端ジョイントに仮想tailノードを作成
-    createVirtualTailNodes(vrm)
+    // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
+    ;(vrm as any).springBoneManager = springBoneManager
 
-    // SpringBoneの初期状態を再設定
-    vrm.springBoneManager?.setInitState()
+    // SpringBone関連の調整を一括で実行
+    // - 末端ジョイントに仮想tailノードを作成
+    // - 重力方向（gravityDir）をY軸180度回転
+    // - コライダーオフセットをY軸180度回転
+    // - SpringBoneの初期状態を再設定
+    migrateSpringBone(vrm)
+    console.log('🔧 migrateSpringBone completed')
 
     const afterSnapshot = captureSpringBoneSnapshot(vrm, 'After Migration')
     compareSnapshots(beforeSnapshot, afterSnapshot)
+
+    // 数フレーム物理シミュレーションを実行して曲がる方向を確認
+    console.group('🔬 Testing SpringBone physics direction')
+
+    // シミュレーション前の髪ボーンの位置を記録
+    const hairBones: { name: string, initialPos: any, initialQuat: any }[] = []
+    springBoneManager?.joints.forEach((joint: any) => {
+      const bone = joint.bone
+      if (bone?.name?.includes('hair') || bone?.name?.includes('Hair')) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        hairBones.push({
+          name: bone.name,
+          initialPos: worldPos.clone(),
+          initialQuat: bone.quaternion.toArray(),
+        })
+      }
+    })
+
+    // 30フレーム分シミュレーション実行
+    for (let i = 0; i < 30; i++) {
+      springBoneManager?.update(1 / 60)
+    }
+
+    // シミュレーション後の位置を記録して比較
+    let hairIndex = 0
+    springBoneManager?.joints.forEach((joint: any) => {
+      const bone = joint.bone
+      if (bone?.name?.includes('hair') || bone?.name?.includes('Hair')) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const initial = hairBones[hairIndex]
+        if (initial) {
+          const movement = new Vector3().subVectors(worldPos, initial.initialPos)
+          console.log(`${bone.name} movement:`, {
+            'delta': movement,
+            'Y movement (negative=down)': movement.y.toFixed(6),
+            'moved down?': movement.y < 0 ? '✓ YES' : '✗ NO (problem!)',
+          })
+        }
+        hairIndex++
+      }
+    })
+
+    // リセットして初期状態に戻す
+    springBoneManager?.reset()
+
+    console.groupEnd()
 
     console.log('Migration successful')
   }, [vrm])
@@ -597,6 +691,8 @@ function App()
           onSpringBoneEnabledChange={setSpringBoneEnabled}
           showBones={showBones}
           onShowBonesChange={setShowBones}
+          showColliders={showColliders}
+          onShowCollidersChange={setShowColliders}
           onReloadExport={handleReloadExport}
           isReloading={isReloading}
         />
