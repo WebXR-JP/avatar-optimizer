@@ -2,7 +2,6 @@ import { err, ok, Result, safeTry } from 'neverthrow'
 import {
   Bone,
   BufferAttribute,
-  BufferGeometry,
   Matrix4,
   Object3D,
   Quaternion,
@@ -60,13 +59,16 @@ export function migrateSkeletonVRM0ToVRM1(
     }
 
     // 2. 各メッシュの頂点位置をY軸180度回転
-    // 同じジオメトリを共有するメッシュ（通常メッシュとアウトラインメッシュなど）が
-    // 複数回処理されないようにするため、処理済みジオメトリを追跡
+    // 同じ BufferAttribute を共有するメッシュが複数回処理されないようにするため、
+    // 処理済み position 属性を追跡
+    // 注意: VRMでは geometry は異なるが position 属性は共有されることがある
     if (!debug.skipVertexRotation) {
-      const processedGeometries = new Set<BufferGeometry>()
+      const processedPositionAttrs = new Set<BufferAttribute>()
       for (const mesh of skinnedMeshes) {
-        if (processedGeometries.has(mesh.geometry)) continue
-        processedGeometries.add(mesh.geometry)
+        const positionAttr = mesh.geometry.getAttribute('position')
+        if (!(positionAttr instanceof BufferAttribute)) continue
+        if (processedPositionAttrs.has(positionAttr)) continue
+        processedPositionAttrs.add(positionAttr)
         rotateVertexPositionsAroundYAxis(mesh)
       }
     }
@@ -95,18 +97,30 @@ export function migrateSkeletonVRM0ToVRM1(
       // 5. 座標をY軸180度回転
       const rotatedPositions = rotateBonePositions(allBonePositions)
 
-      // 6. ルートボーンを特定（最初のスケルトンから）
-      const firstSkeleton = skinnedMeshes[0].skeleton
-      const rootBone = findRootBone(firstSkeleton)
-      if (!rootBone) {
+      // 6. 全ボーンから真のルートボーン（親がBoneでないもの）を特定
+      // VRMでは各SkinnedMesh.skeleton.bonesは使用するボーンのみを含むが、
+      // 実際のボーン階層は1つなので、全ボーンを走査して真のルートを見つける
+      const allRootBones = new Set<Bone>()
+      for (const bone of allBonePositions.keys()) {
+        // 親を辿って真のルートを見つける
+        let current: Bone = bone
+        while (current.parent instanceof Bone) {
+          current = current.parent
+        }
+        allRootBones.add(current)
+      }
+
+      if (allRootBones.size === 0) {
         return err({
           type: 'ASSET_ERROR',
           message: 'ルートボーンが見つかりません',
         })
       }
 
-      // 7. ボーン変換を再構築（rotationをidentityにリセット、positionのみで階層構築）
-      rebuildBoneTransformsPositionOnly(rootBone, rotatedPositions)
+      // 7. 各ルートボーンからボーン変換を再構築
+      for (const rootBone of allRootBones) {
+        rebuildBoneTransformsPositionOnly(rootBone, rotatedPositions)
+      }
 
       // 8. すべてのスケルトンのInverseBoneMatrixを再計算
       processedSkeletons.forEach((skeleton) => {
@@ -250,7 +264,8 @@ export function findRootBone(skeleton: Skeleton): Bone | null {
  * VRM1.0仕様に準拠するため、全ボーンのrotationをidentityにリセット
  * ボーン階層はpositionのみで構築
  *
- * 注意: rotatedPositionsに含まれるボーンのみを処理
+ * rotatedPositionsに含まれないボーン（SpringBone専用ボーンなど）も
+ * 現在のワールド位置を基準にY軸180度回転して処理
  */
 export function rebuildBoneTransformsPositionOnly(
   rootBone: Bone,
@@ -258,10 +273,19 @@ export function rebuildBoneTransformsPositionOnly(
 ): void {
   // identityのQuaternion
   const identityQuat = new Quaternion()
+  const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
 
   function processBone(bone: Bone, parentWorldPos: Vector3): void {
-    const targetWorldPos = rotatedPositions.get(bone)
-    if (!targetWorldPos) return // このスケルトンに含まれていないボーンはスキップ
+    let targetWorldPos = rotatedPositions.get(bone)
+
+    // rotatedPositionsに含まれないボーン（SpringBone専用ボーンなど）は
+    // 現在のワールド位置を取得してY軸180度回転
+    if (!targetWorldPos) {
+      bone.updateMatrixWorld(true)
+      const currentWorldPos = new Vector3()
+      bone.getWorldPosition(currentWorldPos)
+      targetWorldPos = currentWorldPos.applyMatrix4(rotationMatrix)
+    }
 
     // VRM1.0仕様: rotationをidentityにリセット
     bone.quaternion.copy(identityQuat)

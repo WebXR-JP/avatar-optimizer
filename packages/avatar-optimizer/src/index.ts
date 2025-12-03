@@ -28,3 +28,7 @@ export type {
 
 // Exporter
 export { VRMExporterPlugin } from './exporter'
+
+// Skeleton migration utilities (for debugging)
+export { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
+export { createVirtualTailNodes } from './util/springbone'

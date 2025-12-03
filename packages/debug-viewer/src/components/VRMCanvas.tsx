@@ -106,6 +106,8 @@ interface VRMCanvasProps
   onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onOptimize: () => Promise<void>
   isOptimizing: boolean
+  onOptimizeOnly: () => Promise<void>
+  onMigrateOnly: () => void
   onExportScene: () => void
   onExportGLTF: () => void
   onReplaceTextures: () => Promise<void>
@@ -157,6 +159,8 @@ function VRMCanvas({
   onFileChange,
   onOptimize,
   isOptimizing,
+  onOptimizeOnly,
+  onMigrateOnly,
   onExportScene,
   onExportGLTF,
   onReplaceTextures,
@@ -223,7 +227,23 @@ function VRMCanvas({
               onClick={onOptimize}
               disabled={!vrm || isOptimizing}
             >
-              {isOptimizing ? 'Optimizing...' : 'Optimize Material'}
+              {isOptimizing ? 'Optimizing...' : 'Optimize + Migrate'}
+            </button>
+            <button
+              className="vrm-canvas__optimize-btn"
+              onClick={onOptimizeOnly}
+              disabled={!vrm || isOptimizing}
+              style={{ backgroundColor: '#4a9eff' }}
+            >
+              Optimize Only
+            </button>
+            <button
+              className="vrm-canvas__optimize-btn"
+              onClick={onMigrateOnly}
+              disabled={!vrm}
+              style={{ backgroundColor: '#ff9f4a' }}
+            >
+              Migrate Only
             </button>
             <button
               className="vrm-canvas__export-btn"

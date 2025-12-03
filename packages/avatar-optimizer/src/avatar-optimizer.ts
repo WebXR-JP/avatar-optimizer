@@ -181,7 +181,8 @@ export function optimizeModel(
       yield* migrateSkeletonVRM0ToVRM1(rootNode)
 
       // 末端ジョイントに仮想tailノードを作成
-      // setInitState()が正しく_initialLocalChildPositionを計算できるようにする
+      // マイグレーション後のbone.positionはVRM1.0形式（回転がidentity）なので
+      // bone.positionから正しい方向を計算できる
       createVirtualTailNodes(vrm)
 
       // SpringBoneの初期状態を再設定（ボーン変換後の状態を記録）

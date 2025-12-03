@@ -1,5 +1,5 @@
 import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
-import { Bone, Vector3 } from 'three'
+import { Bone, SkinnedMesh, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
 import { migrateSkeletonVRM0ToVRM1 } from '../../src/util/skeleton'
@@ -41,7 +41,7 @@ describe('Skeleton Migration with Real VRM', () => {
 
     // マイグレーション後のワールド座標を確認
     let testedBones = 0
-    let failedBones: string[] = []
+    const failedBones: string[] = []
 
     rootNode.traverse((obj) => {
       if (obj instanceof Bone) {
@@ -102,7 +102,7 @@ describe('Skeleton Migration with Real VRM', () => {
     rootNode.traverse((obj) => {
       if (obj instanceof Bone) {
         const isHairBone = hairBonePatterns.some(pattern =>
-          obj.name.toLowerCase().includes(pattern)
+          obj.name.toLowerCase().includes(pattern),
         )
         if (isHairBone) {
           obj.updateMatrixWorld(true)
@@ -118,7 +118,7 @@ describe('Skeleton Migration with Real VRM', () => {
     expect(result.isOk()).toBe(true)
 
     // マイグレーション後のワールド座標を確認
-    let failedBones: { name: string; before: Vector3; after: Vector3; expected: Vector3 }[] = []
+    const failedBones: { name: string; before: Vector3; after: Vector3; expected: Vector3 }[] = []
 
     rootNode.traverse((obj) => {
       if (obj instanceof Bone) {
@@ -204,5 +204,69 @@ describe('Skeleton Migration with Real VRM', () => {
     })
 
     expect(mismatchCount).toBe(0)
+  })
+
+  it('should correctly rotate raw vertex positions after migration', async () => {
+    // VRMをロード
+    const loader = new GLTFLoader()
+    loader.register((parser) => new VRMLoaderPlugin(parser))
+
+    const response = await fetch(VRM_FILE_PATH)
+    const buffer = await response.arrayBuffer()
+    const gltf = await loader.parseAsync(buffer, '')
+    const vrm = gltf.userData.vrm as VRM
+    expect(vrm).toBeDefined()
+
+    const rootNode = vrm.scene
+
+    // SkinnedMeshを収集
+    const skinnedMeshes: SkinnedMesh[] = []
+    rootNode.traverse((obj) => {
+      if (obj instanceof SkinnedMesh) {
+        skinnedMeshes.push(obj)
+      }
+    })
+    expect(skinnedMeshes.length).toBeGreaterThan(0)
+
+    // マイグレーション前の生の頂点位置を記録
+    const beforePositions = new Map<string, { x: number; y: number; z: number }>()
+    for (const mesh of skinnedMeshes) {
+      const pos = mesh.geometry.getAttribute('position')
+      beforePositions.set(mesh.name, {
+        x: pos.getX(0),
+        y: pos.getY(0),
+        z: pos.getZ(0),
+      })
+    }
+
+    // マイグレーション実行
+    const result = migrateSkeletonVRM0ToVRM1(rootNode)
+    expect(result.isOk()).toBe(true)
+
+    // マイグレーション後の生の頂点位置を確認
+    const failedMeshes: string[] = []
+    for (const mesh of skinnedMeshes) {
+      const pos = mesh.geometry.getAttribute('position')
+      const before = beforePositions.get(mesh.name)!
+      const afterX = pos.getX(0)
+      const afterY = pos.getY(0)
+      const afterZ = pos.getZ(0)
+
+      // Y軸180度回転後の期待値: X -> -X, Z -> -Z, Y -> Y
+      const expectedX = -before.x
+      const expectedY = before.y
+      const expectedZ = -before.z
+
+      const tolerance = 1e-4
+      const xOk = Math.abs(afterX - expectedX) < tolerance
+      const yOk = Math.abs(afterY - expectedY) < tolerance
+      const zOk = Math.abs(afterZ - expectedZ) < tolerance
+
+      if (!xOk || !yOk || !zOk) {
+        failedMeshes.push(mesh.name)
+      }
+    }
+
+    expect(failedMeshes).toHaveLength(0)
   })
 })

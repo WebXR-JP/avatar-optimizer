@@ -7,7 +7,7 @@ import { Scene } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, VRMExporterPlugin } from '@xrift/avatar-optimizer'
+import { optimizeModel, VRMExporterPlugin, migrateSkeletonVRM0ToVRM1, createVirtualTailNodes } from '@xrift/avatar-optimizer'
 import { MToonAtlasExporterPlugin, type DebugMode } from '@xrift/mtoon-atlas'
 import { captureSpringBoneSnapshot, compareSnapshots, dumpProblematicBones } from './utils/springbone-debug'
 import './App.css'
@@ -138,6 +138,70 @@ function App()
       console.log('Optimization successful:', optimizationResult.statistics)
     }
     setIsOptimizing(false)
+  }, [vrm])
+
+  // マイグレーションなしの最適化のみ（デバッグ用）
+  const handleOptimizeOnly = useCallback(async () =>
+  {
+    if (!vrm) return
+
+    setIsOptimizing(true)
+    setError(null)
+
+    const beforeSnapshot = captureSpringBoneSnapshot(vrm, 'Before Optimize (no migration)')
+
+    // マイグレーションなしで最適化
+    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false })
+
+    if (result.isErr())
+    {
+      const err = result.error
+      console.error(err)
+      setError(`Optimization failed (${err.type}): ${err.message}`)
+      setIsOptimizing(false)
+      return
+    }
+
+    const afterSnapshot = captureSpringBoneSnapshot(vrm, 'After Optimize (no migration)')
+    compareSnapshots(beforeSnapshot, afterSnapshot)
+
+    console.log('Optimization (without migration) successful:', result.value.statistics)
+    setIsOptimizing(false)
+  }, [vrm])
+
+  // マイグレーションのみ（デバッグ用）
+  const handleMigrateOnly = useCallback(() =>
+  {
+    if (!vrm) return
+
+    setError(null)
+
+    const beforeSnapshot = captureSpringBoneSnapshot(vrm, 'Before Migration')
+
+    // SpringBoneを初期姿勢にリセット
+    vrm.springBoneManager?.reset()
+
+    // マイグレーション実行
+    const result = migrateSkeletonVRM0ToVRM1(vrm.scene)
+
+    if (result.isErr())
+    {
+      const err = result.error
+      console.error(err)
+      setError(`Migration failed (${err.type}): ${err.message}`)
+      return
+    }
+
+    // 末端ジョイントに仮想tailノードを作成
+    createVirtualTailNodes(vrm)
+
+    // SpringBoneの初期状態を再設定
+    vrm.springBoneManager?.setInitState()
+
+    const afterSnapshot = captureSpringBoneSnapshot(vrm, 'After Migration')
+    compareSnapshots(beforeSnapshot, afterSnapshot)
+
+    console.log('Migration successful')
   }, [vrm])
 
   const handleReplaceTextures = useCallback(async () =>
@@ -519,6 +583,8 @@ function App()
           onFileChange={handleFileChange}
           onOptimize={handleOptimize}
           isOptimizing={isOptimizing}
+          onOptimizeOnly={handleOptimizeOnly}
+          onMigrateOnly={handleMigrateOnly}
           onExportScene={handleExportScene}
           onExportGLTF={handleExportGLTF}
           onReplaceTextures={handleReplaceTextures}
