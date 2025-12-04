@@ -223,3 +223,28 @@ export type OptimizationError =
   | { type: 'INTERNAL_ERROR'; message: string }
   | { type: 'NO_MATERIALS_FOUND'; message: string }
   | { type: 'PARAMETER_TEXTURE_FAILED'; message: string }
+
+/**
+ * VRM ロード時のエラー型
+ */
+export type VRMLoaderError =
+  | { type: 'VRM_LOAD_FAILED'; message: string }
+  | { type: 'INVALID_VRM'; message: string }
+
+/**
+ * VRM エクスポート時のオプション
+ */
+export interface ExportVRMOptions {
+  /**
+   * バイナリ形式 (.vrm) で出力するか
+   * @default true
+   */
+  binary?: boolean
+}
+
+/**
+ * VRM エクスポート時のエラー型
+ */
+export type ExportVRMError =
+  | { type: 'EXPORT_FAILED'; message: string }
+  | { type: 'INVALID_VRM'; message: string }

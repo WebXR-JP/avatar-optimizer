@@ -3,12 +3,10 @@ import { Box, Tabs, Tab } from '@mui/material'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
-import { Scene } from 'three'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, VRMExporterPlugin, migrateSkeletonVRM0ToVRM1, migrateSpringBone, type AtlasGenerationOptions } from '@xrift/avatar-optimizer'
-import { MToonAtlasExporterPlugin, type DebugMode } from '@xrift/mtoon-atlas'
+import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, type AtlasGenerationOptions } from '@xrift/avatar-optimizer'
+import type { DebugMode } from '@xrift/mtoon-atlas'
 import './App.css'
 
 function App()
@@ -237,88 +235,35 @@ function App()
     }
   }, [vrm])
 
-  const handleExportGLTF = useCallback(() =>
+  const handleExportGLTF = useCallback(async () =>
   {
     if (!vrm) return
 
-    // SpringBone を初期状態にリセット（エクスポート時の回転状態を正しく保存するため）
-    vrm.springBoneManager?.reset()
+    const result = await exportVRM(vrm)
 
-    // 現在のボーン状態を SpringBone の初期状態として記録
-    vrm.springBoneManager?.setInitState()
-
-    const exporter = new GLTFExporter()
-    exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
-    exporter.register((writer: any) =>
+    if (result.isErr())
     {
-      const plugin = new VRMExporterPlugin(writer)
-      plugin.setVRM(vrm)
-      return plugin
-    })
+      setError(`VRM export failed: ${result.error.message}`)
+      return
+    }
 
-    // vrm.scene の子要素を Scene に直接追加してエクスポート
-    // これにより GLTFExporter が AuxScene を作成するのを防ぐ
-    // VRMHumanoidRig と VRMExpression はランタイムで動的に生成されるため除外
-    const exportScene = new Scene()
-    const children = [...vrm.scene.children].filter((child) =>
-      child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
-    )
-    children.forEach((child) => exportScene.add(child))
+    const data = result.value
+    const blob = new Blob([data], { type: 'application/octet-stream' })
+    const filename = `${vrm.scene.name || 'vrm-model'}.vrm`
 
-    exporter.parse(
-      exportScene,
-      (result) =>
-      {
-        // エクスポート後、子要素を元のvrm.sceneに戻す
-        children.forEach((child) => vrm.scene.add(child))
+    // ファイルサイズを記録
+    setLastExportSize(blob.size)
+    // eslint-disable-next-line no-console
+    console.log(`Export file size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
 
-        try
-        {
-          let blob: Blob
-          let filename: string
-
-          if (result instanceof ArrayBuffer)
-          {
-            // Binary VRM (.vrm)
-            blob = new Blob([result], { type: 'application/octet-stream' })
-            filename = `${vrm.scene.name || 'vrm-model'}.vrm`
-          } else
-          {
-            // JSON VRM (.vrm)
-            const jsonString = JSON.stringify(result, null, 2)
-            blob = new Blob([jsonString], { type: 'application/json' })
-            filename = `${vrm.scene.name || 'vrm-model'}.vrm`
-          }
-
-          // ファイルサイズを記録
-          setLastExportSize(blob.size)
-          console.log(`Export file size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
-
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = filename
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-        } catch (err)
-        {
-          setError(`VRM export failed: ${String(err)}`)
-        }
-      },
-      (error) =>
-      {
-        // エラー時も子要素を元に戻す
-        children.forEach((child) => vrm.scene.add(child))
-        setError(`VRM export failed: ${String(error)}`)
-      },
-      {
-        binary: true, // .vrm形式で出力
-        trs: false,
-        onlyVisible: true,
-      },
-    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }, [vrm, setLastExportSize])
 
   const handlePlayAnimation = useCallback(async () =>
@@ -340,7 +285,7 @@ function App()
   }, [])
 
   // Export VRM後にそのまま再読み込みする（エクスポート結果の確認用）
-  const handleReloadExport = useCallback(() =>
+  const handleReloadExport = useCallback(async () =>
   {
     if (!vrm) return
 
@@ -351,11 +296,6 @@ function App()
     const wasSpringBoneEnabled = springBoneEnabled
     setSpringBoneEnabled(false)
 
-    // SpringBone を初期状態にリセット（エクスポート時の回転状態を正しく保存するため）
-    vrm.springBoneManager?.reset()
-    vrm.springBoneManager?.setInitState()
-
-    // エクスポート完了後に SpringBone を復元する関数
     const restoreSpringBone = () =>
     {
       if (wasSpringBoneEnabled)
@@ -364,82 +304,38 @@ function App()
       }
     }
 
-    const exporter = new GLTFExporter()
-    exporter.register((writer: any) => new MToonAtlasExporterPlugin(writer))
-    exporter.register((writer: any) =>
+    const exportResult = await exportVRM(vrm)
+
+    if (exportResult.isErr())
     {
-      const plugin = new VRMExporterPlugin(writer)
-      plugin.setVRM(vrm)
-      return plugin
-    })
+      setError(`Export for reload failed: ${exportResult.error.message}`)
+      setIsReloading(false)
+      restoreSpringBone()
+      return
+    }
 
-    const exportScene = new Scene()
-    const children = [...vrm.scene.children].filter((child) =>
-      child.name !== 'VRMHumanoidRig' && !child.name.startsWith('VRMExpression')
-    )
-    children.forEach((child) => exportScene.add(child))
+    const data = exportResult.value
+    const blob = new Blob([data], { type: 'application/octet-stream' })
 
-    exporter.parse(
-      exportScene,
-      async (result) =>
-      {
-        // エクスポート後、子要素を元のvrm.sceneに戻す
-        children.forEach((child) => vrm.scene.add(child))
+    // ファイルサイズを記録・表示
+    setLastExportSize(blob.size)
+    // eslint-disable-next-line no-console
+    console.log(`Reload export file size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
 
-        try
-        {
-          let blob: Blob
-          if (result instanceof ArrayBuffer)
-          {
-            blob = new Blob([result], { type: 'application/octet-stream' })
-          } else
-          {
-            const jsonString = JSON.stringify(result, null, 2)
-            blob = new Blob([jsonString], { type: 'application/json' })
-          }
+    const loadResult = await loadVRMFromFile(blob)
 
-          // ファイルサイズを記録・表示
-          setLastExportSize(blob.size)
-          console.log(`Reload export file size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
+    if (loadResult.isErr())
+    {
+      setError(`Reload failed: ${loadResult.error.message}`)
+      setIsReloading(false)
+      restoreSpringBone()
+      return
+    }
 
-          const file = new File([blob], `${vrm.scene.name || 'vrm-model'}.vrm`, {
-            type: 'application/octet-stream',
-          })
-
-          const loadResult = await loadVRMFromFile(file)
-
-          if (loadResult.isErr())
-          {
-            setError(`Reload failed: ${loadResult.error.message}`)
-            setIsReloading(false)
-            restoreSpringBone()
-            return
-          }
-
-          setVRM(loadResult.value)
-          setVRMAnimation(null)
-          setIsReloading(false)
-          restoreSpringBone()
-        } catch (err)
-        {
-          setError(`Reload failed: ${String(err)}`)
-          setIsReloading(false)
-          restoreSpringBone()
-        }
-      },
-      (error) =>
-      {
-        children.forEach((child) => vrm.scene.add(child))
-        setError(`Export for reload failed: ${String(error)}`)
-        setIsReloading(false)
-        restoreSpringBone()
-      },
-      {
-        binary: true,
-        trs: false,
-        onlyVisible: true,
-      },
-    )
+    setVRM(loadResult.value)
+    setVRMAnimation(null)
+    setIsReloading(false)
+    restoreSpringBone()
   }, [vrm, springBoneEnabled])
 
   return (

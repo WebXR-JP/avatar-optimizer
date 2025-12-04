@@ -1,13 +1,145 @@
 # @xrift/avatar-optimizer
 
-XRift 用アバターモデル最適化ライブラリ。
-
-> ⚠️ **警告**: このプロジェクトは **開発進行中** です。実装の完成度は約 70-75% で、テスト失敗やビルドエラーがあります。本番環境での使用はお控えください。詳細は[実装状況](#実装状況)セクションを参照してください。
+WebXR アプリケーション向け VRM モデル最適化ライブラリ。
 
 ## 機能
 
-- **テクスチャアトラス化**: 各マテリアルのテクスチャをアトラス化して 1 枚にする
-- **Three.js ベース**: Three.js 上で各編集を行う
+- **VRM 読み込み/エクスポート**: URL / File / Blob / ArrayBuffer から VRM を読み込み、バイナリとしてエクスポート
+- **テクスチャアトラス化**: 複数マテリアルのテクスチャを 1 枚のアトラスに統合
+- **マテリアル統合**: MToon マテリアルを統合してドローコール数を削減
+- **VRM0 → VRM1 マイグレーション**: スケルトン・SpringBone の自動変換
+
+## インストール
+
+```bash
+npm install @xrift/avatar-optimizer
+# または
+pnpm add @xrift/avatar-optimizer
+```
+
+### Peer Dependencies
+
+```bash
+npm install @gltf-transform/core @gltf-transform/extensions @pixiv/three-vrm @pixiv/three-vrm-materials-mtoon three
+```
+
+## 使い方
+
+### VRM の読み込み
+
+```typescript
+import { loadVRM } from '@xrift/avatar-optimizer'
+
+// URL から読み込み
+const result = await loadVRM('/path/to/model.vrm')
+
+if (result.isOk()) {
+  const vrm = result.value
+  scene.add(vrm.scene)
+}
+
+// File から読み込み (ファイルアップロード)
+const fileResult = await loadVRM(file)
+
+// ArrayBuffer から読み込み
+const bufferResult = await loadVRM(arrayBuffer)
+```
+
+### VRM のエクスポート
+
+```typescript
+import { exportVRM } from '@xrift/avatar-optimizer'
+
+const result = await exportVRM(vrm)
+
+if (result.isOk()) {
+  // ブラウザでダウンロード
+  const blob = new Blob([result.value], { type: 'application/octet-stream' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'model.vrm'
+  a.click()
+  URL.revokeObjectURL(url)
+
+  // Node.js でファイル書き出し
+  // fs.writeFileSync('output.vrm', Buffer.from(result.value))
+}
+```
+
+### VRM の最適化
+
+```typescript
+import { loadVRM, optimizeModel, exportVRM } from '@xrift/avatar-optimizer'
+
+// VRM を読み込み
+const loadResult = await loadVRM('/model.vrm')
+if (loadResult.isErr()) {
+  console.error(loadResult.error)
+  return
+}
+const vrm = loadResult.value
+
+// 最適化を実行
+const optimizeResult = await optimizeModel(vrm, {
+  migrateVRM0ToVRM1: true,  // VRM0 → VRM1 マイグレーション
+  atlas: {
+    defaultResolution: 2048,  // アトラス解像度
+    slotResolutions: {        // スロットごとの解像度
+      normalMap: 1024,
+      emissiveMap: 512,
+    },
+  },
+})
+
+if (optimizeResult.isErr()) {
+  console.error(optimizeResult.error)
+  return
+}
+
+// 最適化結果を確認
+console.log('統合グループ数:', optimizeResult.value.groups.size)
+
+// エクスポート
+const exportResult = await exportVRM(vrm)
+```
+
+## API リファレンス
+
+### `loadVRM(source): ResultAsync<VRM, VRMLoaderError>`
+
+VRM を読み込みます。
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `source` | `string \| File \| Blob \| ArrayBuffer` | VRM ソース |
+
+### `exportVRM(vrm, options?): ResultAsync<ArrayBuffer, ExportVRMError>`
+
+VRM をバイナリとしてエクスポートします。
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `vrm` | `VRM` | エクスポート対象 |
+| `options.binary` | `boolean` | バイナリ形式で出力 (default: `true`) |
+
+### `optimizeModel(vrm, options?): ResultAsync<CombinedMeshResult, OptimizationError>`
+
+VRM のマテリアルを最適化します。
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `vrm` | `VRM` | 最適化対象 |
+| `options.migrateVRM0ToVRM1` | `boolean` | VRM0→VRM1 マイグレーション |
+| `options.atlas.defaultResolution` | `number` | デフォルトアトラス解像度 (default: `2048`) |
+| `options.atlas.slotResolutions` | `Record<string, number>` | スロットごとの解像度オーバーライド |
+
+### ユーティリティ関数
+
+| 関数 | 説明 |
+|------|------|
+| `migrateSkeletonVRM0ToVRM1(scene)` | スケルトンを VRM0 から VRM1 形式に変換 |
+| `migrateSpringBone(vrm)` | SpringBone を VRM1 形式に調整 |
 
 ## プロジェクト構成
 
@@ -15,110 +147,10 @@ XRift 用アバターモデル最適化ライブラリ。
 
 ```
 packages/
-├── avatar-optimizer/              # メインライブラリ (VRM最適化 + テクスチャアトラス)
-│   ├── src/
-│   │   ├── core/                 # 最適化ロジック
-│   │   ├── material/             # マテリアル・アトラス化処理
-│   │   ├── vrm/                  # VRM 読み込み/エクスポート層
-│   │   ├── types.ts              # 型定義集約
-│   │   └── index.ts              # ライブラリエクスポート管理
-│   ├── tests/                    # Vitest ユニットテスト
-│   ├── dist/                     # ビルド出力 (ESM/型定義)
-│   └── package.json
-│
-├── mtoon-atlas/             # MToon インスタンシング マテリアル
-│   ├── src/
-│   │   ├── index.ts              # MToonInstancingMaterial クラス
-│   │   └── types.ts              # 型定義 (ParameterTextureDescriptor など)
-│   ├── tests/                    # Vitest ユニットテスト
-│   ├── dist/                     # ビルド出力 (ESM/型定義)
-│   └── package.json
-│
-└── debug-viewer/                 # VRM 表示用デバッグビューア
-    ├── src/
-    │   ├── viewer/               # Three.js + @pixiv/three-vrm 実装
-    │   ├── utils/                # レンダリングユーティリティ
-    │   └── types.ts              # 型定義
-    ├── __tests__/
-    │   ├── fixtures/             # テスト用 VRM サンプル
-    │   └── __tests__/            # Vitest ユニットテスト
-    └── dist/                     # ビルド出力
+├── avatar-optimizer/    # メインライブラリ
+├── mtoon-atlas/         # MToon Atlas マテリアル
+└── debug-viewer/        # VRM デバッグビューア
 ```
-
-## 実装状況
-
-プロジェクトは **70-75% 完成** です。以下は各パッケージの実装状況です。
-
-### パッケージ別の完成度
-
-| パッケージ           | 完成度  | 状態                                                  |
-| -------------------- | ------- | ----------------------------------------------------- |
-| **avatar-optimizer** | 80%     | 主要機能実装済み、テスト 2 件失敗                     |
-| **mtoon-atlas**      | ~~95%~~ | ~~本体完成、シェーダーグラフ拡張待ち~~ 作り直しが必要 |
-| **debug-viewer**     | 60%     | ビルドエラーで実行不可                                |
-
-### ✅ 実装済みの主要機能
-
-**avatar-optimizer:**
-
-- `optimizeModel()` - Three.js マテリアル最適化（完全実装）
-- `combineMToonMaterials()` - マテリアル結合処理（724 行）
-- `createParameterTexture()` - パラメータテクスチャ生成（19 パラメータ対応）
-- `packTextures()` - MaxRects テクスチャパッキング
-- `composeImagesToAtlas()` - WebGL オフスクリーン描画によるアトラス合成
-- `applyPlacementsToGeometries()` - UV 座標再マッピング
-
-**mtoon-atlas:**
-
-- **NodeMaterial が WebXR で使えないことが発覚したので現状白紙**
-- ~~`MToonInstancingMaterial` クラス（380 行、完全実装）~~
-- ~~パラメータテクスチャの自動サンプリング~~
-- ~~アトラステクスチャの自動設定~~
-- ~~スロット属性管理~~
-
-**debug-viewer:**
-
-- VRM ファイル読み込み機能
-- 3D レンダリング表示
-- テクスチャビューア
-
-### ❌ 未実装・進行中の機能
-
-| 機能                                | 状態                             |
-| ----------------------------------- | -------------------------------- |
-| `calculateVRMStatistics()`          | 未実装（型定義のみ）             |
-| UV アニメーション scroll パラメータ | 部分実装（TODO コメント）        |
-| SkinnedMesh 完全対応                | 部分実装（スキニング情報が破棄） |
-| debug-viewer ビルド                 | 失敗中（TypeScript エラー 6 件） |
-
-### 🧪 テスト状況
-
-- **成功**: 28/36 件 (78%)
-- **失敗**: 3 件（UV 変換関連）
-- **mtoon-atlas**: 3/3 成功 ✓
-
-### 🏗️ ビルド状況
-
-- `avatar-optimizer`: ✓ 成功
-- `mtoon-atlas`: ✓ 成功
-- `debug-viewer`: ✗ 失敗（TypeScript コンパイルエラー）
-
----
-
-## API
-
-### `optimizeModel(objects: Object3D[], options?: OptimizationOptions): ResultAsync<OptimizedMaterialResult, MaterialOptimizationError>`
-
-Three.js オブジェクトのマテリアルを最適化します。複数の MToonNodeMaterial をテクスチャパッキング・アトラス化し、MToonInstancingMaterial に統合します。
-
-#### パラメータ
-
-- `objects`: 最適化対象の Three.js オブジェクトの配列
-- `options` (オプション): 最適化オプション
-
-#### 戻り値
-
-- `ResultAsync<OptimizedMaterialResult, MaterialOptimizationError>`: 最適化結果を返す
 
 ## 開発
 

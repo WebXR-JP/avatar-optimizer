@@ -5,6 +5,9 @@
 // メイン処理のエクスポート
 export { optimizeModel } from './avatar-optimizer'
 
+// IO (load/export)
+export { exportVRM, loadVRM, type VRMSource } from './io'
+
 // Material types
 export type {
   AtlasBuildResult,
@@ -20,12 +23,15 @@ export type {
 export type {
   AtlasGenerationOptions,
   AtlasTextureDescriptor,
+  ExportVRMError,
+  ExportVRMOptions,
   OptimizationError,
   OptimizationOptions,
   OptimizeModelOptions,
   SlotAtlasResolution,
   TextureSlotInfo,
   ThreeVRMDocument,
+  VRMLoaderError,
 } from './types'
 
 // Exporter
