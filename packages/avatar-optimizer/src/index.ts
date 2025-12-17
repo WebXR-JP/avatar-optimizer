@@ -28,11 +28,15 @@ export type {
   OptimizationError,
   OptimizationOptions,
   OptimizeModelOptions,
+  SimplifyOptions,
   SlotAtlasResolution,
   TextureSlotInfo,
   ThreeVRMDocument,
   VRMLoaderError,
 } from './types'
+
+// Simplify types
+export type { SimplifyStatistics } from './process/simplify'
 
 // Exporter
 export { VRMExporterPlugin } from './exporter'

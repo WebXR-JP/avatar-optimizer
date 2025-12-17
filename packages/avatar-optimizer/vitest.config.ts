@@ -1,3 +1,4 @@
+import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -9,29 +10,26 @@ export default defineConfig({
     testTimeout: 30_000,
     coverage: {
       enabled: true,
-      provider: 'istanbul', // webdriverioブラウザプロバイダと互換性を持たせるため
+      provider: 'istanbul',
     },
     browser: {
       enabled: true,
-      provider: 'webdriverio',
-      name: 'chrome',
       headless: true,
-      providerOptions: {
-        capabilities: {
-          'goog:chromeOptions': {
-            args: [
-              '--use-gl=angle',
-              '--use-angle=swiftshader',
-              '--enable-unsafe-swiftshader',
-              '--enable-webgl',
-              '--ignore-gpu-blocklist',
-              '--disable-gpu-sandbox',
-              '--no-sandbox',
-              '--disable-dev-shm-usage',
-            ],
-          },
+      provider: playwright({
+        launchOptions: {
+          args: [
+            '--use-gl=angle',
+            '--use-angle=swiftshader',
+            '--enable-unsafe-swiftshader',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+            '--disable-gpu-sandbox',
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+          ],
         },
-      },
+      }),
+      instances: [{ browser: 'chromium' }],
     },
   },
 })

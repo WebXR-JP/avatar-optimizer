@@ -6,6 +6,7 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
 import { Matrix3, Mesh } from 'three'
+import type { SimplifyStatistics } from '../../process/simplify'
 import { OffsetScale } from '../../types'
 
 /**
@@ -171,5 +172,7 @@ export interface CombinedMeshResult {
     originalMaterialCount: number
     /** 削減されたドローコール数 */
     reducedDrawCalls: number
+    /** メッシュ簡略化の統計（簡略化を実行した場合のみ） */
+    simplify?: SimplifyStatistics
   }
 }

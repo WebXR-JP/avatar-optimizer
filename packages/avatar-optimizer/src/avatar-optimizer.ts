@@ -4,6 +4,7 @@ import { Bone, BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
+import { simplifyMeshes, SimplifyStatistics } from './process/simplify'
 import { OffsetScale, OptimizationError, OptimizeModelOptions } from './types'
 import {
   assignAtlasTexturesToMaterial,
@@ -76,6 +77,7 @@ export function optimizeModel(
     yield* applyPlacementsToGeometries(rootNode, materialPlacementMap)
 
     // 顔メッシュ（表情で使われているメッシュ）を特定
+    // 簡略化とメッシュ統合から除外するメッシュのSet
     const excludedMeshes = new Set<Mesh>()
     if (vrm.expressionManager) {
       for (const expression of vrm.expressionManager.expressions) {
@@ -101,6 +103,17 @@ export function optimizeModel(
           }
         }
       }
+    }
+
+    // メッシュ簡略化（オプションが設定されている場合）
+    // UVリマッピング後、メッシュ統合前に実行
+    let simplifyStats: SimplifyStatistics | undefined
+    if (options.simplify) {
+      simplifyStats = yield* await simplifyMeshes(
+        rootNode,
+        excludedMeshes,
+        options.simplify,
+      )
     }
 
     // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
@@ -220,6 +233,11 @@ export function optimizeModel(
       // - コライダーオフセットをY軸180度回転
       // - SpringBoneの初期状態を再設定
       migrateSpringBone(vrm)
+    }
+
+    // 簡略化統計を結果に追加
+    if (simplifyStats) {
+      combineResult.statistics.simplify = simplifyStats
     }
 
     return ok(combineResult)

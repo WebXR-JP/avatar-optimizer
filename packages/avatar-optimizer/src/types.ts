@@ -31,6 +31,49 @@ export interface OptimizationOptions {
 }
 
 /**
+ * メッシュ簡略化オプション
+ */
+export interface SimplifyOptions {
+  /**
+   * 目標頂点削減率 (0.0-1.0)
+   * 例: 0.5 = 頂点数を50%に削減
+   * @default 0.5
+   */
+  targetRatio?: number
+  /**
+   * 目標エラー値（0.0-1.0）
+   * 簡略化による形状変化の許容度
+   * @default 0.01
+   */
+  targetError?: number
+  /**
+   * 境界頂点をロックするか
+   * trueの場合、メッシュの端にある頂点は移動・削除されない
+   * @default true
+   */
+  lockBorder?: boolean
+  /**
+   * UV属性の重み（0.0-1.0）
+   * 高い値ほどテクスチャ座標の保護を優先
+   * @default 1.0
+   */
+  uvWeight?: number
+  /**
+   * 法線属性の重み（0.0-1.0）
+   * 高い値ほどシェーディングの滑らかさを優先
+   * @default 0.5
+   */
+  normalWeight?: number
+  /**
+   * MorphTargetを持つメッシュの処理方法
+   * - 'skip': 簡略化をスキップ
+   * - 'discard': MorphTargetを破棄して簡略化
+   * @default 'skip'
+   */
+  morphTargetHandling?: 'skip' | 'discard'
+}
+
+/**
  * optimizeModel 関数のオプション
  */
 export interface OptimizeModelOptions {
@@ -44,6 +87,11 @@ export interface OptimizeModelOptions {
    * スロットごとの解像度指定などを行う
    */
   atlas?: AtlasGenerationOptions
+  /**
+   * メッシュ簡略化オプション
+   * 設定された場合、excludedMeshes以外のメッシュを簡略化
+   */
+  simplify?: SimplifyOptions
 }
 
 /**
