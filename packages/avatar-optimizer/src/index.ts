@@ -35,8 +35,8 @@ export type {
   VRMLoaderError,
 } from './types'
 
-// Simplify types
-export type { SimplifyStatistics } from './process/simplify'
+// Simplify
+export { simplifyMeshes, type SimplifyStatistics } from './process/simplify'
 
 // Exporter
 export { VRMExporterPlugin } from './exporter'

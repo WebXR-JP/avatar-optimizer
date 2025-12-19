@@ -282,3 +282,36 @@
   outline: none;
   border-color: #0066cc;
 }
+
+/* Simplify統計パネル */
+.vrm-canvas__simplify-panel {
+  position: absolute;
+  top: 70px;
+  left: 10px;
+  padding: 0.75rem 1rem;
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #9f4aff;
+  border-radius: 6px;
+  z-index: 100;
+  color: #fff;
+  font-size: 0.875rem;
+  max-width: 400px;
+}
+
+.vrm-canvas__simplify-header {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #9f4aff;
+}
+
+.vrm-canvas__simplify-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.vrm-canvas__simplify-stats div {
+  font-family: monospace;
+}

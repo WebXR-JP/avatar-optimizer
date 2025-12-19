@@ -5,7 +5,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
-import type { AtlasGenerationOptions } from '@xrift/avatar-optimizer'
+import type { AtlasGenerationOptions, SimplifyStatistics } from '@xrift/avatar-optimizer'
 
 import './VRMCanvas.css'
 
@@ -128,6 +128,9 @@ interface VRMCanvasProps
   atlasOptions: AtlasGenerationOptions
   onAtlasOptionsChange: (options: AtlasGenerationOptions) => void
   lastExportSize: number | null
+  onSimplifyOnly: () => Promise<void>
+  isSimplifying: boolean
+  lastSimplifyStats: SimplifyStatistics | null
 }
 
 /**
@@ -186,6 +189,9 @@ function VRMCanvas({
   atlasOptions,
   onAtlasOptionsChange,
   lastExportSize,
+  onSimplifyOnly,
+  isSimplifying,
+  lastSimplifyStats,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -255,6 +261,14 @@ function VRMCanvas({
               style={{ backgroundColor: '#ff9f4a' }}
             >
               Migrate Only
+            </button>
+            <button
+              className="vrm-canvas__optimize-btn"
+              onClick={onSimplifyOnly}
+              disabled={!vrm || isSimplifying}
+              style={{ backgroundColor: '#9f4aff' }}
+            >
+              {isSimplifying ? 'Simplifying...' : 'Simplify Only'}
             </button>
             <button
               className="vrm-canvas__export-btn"
@@ -457,6 +471,18 @@ function VRMCanvas({
               </label>
             </div>
           </div>
+
+          {/* Simplify 統計パネル */}
+          {lastSimplifyStats && (
+            <div className="vrm-canvas__simplify-panel">
+              <div className="vrm-canvas__simplify-header">Simplify Stats</div>
+              <div className="vrm-canvas__simplify-stats">
+                <div>処理: {lastSimplifyStats.processedMeshCount} メッシュ (スキップ: {lastSimplifyStats.skippedMeshCount})</div>
+                <div>頂点: {lastSimplifyStats.originalVertexCount.toLocaleString()} → {lastSimplifyStats.simplifiedVertexCount.toLocaleString()} ({(lastSimplifyStats.vertexReductionRatio * 100).toFixed(1)}% 削減)</div>
+                <div>インデックス: {lastSimplifyStats.originalIndexCount.toLocaleString()} → {lastSimplifyStats.simplifiedIndexCount.toLocaleString()} ({(lastSimplifyStats.indexReductionRatio * 100).toFixed(1)}% 削減)</div>
+              </div>
+            </div>
+          )}
 
           {/* 表情（モーフ）パネル */}
           {vrm?.expressionManager && (

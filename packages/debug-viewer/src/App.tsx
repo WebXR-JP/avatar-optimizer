@@ -3,9 +3,10 @@ import { Box, Tabs, Tab } from '@mui/material'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
+import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, type AtlasGenerationOptions } from '@xrift/avatar-optimizer'
+import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics } from '@xrift/avatar-optimizer'
 import type { DebugMode } from '@xrift/mtoon-atlas'
 import './App.css'
 
@@ -28,6 +29,8 @@ function App()
     defaultResolution: 2048,
   })
   const [lastExportSize, setLastExportSize] = useState<number | null>(null)
+  const [isSimplifying, setIsSimplifying] = useState(false)
+  const [lastSimplifyStats, setLastSimplifyStats] = useState<SimplifyStatistics | null>(null)
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -193,6 +196,149 @@ function App()
     migrateSpringBone(vrm)
 
     console.log('Migration successful')
+  }, [vrm])
+
+  // メッシュ簡略化のみ（デバッグ用）
+  const handleSimplifyOnly = useCallback(async () =>
+  {
+    if (!vrm) return
+
+    setIsSimplifying(true)
+    setError(null)
+
+    // 表情メッシュを特定（簡略化から除外）
+    const excludedMeshes = new Set<import('three').Mesh>()
+    if (vrm.expressionManager)
+    {
+      for (const expression of vrm.expressionManager.expressions)
+      {
+        for (const bind of expression.binds)
+        {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const bindAny = bind as any
+
+          // MorphTargetBind
+          if (bindAny.primitives)
+          {
+            for (const mesh of bindAny.primitives)
+            {
+              if (mesh && mesh.isMesh)
+              {
+                excludedMeshes.add(mesh)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const result = await simplifyMeshes(vrm.scene, excludedMeshes, {
+      targetRatio: 0.5, // 50%に削減
+      morphTargetHandling: 'skip',
+    })
+
+    if (result.isErr())
+    {
+      const err = result.error
+      console.error(err)
+      setError(`Simplify failed (${err.type}): ${err.message}`)
+      setIsSimplifying(false)
+      return
+    }
+
+    const stats = result.value
+    setLastSimplifyStats(stats)
+    console.log('Simplify successful:', stats)
+    console.log(`頂点: ${stats.originalVertexCount} -> ${stats.simplifiedVertexCount} (${(stats.vertexReductionRatio * 100).toFixed(1)}% 削減)`)
+    console.log(`インデックス: ${stats.originalIndexCount} -> ${stats.simplifiedIndexCount} (${(stats.indexReductionRatio * 100).toFixed(1)}% 削減)`)
+
+    // デバッグ: 簡略化後のメッシュ状態を確認
+    console.log('=== Simplified Mesh Debug Info ===')
+    vrm.scene.traverse((obj) =>
+    {
+      if (obj instanceof Mesh)
+      {
+        const geo = obj.geometry
+        const posAttr = geo.getAttribute('position')
+        const normalAttr = geo.getAttribute('normal')
+        const skinIndexAttr = geo.getAttribute('skinIndex')
+        const skinWeightAttr = geo.getAttribute('skinWeight')
+
+        // 位置データにNaN/Infinityがないか確認
+        let hasInvalidPosition = false
+        if (posAttr)
+        {
+          for (let i = 0; i < Math.min(posAttr.count * 3, 100); i++)
+          {
+            if (!Number.isFinite(posAttr.array[i]))
+            {
+              hasInvalidPosition = true
+              break
+            }
+          }
+        }
+
+        // SkinnedMesh固有の情報
+        let skeletonInfo = null
+        if (obj instanceof SkinnedMesh)
+        {
+          const skeleton = obj.skeleton
+          skeletonInfo = skeleton
+            ? {
+              boneCount: skeleton.bones.length,
+              boneMatricesLength: skeleton.boneMatrices?.length,
+              hasBoneTexture: !!skeleton.boneTexture,
+            }
+            : 'no skeleton'
+        }
+
+        // skinIndex の値を確認（不正な値がないか）
+        let maxSkinIndex = -1
+        let hasInvalidSkinIndex = false
+        if (skinIndexAttr)
+        {
+          for (let i = 0; i < skinIndexAttr.count * 4; i++)
+          {
+            const idx = skinIndexAttr.array[i]
+            if (idx > maxSkinIndex) maxSkinIndex = idx
+            if (!Number.isFinite(idx) || idx < 0)
+            {
+              hasInvalidSkinIndex = true
+            }
+          }
+        }
+
+        console.log({
+          name: obj.name,
+          type: obj.type,
+          visible: obj.visible,
+          frustumCulled: obj.frustumCulled,
+          vertexCount: posAttr?.count,
+          indexCount: geo.index?.count,
+          indexType: geo.index?.array.constructor.name,
+          drawRange: geo.drawRange,
+          groups: geo.groups,
+          groupsCount: geo.groups.length,
+          boundingSphere: geo.boundingSphere
+            ? { center: geo.boundingSphere.center.toArray(), radius: geo.boundingSphere.radius }
+            : null,
+          hasInvalidPosition,
+          hasNormal: !!normalAttr,
+          hasSkinIndex: !!skinIndexAttr,
+          hasSkinWeight: !!skinWeightAttr,
+          maxSkinIndex,
+          hasInvalidSkinIndex,
+          skeletonInfo,
+          materialVisible: Array.isArray(obj.material)
+            ? obj.material.map((m) => m.visible)
+            : obj.material?.visible,
+          materialCount: Array.isArray(obj.material) ? obj.material.length : 1,
+        })
+      }
+    })
+    console.log('=== End Debug Info ===')
+
+    setIsSimplifying(false)
   }, [vrm])
 
   const handleReplaceTextures = useCallback(async () =>
@@ -378,6 +524,9 @@ function App()
           atlasOptions={atlasOptions}
           onAtlasOptionsChange={setAtlasOptions}
           lastExportSize={lastExportSize}
+          onSimplifyOnly={handleSimplifyOnly}
+          isSimplifying={isSimplifying}
+          lastSimplifyStats={lastSimplifyStats}
         />
 
         {/* Routes でオーバーレイを管理 */}
