@@ -6,7 +6,7 @@
  */
 
 import { ResultAsync } from 'neverthrow'
-import { Mesh, Object3D } from 'three'
+import { Mesh, Object3D, SkinnedMesh } from 'three'
 import { OptimizationError, SimplifyOptions } from '../types'
 import { ensureSimplifierReady, simplifyGeometry } from '../util/mesh/simplify-mesh'
 
@@ -123,6 +123,25 @@ async function simplifyMeshesAsync(
     // ジオメトリを置き換え
     const oldGeometry = mesh.geometry
     mesh.geometry = result.value
+
+    // 全ての属性バッファを更新フラグをセット（WebGLキャッシュ対策）
+    for (const key of Object.keys(mesh.geometry.attributes)) {
+      const attr = mesh.geometry.attributes[key]
+      if (attr) {
+        attr.needsUpdate = true
+      }
+    }
+    if (mesh.geometry.index) {
+      mesh.geometry.index.needsUpdate = true
+    }
+
+    // SkinnedMeshの場合、バインドマトリックスを再計算
+    if (mesh instanceof SkinnedMesh) {
+      // バインドマトリックスを再適用（スケルトンとの関連付けを維持）
+      if (mesh.skeleton) {
+        mesh.bind(mesh.skeleton, mesh.bindMatrix)
+      }
+    }
 
     // 古いジオメトリを破棄
     oldGeometry.dispose()

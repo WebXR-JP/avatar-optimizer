@@ -111,8 +111,9 @@ export function simplifyGeometry(
       }
     }
 
-    // 目標インデックス数の計算
-    const targetIndexCount = Math.max(3, Math.floor(indices.length * opts.targetRatio))
+    // 目標インデックス数の計算（3の倍数に丸める）
+    const rawTargetCount = Math.floor(indices.length * opts.targetRatio)
+    const targetIndexCount = Math.max(3, Math.floor(rawTargetCount / 3) * 3)
 
     // フラグの設定
     const flags: ('LockBorder' | 'Sparse' | 'ErrorAbsolute')[] = []
@@ -257,6 +258,23 @@ function rebuildGeometry(
       const newAttr = new BufferAttribute(newArray, itemSize, normalized)
       newGeometry.setAttribute(name, newAttr)
     }
+
+    // グループ（マルチマテリアル用サブメッシュ）をコピー
+    // 簡略化によりインデックスが変わるため、元のグループ構造は維持できない
+    // グループがある場合は全インデックスを単一グループとして設定
+    if (originalGeometry.groups.length > 0) {
+      newGeometry.addGroup(0, remappedIndices.length, 0)
+
+      if (originalGeometry.groups.length > 1) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `複数グループ(${originalGeometry.groups.length})を持つジオメトリは単一グループに統合されます`,
+        )
+      }
+    }
+
+    // drawRangeをリセット（全体を描画対象に）
+    newGeometry.setDrawRange(0, Infinity)
 
     // バウンディングボックス/スフィアを再計算
     newGeometry.computeBoundingBox()
