@@ -172,9 +172,18 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
     geometry.setAttribute(attrName, rotated)
   }
 
+  // 処理済みのgeometryを追跡（共有geometryの重複処理を防ぐ）
+  const processedGeometries = new Set<SkinnedMesh['geometry']>()
+
   // 各SkinnedMeshを処理
   for (const mesh of skinnedMeshes) {
     const geometry = mesh.geometry
+
+    // 既に処理済みのgeometryはスキップ
+    if (processedGeometries.has(geometry)) {
+      continue
+    }
+    processedGeometries.add(geometry)
 
     // position属性
     const posAttr = geometry.getAttribute('position')
@@ -191,20 +200,32 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
     // morphTarget position属性
     const morphPositions = geometry.morphAttributes.position
     if (morphPositions && Array.isArray(morphPositions)) {
-      geometry.morphAttributes.position = morphPositions.map((morphAttr) => {
-        if (morphAttr.itemSize !== 3) return morphAttr
-        return editBufferAttribute<Float32Array>(morphAttr, rotateVec3Array)
-      })
+      for (let i = 0; i < morphPositions.length; i++) {
+        const morphAttr = morphPositions[i]
+        if (morphAttr.itemSize !== 3) continue
+        // 既存の配列を直接編集（GPUキャッシュ問題を回避）
+        const array = morphAttr.array as Float32Array
+        rotateVec3Array(array)
+        morphAttr.needsUpdate = true
+      }
     }
 
     // morphTarget normal属性
     const morphNormals = geometry.morphAttributes.normal
     if (morphNormals && Array.isArray(morphNormals)) {
-      geometry.morphAttributes.normal = morphNormals.map((morphAttr) => {
-        if (morphAttr.itemSize !== 3) return morphAttr
-        return editBufferAttribute<Float32Array>(morphAttr, rotateVec3Array)
-      })
+      for (let i = 0; i < morphNormals.length; i++) {
+        const morphAttr = morphNormals[i]
+        if (morphAttr.itemSize !== 3) continue
+        // 既存の配列を直接編集
+        const array = morphAttr.array as Float32Array
+        rotateVec3Array(array)
+        morphAttr.needsUpdate = true
+      }
     }
+
+    // Three.jsのmorphテクスチャキャッシュを無効化するためdisposeイベントを発火
+    // これにより次のレンダリングでmorphデータが再アップロードされる
+    geometry.dispatchEvent({ type: 'dispose' })
   }
 }
 
