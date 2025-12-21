@@ -8,6 +8,7 @@
 import { err, ok, Result } from 'neverthrow'
 import { BufferGeometry, Vector2 } from 'three'
 import { OffsetScale, OptimizationError } from '../../types'
+import { editBufferAttribute } from './buffer-attribute'
 
 function wrapUV(uv: Vector2) {
   let x = uv.x
@@ -61,6 +62,9 @@ function applyUVTransform(
 /**
  * BufferGeometry の UV 属性を再マッピング
  *
+ * editBufferAttribute を使用して安全に新しい BufferAttribute を作成し、
+ * 元のバッファを変更せずに処理する。
+ *
  * @param geometry - 更新対象のジオメトリ
  * @param uvTransform - UV配置情報
  */
@@ -77,13 +81,12 @@ export function remapGeometryUVs(
     })
   }
 
-  // UV データを取得
-  const uvArray = uvAttribute.array as Float32Array
-  if (!uvArray)
+  if (!uvAttribute.array) {
     return err({
       type: 'ASSET_ERROR',
       message: 'UVアトリビュート配列が存在しません',
     })
+  }
   if (uvAttribute.itemSize !== 2) {
     return err({
       type: 'ASSET_ERROR',
@@ -91,16 +94,21 @@ export function remapGeometryUVs(
     })
   }
 
-  // 全頂点の UV を変換
-  applyUVTransform(
-    uvArray,
-    uvTransform.scale.x,
-    uvTransform.scale.y,
-    uvTransform.offset.x,
-    uvTransform.offset.y,
+  // editBufferAttribute で安全に編集
+  const newUvAttribute = editBufferAttribute<Float32Array>(
+    uvAttribute,
+    (uvArray) => {
+      applyUVTransform(
+        uvArray,
+        uvTransform.scale.x,
+        uvTransform.scale.y,
+        uvTransform.offset.x,
+        uvTransform.offset.y,
+      )
+    },
   )
 
-  // 属性を更新
-  uvAttribute.needsUpdate = true
+  // 新しい属性を設定
+  geometry.setAttribute('uv', newUvAttribute)
   return ok()
 }

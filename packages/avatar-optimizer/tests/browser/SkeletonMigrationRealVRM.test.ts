@@ -695,10 +695,14 @@ describe('Skeleton Migration with Real VRM', () => {
       expect(result.isOk()).toBe(true)
 
       // マイグレーション後の「適用後位置」を計算
-      const afterBaseX = posAttr.getX(sampleVertexIndex)
-      const afterBaseZ = posAttr.getZ(sampleVertexIndex)
-      const afterDeltaX = morphAttr.getX(sampleVertexIndex)
-      const afterDeltaZ = morphAttr.getZ(sampleVertexIndex)
+      // 新しい BufferAttribute が設定されるため取り直す
+      const newPosAttr = mesh.geometry.getAttribute('position')
+      const newMorphPositions = mesh.geometry.morphAttributes.position
+      const newMorphAttr = newMorphPositions![0]
+      const afterBaseX = newPosAttr.getX(sampleVertexIndex)
+      const afterBaseZ = newPosAttr.getZ(sampleVertexIndex)
+      const afterDeltaX = newMorphAttr.getX(sampleVertexIndex)
+      const afterDeltaZ = newMorphAttr.getZ(sampleVertexIndex)
       const afterAppliedX = afterBaseX + afterDeltaX
       const afterAppliedZ = afterBaseZ + afterDeltaZ
 

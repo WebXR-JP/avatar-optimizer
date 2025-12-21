@@ -834,16 +834,18 @@ describe('skeleton-migration', () => {
       expect(result.isOk()).toBe(true)
 
       // マイグレーション後のmorphTarget値を確認
+      // geometry.morphAttributes.position は新しい BufferAttribute 配列で置き換わるため取り直す
+      const newMorphAttrs = mesh.geometry.morphAttributes.position!
       // Y軸180度回転: x' = -x, z' = -z, y' = y
       // morphTarget delta (0.5, 0, 0) -> (-0.5, 0, 0)
-      expect(morphAttrs[0].getX(0)).toBeCloseTo(-0.5)
-      expect(morphAttrs[0].getY(0)).toBeCloseTo(0)
-      expect(morphAttrs[0].getZ(0)).toBeCloseTo(0)
+      expect(newMorphAttrs[0].getX(0)).toBeCloseTo(-0.5)
+      expect(newMorphAttrs[0].getY(0)).toBeCloseTo(0)
+      expect(newMorphAttrs[0].getZ(0)).toBeCloseTo(0)
 
       // morphTarget delta (0, 0, 0.3) -> (0, 0, -0.3)
-      expect(morphAttrs[1].getX(2)).toBeCloseTo(0)
-      expect(morphAttrs[1].getY(2)).toBeCloseTo(0)
-      expect(morphAttrs[1].getZ(2)).toBeCloseTo(-0.3)
+      expect(newMorphAttrs[1].getX(2)).toBeCloseTo(0)
+      expect(newMorphAttrs[1].getY(2)).toBeCloseTo(0)
+      expect(newMorphAttrs[1].getZ(2)).toBeCloseTo(-0.3)
     })
 
     it('should not double-rotate morphTargets even if they share ArrayBuffer with position', () => {
@@ -964,8 +966,11 @@ describe('skeleton-migration', () => {
       // マイグレーション後: vertex 0 at (-1, 0, 0), morph delta (-0.5, 0, 0)
       // morphTarget適用後: (-1.5, 0, 0)
       // これはマイグレーション前の (1.5, 0, 0) をY軸180度回転した結果と一致すべき
-      const afterV0 = posAttr.getX(0)
-      const afterMorphDelta0 = morphAttrs[0].getX(0)
+      // 新しい BufferAttribute が設定されるため取り直す
+      const newPosAttr = mesh.geometry.getAttribute('position')
+      const newMorphAttrs = mesh.geometry.morphAttributes.position!
+      const afterV0 = newPosAttr.getX(0)
+      const afterMorphDelta0 = newMorphAttrs[0].getX(0)
       const afterApplied0 = afterV0 + afterMorphDelta0
       expect(afterApplied0).toBeCloseTo(-1.5)
 
@@ -974,8 +979,8 @@ describe('skeleton-migration', () => {
       // morphTarget適用後: (0, 0, 1.3)
       // マイグレーション後: vertex 2 at (0, 0, -1), morph delta (0, 0, -0.3)
       // morphTarget適用後: (0, 0, -1.3)
-      const afterV2Z = posAttr.getZ(2)
-      const afterMorphDelta2Z = morphAttrs[1].getZ(2)
+      const afterV2Z = newPosAttr.getZ(2)
+      const afterMorphDelta2Z = newMorphAttrs[1].getZ(2)
       const afterApplied2Z = afterV2Z + afterMorphDelta2Z
       expect(afterApplied2Z).toBeCloseTo(-1.3)
     })

@@ -2,6 +2,7 @@ import { err, ok, Result, safeTry } from 'neverthrow'
 import {
   Bone,
   BufferAttribute,
+  InterleavedBufferAttribute,
   Matrix4,
   Object3D,
   Quaternion,
@@ -10,6 +11,7 @@ import {
   Vector3,
 } from 'three'
 import { OptimizationError } from '../../types'
+import { editBufferAttribute } from '../mesh/buffer-attribute'
 
 /**
  * マイグレーションオプション
@@ -137,51 +139,37 @@ export function migrateSkeletonVRM0ToVRM1(
 /**
  * 全SkinnedMeshの頂点バッファにY軸180度回転を適用
  *
- * 各SkinnedMeshを走査し、BufferAttributeのarrayに対して直接処理を行う。
- * 同じTypedArrayが複数のBufferAttributeから参照されている場合に
- * 二重処理を防ぐため、処理済みのTypedArrayを記録する。
+ * editBufferAttribute を使用して安全に新しい BufferAttribute を作成し、
+ * 元のバッファを変更せずに処理する。
  *
  * @param skinnedMeshes - 処理対象のSkinnedMesh配列
  */
 function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
-  // 処理済みのTypedArrayを記録（二重処理防止）
-  const processedArrays = new Set<Float32Array>()
-
   /**
-   * BufferAttributeにY軸180度回転を適用
-   * @param attr - 処理対象のBufferAttribute
-   * @returns 処理した場合true
+   * Y軸180度回転を適用する編集関数
+   * 回転行列 [[−1, 0, 0], [0, 1, 0], [0, 0, −1]] を適用
    */
-  function rotateBufferAttribute(attr: BufferAttribute): boolean {
-    // vec3以外はスキップ
-    if (attr.itemSize !== 3) {
-      return false
-    }
-
-    const array = attr.array
-    if (!(array instanceof Float32Array)) {
-      return false
-    }
-
-    // 既に処理済みならスキップ
-    // if (processedArrays.has(array)) {
-    //   console.log('Array already processed, skipping:', array)
-    //   return false
-    // }
-    // processedArrays.add(array)
-
-    // Y軸180度回転を適用（x と z を反転）
-    // 回転行列 [[−1, 0, 0], [0, 1, 0], [0, 0, −1]] を適用
-    const count = attr.count
+  function rotateVec3Array(array: Float32Array): void {
+    const count = array.length / 3
     for (let i = 0; i < count; i++) {
       const baseIdx = i * 3
       array[baseIdx + 0] = -array[baseIdx + 0] // x = -x
-      // array[baseIdx + 1] = array[baseIdx + 1] // y = y (変更なし)
       array[baseIdx + 2] = -array[baseIdx + 2] // z = -z
     }
+  }
 
-    attr.needsUpdate = true
-    return true
+  /**
+   * BufferAttribute を回転して geometry に設定
+   */
+  function rotateAndSetAttribute(
+    geometry: SkinnedMesh['geometry'],
+    attrName: string,
+    attr: BufferAttribute | InterleavedBufferAttribute,
+  ): void {
+    if (attr.itemSize !== 3) return
+
+    const rotated = editBufferAttribute<Float32Array>(attr, rotateVec3Array)
+    geometry.setAttribute(attrName, rotated)
   }
 
   // 各SkinnedMeshを処理
@@ -190,35 +178,32 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
 
     // position属性
     const posAttr = geometry.getAttribute('position')
-    if (posAttr instanceof BufferAttribute) {
-      rotateBufferAttribute(posAttr)
+    if (posAttr) {
+      rotateAndSetAttribute(geometry, 'position', posAttr)
     }
 
     // normal属性
     const normalAttr = geometry.getAttribute('normal')
-    if (normalAttr instanceof BufferAttribute) {
-      rotateBufferAttribute(normalAttr)
+    if (normalAttr) {
+      rotateAndSetAttribute(geometry, 'normal', normalAttr)
     }
 
     // morphTarget position属性
     const morphPositions = geometry.morphAttributes.position
     if (morphPositions && Array.isArray(morphPositions)) {
-      for (const morphAttr of morphPositions) {
-        if (morphAttr instanceof BufferAttribute) {
-          console.log('Rotating morph position attribute', morphAttr)
-          rotateBufferAttribute(morphAttr)
-        }
-      }
+      geometry.morphAttributes.position = morphPositions.map((morphAttr) => {
+        if (morphAttr.itemSize !== 3) return morphAttr
+        return editBufferAttribute<Float32Array>(morphAttr, rotateVec3Array)
+      })
     }
 
     // morphTarget normal属性
     const morphNormals = geometry.morphAttributes.normal
     if (morphNormals && Array.isArray(morphNormals)) {
-      for (const morphAttr of morphNormals) {
-        if (morphAttr instanceof BufferAttribute) {
-          rotateBufferAttribute(morphAttr)
-        }
-      }
+      geometry.morphAttributes.normal = morphNormals.map((morphAttr) => {
+        if (morphAttr.itemSize !== 3) return morphAttr
+        return editBufferAttribute<Float32Array>(morphAttr, rotateVec3Array)
+      })
     }
   }
 }
