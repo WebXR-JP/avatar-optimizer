@@ -291,6 +291,61 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.19.1)(@vitest/browser@2.1.9)(happy-dom@20.0.10)(msw@2.12.3(@types/node@22.19.1)(typescript@5.9.3))
 
+  packages/texture-compression:
+    dependencies:
+      neverthrow:
+        specifier: ^8.2.0
+        version: 8.2.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.32.0
+        version: 9.39.1
+      '@types/node':
+        specifier: ^24.10.0
+        version: 24.10.0
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.38.0
+        version: 8.46.3(@typescript-eslint/parser@8.46.3(eslint@9.39.1)(typescript@5.9.3))(eslint@9.39.1)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.39.0
+        version: 8.46.3(eslint@9.39.1)(typescript@5.9.3)
+      '@vitest/browser-playwright':
+        specifier: ^4.0.16
+        version: 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(playwright@1.57.0)(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)
+      '@vitest/coverage-istanbul':
+        specifier: ^4.0.16
+        version: 4.0.16(vitest@4.0.16)
+      eslint:
+        specifier: ^9.32.0
+        version: 9.39.1
+      eslint-plugin-import:
+        specifier: ^2.32.0
+        version: 2.32.0(@typescript-eslint/parser@8.46.3(eslint@9.39.1)(typescript@5.9.3))(eslint@9.39.1)
+      eslint-plugin-simple-import-sort:
+        specifier: ^12.1.1
+        version: 12.1.1(eslint@9.39.1)
+      eslint-plugin-unused-imports:
+        specifier: ^4.1.4
+        version: 4.3.0(@typescript-eslint/eslint-plugin@8.46.3(@typescript-eslint/parser@8.46.3(eslint@9.39.1)(typescript@5.9.3))(eslint@9.39.1)(typescript@5.9.3))(eslint@9.39.1)
+      playwright:
+        specifier: ^1.57.0
+        version: 1.57.0
+      prettier:
+        specifier: ^3.3.0
+        version: 3.6.2
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.0(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.38.0
+        version: 8.46.3(eslint@9.39.1)(typescript@5.9.3)
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@24.10.0)(@vitest/browser-playwright@4.0.16)(happy-dom@20.0.10)(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(tsx@4.20.6)
+
 packages:
 
   '@babel/code-frame@7.27.1':
@@ -6265,6 +6320,19 @@ snapshots:
       - utf-8-validate
       - vite
 
+  '@vitest/browser-playwright@4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(playwright@1.57.0)(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)':
+    dependencies:
+      '@vitest/browser': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)
+      '@vitest/mocker': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))
+      playwright: 1.57.0
+      tinyrainbow: 3.0.3
+      vitest: 4.0.16(@types/node@24.10.0)(@vitest/browser-playwright@4.0.16)(happy-dom@20.0.10)(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(tsx@4.20.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - msw
+      - utf-8-validate
+      - vite
+
   '@vitest/browser@2.1.9(@types/node@22.19.1)(playwright@1.57.0)(typescript@5.9.3)(vite@5.4.21(@types/node@22.19.1))(vitest@2.1.9)(webdriverio@9.20.1)':
     dependencies:
       '@testing-library/dom': 10.4.1
@@ -6291,6 +6359,23 @@ snapshots:
   '@vitest/browser@4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)':
     dependencies:
       '@vitest/mocker': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.0)(tsx@4.20.6))
+      '@vitest/utils': 4.0.16
+      magic-string: 0.30.21
+      pixelmatch: 7.1.0
+      pngjs: 7.0.0
+      sirv: 3.0.2
+      tinyrainbow: 3.0.3
+      vitest: 4.0.16(@types/node@24.10.0)(@vitest/browser-playwright@4.0.16)(happy-dom@20.0.10)(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(tsx@4.20.6)
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - bufferutil
+      - msw
+      - utf-8-validate
+      - vite
+
+  '@vitest/browser@4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)':
+    dependencies:
+      '@vitest/mocker': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))
       '@vitest/utils': 4.0.16
       magic-string: 0.30.21
       pixelmatch: 7.1.0
@@ -6374,6 +6459,15 @@ snapshots:
     optionalDependencies:
       msw: 2.12.3(@types/node@24.10.0)(typescript@5.9.3)
       vite: 6.4.1(@types/node@24.10.0)(tsx@4.20.6)
+
+  '@vitest/mocker@4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))':
+    dependencies:
+      '@vitest/spy': 4.0.16
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.12.3(@types/node@24.10.0)(typescript@5.9.3)
+      vite: 7.2.2(@types/node@24.10.0)(tsx@4.20.6)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:

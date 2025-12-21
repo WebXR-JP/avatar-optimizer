@@ -1,5 +1,6 @@
 packages:
   - 'packages/avatar-optimizer'
   - 'packages/texture-atlas'
+  - 'packages/texture-compression'
   - 'packages/debug-viewer'
   - 'packages/mtoon-atlas'
