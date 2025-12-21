@@ -8,6 +8,7 @@ WebXR アプリケーション向け VRM モデル最適化ライブラリ。
 - **テクスチャアトラス化**: 複数マテリアルのテクスチャを 1 枚のアトラスに統合
 - **マテリアル統合**: MToon マテリアルを統合してドローコール数を削減
 - **VRM0 → VRM1 マイグレーション**: スケルトン・SpringBone の自動変換
+- **メッシュ簡略化**: meshoptimizer による頂点削減でポリゴン数を削減
 
 ## インストール
 
@@ -90,6 +91,10 @@ const optimizeResult = await optimizeModel(vrm, {
       emissiveMap: 512,
     },
   },
+  simplify: {                 // メッシュ簡略化オプション
+    targetRatio: 0.5,         // 頂点数を50%に削減
+    targetError: 0.01,        // 許容エラー値
+  },
 })
 
 if (optimizeResult.isErr()) {
@@ -133,6 +138,20 @@ VRM のマテリアルを最適化します。
 | `options.migrateVRM0ToVRM1` | `boolean` | VRM0→VRM1 マイグレーション |
 | `options.atlas.defaultResolution` | `number` | デフォルトアトラス解像度 (default: `2048`) |
 | `options.atlas.slotResolutions` | `Record<string, number>` | スロットごとの解像度オーバーライド |
+| `options.simplify` | `SimplifyOptions` | メッシュ簡略化オプション |
+
+#### SimplifyOptions
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|------------|------|
+| `targetRatio` | `number` | `0.5` | 目標頂点削減率 (0.0-1.0)。0.5 = 頂点数を50%に削減 |
+| `targetError` | `number` | `0.01` | 許容エラー値 (0.0-1.0)。形状変化の許容度 |
+| `lockBorder` | `boolean` | `true` | 境界頂点をロック。メッシュ端の頂点を固定 |
+| `uvWeight` | `number` | `1.0` | UV属性の重み。高いほどテクスチャ座標を保護 |
+| `normalWeight` | `number` | `0.5` | 法線属性の重み。高いほどシェーディングを保護 |
+| `morphTargetHandling` | `'skip' \| 'discard'` | `'skip'` | MorphTarget持ちメッシュの処理方法 |
+
+> **注意**: 表情用メッシュ（excludedMeshes）は自動的に簡略化対象から除外されます。MorphTargetを持つメッシュは `morphTargetHandling` オプションで制御できます。
 
 ### ユーティリティ関数
 
