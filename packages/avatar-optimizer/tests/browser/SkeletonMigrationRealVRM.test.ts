@@ -517,4 +517,198 @@ describe('Skeleton Migration with Real VRM', () => {
       expect(closeRatio).toBeGreaterThan(0.5) // 50%以上が同程度の移動量
     })
   })
+
+  describe('morphTarget rotation after migration', () => {
+    it('should correctly rotate morphTarget deltas by 180 degrees around Y axis', async () => {
+      // VRMをロード
+      const loader = new GLTFLoader()
+      loader.register((parser) => new VRMLoaderPlugin(parser))
+
+      const response = await fetch(VRM_FILE_PATH)
+      const buffer = await response.arrayBuffer()
+      const gltf = await loader.parseAsync(buffer, '')
+      const vrm = gltf.userData.vrm as VRM
+      expect(vrm).toBeDefined()
+
+      const rootNode = vrm.scene
+
+      // morphTargetを持つSkinnedMeshを収集
+      const meshesWithMorphTargets: SkinnedMesh[] = []
+      rootNode.traverse((obj) => {
+        if (obj instanceof SkinnedMesh) {
+          const morphPositions = obj.geometry.morphAttributes.position
+          if (morphPositions && morphPositions.length > 0) {
+            meshesWithMorphTargets.push(obj)
+          }
+        }
+      })
+      expect(meshesWithMorphTargets.length).toBeGreaterThan(0)
+
+      // マイグレーション前のmorphTarget deltas を記録
+      // 各メッシュの最初のmorphTargetから、非ゼロの値を持つ頂点を探す
+      interface MorphSample {
+        meshName: string
+        targetIndex: number
+        vertexIndex: number
+        before: { x: number; y: number; z: number }
+      }
+      const samples: MorphSample[] = []
+
+      for (const mesh of meshesWithMorphTargets) {
+        const morphPositions = mesh.geometry.morphAttributes.position
+        if (!morphPositions) continue
+
+        for (let ti = 0; ti < Math.min(morphPositions.length, 3); ti++) {
+          const morphAttr = morphPositions[ti]
+          // 非ゼロdeltaを持つ頂点を探す
+          for (let vi = 0; vi < morphAttr.count; vi++) {
+            const x = morphAttr.getX(vi)
+            const y = morphAttr.getY(vi)
+            const z = morphAttr.getZ(vi)
+            const magnitude = Math.sqrt(x * x + y * y + z * z)
+            if (magnitude > 0.001) {
+              samples.push({
+                meshName: mesh.name,
+                targetIndex: ti,
+                vertexIndex: vi,
+                before: { x, y, z },
+              })
+              break // このターゲットから1つだけサンプル
+            }
+          }
+        }
+      }
+      expect(samples.length).toBeGreaterThan(0)
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後のmorphTarget deltasを確認
+      const failedSamples: string[] = []
+
+      for (const sample of samples) {
+        const mesh = meshesWithMorphTargets.find((m) => m.name === sample.meshName)
+        if (!mesh) continue
+
+        const morphPositions = mesh.geometry.morphAttributes.position
+        if (!morphPositions) continue
+
+        const morphAttr = morphPositions[sample.targetIndex]
+        const afterX = morphAttr.getX(sample.vertexIndex)
+        const afterY = morphAttr.getY(sample.vertexIndex)
+        const afterZ = morphAttr.getZ(sample.vertexIndex)
+
+        // Y軸180度回転後の期待値: x' = -x, z' = -z, y' = y
+        const expectedX = -sample.before.x
+        const expectedY = sample.before.y
+        const expectedZ = -sample.before.z
+
+        const tolerance = 1e-4
+        const xOk = Math.abs(afterX - expectedX) < tolerance
+        const yOk = Math.abs(afterY - expectedY) < tolerance
+        const zOk = Math.abs(afterZ - expectedZ) < tolerance
+
+        if (!xOk || !yOk || !zOk) {
+          failedSamples.push(
+            `${sample.meshName}[${sample.targetIndex}][${sample.vertexIndex}]: ` +
+              `before=(${sample.before.x.toFixed(4)}, ${sample.before.y.toFixed(4)}, ${sample.before.z.toFixed(4)}) -> ` +
+              `after=(${afterX.toFixed(4)}, ${afterY.toFixed(4)}, ${afterZ.toFixed(4)}) ` +
+              `expected=(${expectedX.toFixed(4)}, ${expectedY.toFixed(4)}, ${expectedZ.toFixed(4)})`,
+          )
+        }
+      }
+
+      if (failedSamples.length > 0) {
+        console.error(`[MorphTarget Test] ${failedSamples.length} samples failed:`)
+        for (const failed of failedSamples) {
+          console.error(`  ${failed}`)
+        }
+      }
+
+      expect(failedSamples).toHaveLength(0)
+    })
+
+    it('should preserve morphTarget effect direction after migration', async () => {
+      // このテストは、morphTargetを適用した結果が正しい方向にあるかを検証
+      // 例: 口を開けるmorphTargetを適用した場合、マイグレーション後も口が正しく開くか
+
+      const loader = new GLTFLoader()
+      loader.register((parser) => new VRMLoaderPlugin(parser))
+
+      const response = await fetch(VRM_FILE_PATH)
+      const buffer = await response.arrayBuffer()
+      const gltf = await loader.parseAsync(buffer, '')
+      const vrm = gltf.userData.vrm as VRM
+      expect(vrm).toBeDefined()
+
+      const rootNode = vrm.scene
+
+      // morphTargetを持つメッシュを取得
+      let facesMesh: SkinnedMesh | null = null
+      rootNode.traverse((obj) => {
+        if (obj instanceof SkinnedMesh) {
+          const morphPositions = obj.geometry.morphAttributes.position
+          if (morphPositions && morphPositions.length > 0) {
+            // 顔メッシュを優先して取得
+            if (obj.name.toLowerCase().includes('face') || !facesMesh) {
+              facesMesh = obj
+            }
+          }
+        }
+      })
+
+      if (!facesMesh) {
+        console.log('[MorphTarget Test] No mesh with morphTargets found, skipping')
+        return
+      }
+
+      const mesh = facesMesh
+      const posAttr = mesh.geometry.getAttribute('position')
+      const morphPositions = mesh.geometry.morphAttributes.position
+      expect(morphPositions).toBeDefined()
+      expect(morphPositions!.length).toBeGreaterThan(0)
+
+      // マイグレーション前: 頂点位置 + morphTarget delta = 適用後位置
+      // サンプル頂点を選択（非ゼロdeltaを持つもの）
+      const morphAttr = morphPositions![0]
+      let sampleVertexIndex = 0
+      for (let vi = 0; vi < morphAttr.count; vi++) {
+        const dx = morphAttr.getX(vi)
+        const dz = morphAttr.getZ(vi)
+        if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+          sampleVertexIndex = vi
+          break
+        }
+      }
+
+      // マイグレーション前の「適用後位置」を計算
+      const beforeBaseX = posAttr.getX(sampleVertexIndex)
+      const beforeBaseZ = posAttr.getZ(sampleVertexIndex)
+      const beforeDeltaX = morphAttr.getX(sampleVertexIndex)
+      const beforeDeltaZ = morphAttr.getZ(sampleVertexIndex)
+      const beforeAppliedX = beforeBaseX + beforeDeltaX
+      const beforeAppliedZ = beforeBaseZ + beforeDeltaZ
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後の「適用後位置」を計算
+      const afterBaseX = posAttr.getX(sampleVertexIndex)
+      const afterBaseZ = posAttr.getZ(sampleVertexIndex)
+      const afterDeltaX = morphAttr.getX(sampleVertexIndex)
+      const afterDeltaZ = morphAttr.getZ(sampleVertexIndex)
+      const afterAppliedX = afterBaseX + afterDeltaX
+      const afterAppliedZ = afterBaseZ + afterDeltaZ
+
+      // マイグレーション前の「適用後位置」をY軸180度回転したものと一致すべき
+      const expectedAppliedX = -beforeAppliedX
+      const expectedAppliedZ = -beforeAppliedZ
+
+      const tolerance = 1e-4
+      expect(Math.abs(afterAppliedX - expectedAppliedX)).toBeLessThan(tolerance)
+      expect(Math.abs(afterAppliedZ - expectedAppliedZ)).toBeLessThan(tolerance)
+    })
+  })
 })

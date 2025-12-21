@@ -6,5 +6,4 @@ export {
   recalculateBoneInverses,
   recordBoneWorldPositions,
   rotateBonePositions,
-  rotateVertexPositionsAroundYAxis,
 } from './migrate-vrm0-to-vrm1'

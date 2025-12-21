@@ -62,18 +62,10 @@ export function migrateSkeletonVRM0ToVRM1(
     }
 
     // 2. 各メッシュの頂点位置をY軸180度回転
-    // 同じ BufferAttribute を共有するメッシュが複数回処理されないようにするため、
-    // 処理済み position 属性を追跡
-    // 注意: VRMでは geometry は異なるが position 属性は共有されることがある
+    // 新しいアプローチ: 全BufferAttributeを収集し、ArrayBufferごとに1回だけ回転を適用
+    // これにより、BufferAttributeの関係を気にせず、各ArrayBufferを確実に1回だけ処理できる
     if (!options.skipVertexRotation) {
-      const processedPositionAttrs = new Set<BufferAttribute>()
-      for (const mesh of skinnedMeshes) {
-        const positionAttr = mesh.geometry.getAttribute('position')
-        if (!(positionAttr instanceof BufferAttribute)) continue
-        if (processedPositionAttrs.has(positionAttr)) continue
-        processedPositionAttrs.add(positionAttr)
-        rotateVertexPositionsAroundYAxis(mesh)
-      }
+      rotateAllVertexBuffers(skinnedMeshes)
     }
 
     // 3. 全ボーンのワールド座標を記録（重複排除）
@@ -143,68 +135,90 @@ export function migrateSkeletonVRM0ToVRM1(
 }
 
 /**
- * SkinnedMeshの頂点位置と法線をY軸周り180度回転
- * position, normal属性とmorphTarget(position, normal)を変換
+ * 全SkinnedMeshの頂点バッファにY軸180度回転を適用
+ *
+ * 各SkinnedMeshを走査し、BufferAttributeのarrayに対して直接処理を行う。
+ * 同じTypedArrayが複数のBufferAttributeから参照されている場合に
+ * 二重処理を防ぐため、処理済みのTypedArrayを記録する。
+ *
+ * @param skinnedMeshes - 処理対象のSkinnedMesh配列
  */
-export function rotateVertexPositionsAroundYAxis(mesh: SkinnedMesh): void {
-  const geometry = mesh.geometry
-  const positionAttr = geometry.getAttribute('position')
+function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
+  // 処理済みのTypedArrayを記録（二重処理防止）
+  const processedArrays = new Set<Float32Array>()
 
-  if (!positionAttr || !(positionAttr instanceof BufferAttribute)) {
-    return
-  }
-
-  const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
-  const vec = new Vector3()
-
-  // 頂点位置を回転
-  for (let i = 0; i < positionAttr.count; i++) {
-    vec.set(positionAttr.getX(i), positionAttr.getY(i), positionAttr.getZ(i))
-    vec.applyMatrix4(rotationMatrix)
-    positionAttr.setXYZ(i, vec.x, vec.y, vec.z)
-  }
-  positionAttr.needsUpdate = true
-
-  // 法線も回転（アウトライン押し出し方向に影響）
-  const normalAttr = geometry.getAttribute('normal')
-  if (normalAttr && normalAttr instanceof BufferAttribute) {
-    for (let i = 0; i < normalAttr.count; i++) {
-      vec.set(normalAttr.getX(i), normalAttr.getY(i), normalAttr.getZ(i))
-      vec.applyMatrix4(rotationMatrix)
-      normalAttr.setXYZ(i, vec.x, vec.y, vec.z)
+  /**
+   * BufferAttributeにY軸180度回転を適用
+   * @param attr - 処理対象のBufferAttribute
+   * @returns 処理した場合true
+   */
+  function rotateBufferAttribute(attr: BufferAttribute): boolean {
+    // vec3以外はスキップ
+    if (attr.itemSize !== 3) {
+      return false
     }
-    normalAttr.needsUpdate = true
-  }
 
-  // morphTargetのposition属性も回転
-  // morphAttributesはキー(position, normalなど)ごとにBufferAttribute配列を持つ
-  const morphPositions = geometry.morphAttributes.position
-  if (morphPositions && Array.isArray(morphPositions)) {
-    for (const morphAttr of morphPositions) {
-      if (!(morphAttr instanceof BufferAttribute)) continue
-
-      for (let i = 0; i < morphAttr.count; i++) {
-        // morphTargetはデルタ（差分ベクトル）なので、同様にY軸180度回転
-        vec.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
-        vec.applyMatrix4(rotationMatrix)
-        morphAttr.setXYZ(i, vec.x, vec.y, vec.z)
-      }
-      morphAttr.needsUpdate = true
+    const array = attr.array
+    if (!(array instanceof Float32Array)) {
+      return false
     }
+
+    // 既に処理済みならスキップ
+    // if (processedArrays.has(array)) {
+    //   console.log('Array already processed, skipping:', array)
+    //   return false
+    // }
+    // processedArrays.add(array)
+
+    // Y軸180度回転を適用（x と z を反転）
+    // 回転行列 [[−1, 0, 0], [0, 1, 0], [0, 0, −1]] を適用
+    const count = attr.count
+    for (let i = 0; i < count; i++) {
+      const baseIdx = i * 3
+      array[baseIdx + 0] = -array[baseIdx + 0] // x = -x
+      // array[baseIdx + 1] = array[baseIdx + 1] // y = y (変更なし)
+      array[baseIdx + 2] = -array[baseIdx + 2] // z = -z
+    }
+
+    attr.needsUpdate = true
+    return true
   }
 
-  // morphTargetのnormal属性も回転
-  const morphNormals = geometry.morphAttributes.normal
-  if (morphNormals && Array.isArray(morphNormals)) {
-    for (const morphAttr of morphNormals) {
-      if (!(morphAttr instanceof BufferAttribute)) continue
+  // 各SkinnedMeshを処理
+  for (const mesh of skinnedMeshes) {
+    const geometry = mesh.geometry
 
-      for (let i = 0; i < morphAttr.count; i++) {
-        vec.set(morphAttr.getX(i), morphAttr.getY(i), morphAttr.getZ(i))
-        vec.applyMatrix4(rotationMatrix)
-        morphAttr.setXYZ(i, vec.x, vec.y, vec.z)
+    // position属性
+    const posAttr = geometry.getAttribute('position')
+    if (posAttr instanceof BufferAttribute) {
+      rotateBufferAttribute(posAttr)
+    }
+
+    // normal属性
+    const normalAttr = geometry.getAttribute('normal')
+    if (normalAttr instanceof BufferAttribute) {
+      rotateBufferAttribute(normalAttr)
+    }
+
+    // morphTarget position属性
+    const morphPositions = geometry.morphAttributes.position
+    if (morphPositions && Array.isArray(morphPositions)) {
+      for (const morphAttr of morphPositions) {
+        if (morphAttr instanceof BufferAttribute) {
+          console.log('Rotating morph position attribute', morphAttr)
+          rotateBufferAttribute(morphAttr)
+        }
       }
-      morphAttr.needsUpdate = true
+    }
+
+    // morphTarget normal属性
+    const morphNormals = geometry.morphAttributes.normal
+    if (morphNormals && Array.isArray(morphNormals)) {
+      for (const morphAttr of morphNormals) {
+        if (morphAttr instanceof BufferAttribute) {
+          rotateBufferAttribute(morphAttr)
+        }
+      }
     }
   }
 }
