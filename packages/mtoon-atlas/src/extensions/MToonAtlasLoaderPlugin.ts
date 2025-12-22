@@ -1,5 +1,6 @@
-import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat } from 'three'
+import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat, CompressedTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, WebGLRenderer } from 'three'
 import { decode as decodePng } from 'fast-png'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {
@@ -7,6 +8,60 @@ import
   MTOON_ATLAS_EXTENSION_NAME,
   MToonAtlasExtensionSchema,
 } from './types'
+
+// KTX2Loaderのシングルトンインスタンス
+let ktx2LoaderInstance: KTX2Loader | null = null
+
+/**
+ * KTX2Loaderを取得または初期化する
+ * ブラウザ環境でのみ動作（WebGLコンテキストが必要）
+ */
+function getKTX2Loader(): KTX2Loader | null
+{
+  if (ktx2LoaderInstance)
+  {
+    return ktx2LoaderInstance
+  }
+
+  // ブラウザ環境チェック
+  if (
+    typeof document === 'undefined' ||
+    typeof WebGLRenderingContext === 'undefined'
+  )
+  {
+    return null
+  }
+
+  try
+  {
+    // KTX2Loaderの初期化にはWebGLコンテキストが必要
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2')
+
+    if (!gl)
+    {
+      console.warn('MToonAtlasLoaderPlugin: WebGL2がサポートされていません')
+      return null
+    }
+
+    // WebGLRendererを一時的に作成してdetectSupportを呼び出す
+    const renderer = new WebGLRenderer({ canvas, context: gl })
+
+    ktx2LoaderInstance = new KTX2Loader()
+    ktx2LoaderInstance.setTranscoderPath(
+      'https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/libs/basis/'
+    )
+    ktx2LoaderInstance.detectSupport(renderer)
+
+    renderer.dispose()
+
+    return ktx2LoaderInstance
+  } catch (error)
+  {
+    console.warn('MToonAtlasLoaderPlugin: KTX2Loaderの初期化に失敗:', error)
+    return null
+  }
+}
 
 export class MToonAtlasLoaderPlugin
 {
@@ -157,6 +212,101 @@ export class MToonAtlasLoaderPlugin
     return texture
   }
 
+  /**
+   * KTX2テクスチャを直接読み込む
+   * GLTFLoaderのloadTextureがKTX2を正しく処理できない場合のフォールバック
+   */
+  private async _loadKtx2Texture(textureIndex: number): Promise<CompressedTexture | null>
+  {
+    const json = this.parser.json
+    const textureDef = json.textures?.[textureIndex]
+
+    if (!textureDef)
+    {
+      console.warn(`MToonAtlasLoaderPlugin: テクスチャ定義が見つかりません: ${textureIndex}`)
+      return null
+    }
+
+    // KHR_texture_basisu拡張からソースインデックスを取得
+    const ktx2Extension = textureDef.extensions?.KHR_texture_basisu
+    const imageIndex = ktx2Extension?.source ?? textureDef.source
+
+    if (imageIndex === undefined || imageIndex < 0 || imageIndex >= json.images.length)
+    {
+      console.warn(`MToonAtlasLoaderPlugin: 無効な画像インデックス: ${imageIndex}`)
+      return null
+    }
+
+    const imageDef = json.images[imageIndex]
+    let ktx2Data: ArrayBuffer
+
+    try
+    {
+      if (imageDef.uri)
+      {
+        // Data URI または 外部URL
+        if (imageDef.uri.startsWith('data:'))
+        {
+          const base64 = imageDef.uri.split(',')[1]
+          const binary = atob(base64)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++)
+          {
+            bytes[i] = binary.charCodeAt(i)
+          }
+          ktx2Data = bytes.buffer
+        } else
+        {
+          const response = await fetch(imageDef.uri)
+          ktx2Data = await response.arrayBuffer()
+        }
+      } else if (imageDef.bufferView !== undefined)
+      {
+        // GLB埋め込みバッファからKTX2データを取得
+        ktx2Data = await this.parser.getDependency('bufferView', imageDef.bufferView) as ArrayBuffer
+      } else
+      {
+        console.warn('MToonAtlasLoaderPlugin: 無効な画像定義（uri/bufferViewなし）')
+        return null
+      }
+
+      // KTX2Loaderで読み込む
+      const ktx2Loader = getKTX2Loader()
+      if (!ktx2Loader)
+      {
+        console.warn('MToonAtlasLoaderPlugin: KTX2Loaderが利用できません')
+        return null
+      }
+
+      // KTX2Loaderのparseメソッドを使用してArrayBufferから直接読み込む
+      return new Promise<CompressedTexture>((resolve, reject) =>
+      {
+        ktx2Loader.parse(
+          ktx2Data,
+          (texture: CompressedTexture) =>
+          {
+            // テクスチャプロパティを設定
+            texture.flipY = false
+            texture.minFilter = LinearMipmapLinearFilter
+            texture.magFilter = LinearFilter
+            texture.wrapS = RepeatWrapping
+            texture.wrapT = RepeatWrapping
+            texture.needsUpdate = true
+            resolve(texture)
+          },
+          (error: unknown) =>
+          {
+            reject(error)
+          }
+        )
+      })
+    } catch (error)
+    {
+      console.warn(`MToonAtlasLoaderPlugin: KTX2テクスチャの読み込みに失敗: ${error}`)
+      return null
+    }
+  }
+
   private async _loadMaterialAsync(materialIndex: number): Promise<Material>
   {
     const materialDef = this.parser.json.materials[materialIndex]
@@ -174,25 +324,56 @@ export class MToonAtlasLoaderPlugin
     {
       if (textureInfo)
       {
-        const loadedTexture = await this.parser.loadTexture(textureInfo.index)
-        // GLTFLoader がテクスチャをキャッシュするため、clone() して独立したオブジェクトを使用
-        const texture = loadedTexture.clone()
-        texture.source = loadedTexture.source // image ソースを共有
-        texture.flipY = false
+        try
+        {
+          // テクスチャがKTX2かどうかを確認
+          const textureDef = this.parser.json.textures?.[textureInfo.index]
+          const isKtx2 = textureDef?.extensions?.KHR_texture_basisu !== undefined
 
-        // Set color space based on texture type
-        // baseColor, shade, emissive, matcap, rim are usually sRGB (color data)
-        // normal, shadingShift, uvAnimationMask are Linear (non-color data)
-        const srgbTextures = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
-        if (srgbTextures.includes(key))
+          let loadedTexture: Texture | CompressedTexture | null = null
+
+          if (isKtx2)
+          {
+            // KTX2テクスチャを直接読み込む
+            loadedTexture = await this._loadKtx2Texture(textureInfo.index)
+          } else
+          {
+            // 通常のテクスチャはparser.loadTextureを使用
+            loadedTexture = await this.parser.loadTexture(textureInfo.index)
+          }
+
+          // テクスチャが正しく読み込まれたかチェック
+          if (!loadedTexture)
+          {
+            console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureInfo.index}) の読み込みに失敗しました`)
+            return
+          }
+
+          // GLTFLoader がテクスチャをキャッシュするため、clone() して独立したオブジェクトを使用
+          const texture = loadedTexture.clone()
+          if ('source' in loadedTexture && loadedTexture.source)
+          {
+            texture.source = loadedTexture.source // image ソースを共有
+          }
+          texture.flipY = false
+
+          // Set color space based on texture type
+          // baseColor, shade, emissive, matcap, rim are usually sRGB (color data)
+          // normal, shadingShift, uvAnimationMask are Linear (non-color data)
+          const srgbTextures = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
+          if (srgbTextures.includes(key))
+          {
+            texture.colorSpace = SRGBColorSpace
+          } else
+          {
+            texture.colorSpace = NoColorSpace
+          }
+
+          atlasedTextures[key] = texture
+        } catch (error)
         {
-          texture.colorSpace = SRGBColorSpace
-        } else
-        {
-          texture.colorSpace = NoColorSpace
+          console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureInfo.index}) の読み込み中にエラーが発生しました:`, error)
         }
-
-        atlasedTextures[key] = texture
       }
     }
 

@@ -6,7 +6,9 @@ import type { VRM } from '@pixiv/three-vrm'
 import { VRMLoaderPlugin } from '@pixiv/three-vrm'
 import { MToonAtlasLoaderPlugin } from '@xrift/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
+import { WebGLRenderer } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { VRMLoaderError } from '../types'
 
 /**
@@ -14,6 +16,68 @@ import type { VRMLoaderError } from '../types'
  * URL文字列、File、Blob、ArrayBuffer を受け付ける
  */
 export type VRMSource = string | File | Blob | ArrayBuffer
+
+// KTX2Loader のシングルトンインスタンス
+// WebGLRenderer との関連付けが必要なため、遅延初期化
+let ktx2LoaderInstance: KTX2Loader | null = null
+
+/**
+ * KTX2Loader を取得または初期化する
+ * ブラウザ環境でのみ動作（WebGL コンテキストが必要）
+ */
+function getKTX2Loader(): KTX2Loader | null {
+  if (ktx2LoaderInstance) {
+    return ktx2LoaderInstance
+  }
+
+  // ブラウザ環境チェック
+  if (
+    typeof document === 'undefined' ||
+    typeof WebGLRenderingContext === 'undefined'
+  ) {
+    return null
+  }
+
+  try {
+    // KTX2Loader の初期化には WebGL コンテキストが必要
+    // 一時的な canvas から WebGLRenderer を作成
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2')
+
+    if (!gl) {
+      console.warn(
+        'WebGL2 がサポートされていません。KTX2 テクスチャは読み込めません。',
+      )
+      return null
+    }
+
+    const renderer = new WebGLRenderer({
+      canvas,
+      context: gl,
+    })
+
+    ktx2LoaderInstance = new KTX2Loader()
+    // Basis Universal transcoder のパス（CDN から読み込み）
+    ktx2LoaderInstance.setTranscoderPath(
+      'https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/libs/basis/',
+    )
+    ktx2LoaderInstance.detectSupport(renderer)
+
+    // eslint-disable-next-line no-console
+    console.log('KTX2Loader 初期化完了')
+
+    // 一時的な renderer を破棄
+    renderer.dispose()
+
+    return ktx2LoaderInstance
+  } catch (error) {
+    console.warn(
+      'KTX2Loader の初期化に失敗しました。KTX2 テクスチャは読み込めません。',
+      error,
+    )
+    return null
+  }
+}
 
 /**
  * VRM を読み込む
@@ -37,35 +101,51 @@ export function loadVRM(source: VRMSource): ResultAsync<VRM, VRMLoaderError> {
   return ResultAsync.fromPromise(
     (async () => {
       const loader = new GLTFLoader()
+
+      // KTX2Loader を設定（KTX2 テクスチャのサポート）
+      const ktx2Loader = getKTX2Loader()
+      if (ktx2Loader) {
+        loader.setKTX2Loader(ktx2Loader)
+      }
+
       loader.register((parser) => new VRMLoaderPlugin(parser))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       loader.register((parser) => new MToonAtlasLoaderPlugin(parser as any))
 
       let gltf
+      let blobUrl: string | null = null
 
-      if (typeof source === 'string') {
-        // URL から読み込み
-        gltf = await loader.loadAsync(source)
-      } else if (source instanceof ArrayBuffer) {
-        // ArrayBuffer から読み込み
-        gltf = await loader.parseAsync(source, '')
-      } else {
-        // File / Blob から読み込み
-        const url = URL.createObjectURL(source)
-        try {
-          gltf = await loader.loadAsync(url)
-        } finally {
-          URL.revokeObjectURL(url)
+      try {
+        if (typeof source === 'string') {
+          // URL から読み込み
+          gltf = await loader.loadAsync(source)
+        } else if (source instanceof ArrayBuffer) {
+          // ArrayBuffer から読み込み
+          // 空のパスを渡すとGLTFLoaderが相対パスを解決できないため、
+          // Blobに変換してURLを作成
+          const blob = new Blob([source], { type: 'model/gltf-binary' })
+          blobUrl = URL.createObjectURL(blob)
+          gltf = await loader.loadAsync(blobUrl)
+        } else {
+          // File / Blob から読み込み
+          blobUrl = URL.createObjectURL(source)
+          gltf = await loader.loadAsync(blobUrl)
+        }
+
+        const vrm = gltf.userData.vrm as VRM | undefined
+
+        if (!vrm) {
+          throw new Error('VRM data not found in loaded file')
+        }
+
+        return vrm
+      } finally {
+        // すべての読み込みが完了した後にblob URLを解放
+        // Note: GLTFLoaderはloadAsync完了時点ですべてのリソースをメモリにロード済み
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl)
         }
       }
-
-      const vrm = gltf.userData.vrm as VRM | undefined
-
-      if (!vrm) {
-        throw new Error('VRM data not found in loaded file')
-      }
-
-      return vrm
     })(),
     (error): VRMLoaderError => ({
       type: 'VRM_LOAD_FAILED',

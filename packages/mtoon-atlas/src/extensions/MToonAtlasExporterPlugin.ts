@@ -579,32 +579,31 @@ export class MToonAtlasExporterPlugin
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const image = texture.image as any
 
-    if (!image?.data || !image.width || !image.height)
+    if (!image)
     {
       throw new Error('テクスチャに有効な画像データがありません')
     }
 
-    // Float32Array の場合は Uint8Array に変換
-    const srcData = image.data
-    const isFloatData = srcData instanceof Float32Array ||
-      srcData.constructor?.name === 'Float32Array'
-    const pixelCount = image.width * image.height * 4
+    // 画像の幅と高さを取得
+    const width = image.width
+    const height = image.height
 
-    let rgbaData: Uint8Array
-    if (isFloatData)
+    if (!width || !height)
     {
-      rgbaData = new Uint8Array(pixelCount)
-      for (let i = 0; i < pixelCount; i++)
-      {
-        rgbaData[i] = Math.round(Math.min(1, Math.max(0, srcData[i])) * 255)
-      }
-    } else
+      throw new Error('テクスチャの画像サイズが取得できません')
+    }
+
+    // RGBAデータを取得（様々な画像形式に対応）
+    const rgbaData = await this.extractRgbaData(image)
+    const pixelCount = width * height * 4
+
+    if (rgbaData.length !== pixelCount)
     {
-      rgbaData = new Uint8Array(srcData)
+      throw new Error(`画像データサイズが不正: expected ${pixelCount}, got ${rgbaData.length}`)
     }
 
     // WebGL テクスチャは左下原点、KTX2 は左上原点なので Y 軸反転
-    const flippedData = flipImageY(rgbaData, image.width, image.height)
+    const flippedData = flipImageY(rgbaData, width, height)
 
     // 圧縮オプションを構築
     const compressionOptions: Ktx2CompressionOptions = {
@@ -617,8 +616,8 @@ export class MToonAtlasExporterPlugin
     // KTX2 圧縮を実行
     const result = await compressToKtx2(
       flippedData,
-      image.width,
-      image.height,
+      width,
+      height,
       compressionOptions
     )
 
@@ -628,6 +627,95 @@ export class MToonAtlasExporterPlugin
     }
 
     return result.value.data
+  }
+
+  /**
+   * 様々な画像形式からRGBAデータを抽出
+   * @param image - 画像データ（DataTexture, HTMLImageElement, ImageBitmap, HTMLCanvasElement等）
+   * @returns RGBA形式のUint8Array
+   */
+  private async extractRgbaData(image: any): Promise<Uint8Array>
+  {
+    // DataTexture（image.dataがある場合）
+    if (image.data && image.width && image.height)
+    {
+      const srcData = image.data
+      const isFloatData = srcData instanceof Float32Array ||
+        srcData.constructor?.name === 'Float32Array'
+      const pixelCount = image.width * image.height * 4
+
+      if (isFloatData)
+      {
+        const rgbaData = new Uint8Array(pixelCount)
+        for (let i = 0; i < pixelCount; i++)
+        {
+          rgbaData[i] = Math.round(Math.min(1, Math.max(0, srcData[i])) * 255)
+        }
+        return rgbaData
+      } else
+      {
+        return new Uint8Array(srcData)
+      }
+    }
+
+    // HTMLCanvasElement
+    if (image instanceof HTMLCanvasElement)
+    {
+      const ctx = image.getContext('2d')
+      if (ctx)
+      {
+        const imageData = ctx.getImageData(0, 0, image.width, image.height)
+        return new Uint8Array(imageData.data)
+      }
+    }
+
+    // HTMLImageElement または ImageBitmap
+    // ImageBitmapはブラウザ環境のみで利用可能なため、typeofでチェック
+    if (image instanceof HTMLImageElement ||
+      (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap))
+    {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const ctx = canvas.getContext('2d')
+      if (ctx)
+      {
+        ctx.drawImage(image, 0, 0)
+        const imageData = ctx.getImageData(0, 0, image.width, image.height)
+        return new Uint8Array(imageData.data)
+      }
+    }
+
+    // toDataURL対応オブジェクト（OffscreenCanvas等）
+    if (typeof image.toDataURL === 'function')
+    {
+      // toDataURLからImageを作成してCanvasに描画
+      return new Promise((resolve, reject) =>
+      {
+        const dataUrl: string = image.toDataURL('image/png')
+        const img = new Image()
+        img.onload = () =>
+        {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.width
+          canvas.height = img.height
+          const ctx = canvas.getContext('2d')
+          if (ctx)
+          {
+            ctx.drawImage(img, 0, 0)
+            const imageData = ctx.getImageData(0, 0, img.width, img.height)
+            resolve(new Uint8Array(imageData.data))
+          } else
+          {
+            reject(new Error('Canvas 2D context取得に失敗'))
+          }
+        }
+        img.onerror = () => reject(new Error('画像のロードに失敗'))
+        img.src = dataUrl
+      })
+    }
+
+    throw new Error('サポートされていない画像形式です')
   }
 
   /**
