@@ -1,5 +1,7 @@
 import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
 import { encode as encodePng16 } from 'fast-png'
+import { compressToKtx2, flipImageY } from '@xrift/texture-compression'
+import type { Ktx2CompressionOptions } from '@xrift/texture-compression'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {
@@ -8,6 +10,18 @@ import
   MToonAtlasExtensionSchema,
   OutlineWidthMode,
 } from './types'
+
+/**
+ * テクスチャ圧縮オプション
+ * エクスポート時にアトラステクスチャを KTX2 形式で圧縮する
+ */
+export interface TextureCompressionOptions extends Ktx2CompressionOptions {
+  /**
+   * WASM ファイルのディレクトリURL（initBasisEncoder に渡す用）
+   * 実際の初期化は exportVRM 側で行うため、ここでは使用しない
+   */
+  wasmDir?: string
+}
 
 /**
  * テクスチャインデックス情報
@@ -53,9 +67,23 @@ export class MToonAtlasExporterPlugin
   // オブジェクト参照ではなくUUIDでキャッシュする必要がある
   private textureCache: Map<string, Promise<number>> = new Map()
 
+  // テクスチャ圧縮オプション（設定されている場合、アトラステクスチャをKTX2で圧縮）
+  private textureCompressionOptions?: TextureCompressionOptions
+
   constructor(writer: GLTFWriter)
   {
     this.writer = writer
+  }
+
+  /**
+   * テクスチャ圧縮オプションを設定
+   * 設定された場合、アトラステクスチャを KTX2 形式で圧縮してエクスポート
+   *
+   * @param options - 圧縮オプション
+   */
+  public setTextureCompressionOptions(options: TextureCompressionOptions): void
+  {
+    this.textureCompressionOptions = options
   }
 
   /**
@@ -458,6 +486,155 @@ export class MToonAtlasExporterPlugin
    * 代わりに手動でテクスチャを登録することで、キャッシュを正しく機能させる。
    */
   private processTextureWithFallback(texture: Texture): Promise<number>
+  {
+    // テクスチャ圧縮オプションが設定されている場合は KTX2 形式で処理
+    if (this.textureCompressionOptions)
+    {
+      return this.processTextureAsKtx2(texture)
+    }
+
+    // 従来の PNG 形式で処理
+    return this.processTextureAsPng(texture)
+  }
+
+  /**
+   * テクスチャを KTX2 形式で処理してBINチャンクに書き込む
+   * @param texture - 処理するテクスチャ
+   */
+  private processTextureAsKtx2(texture: Texture): Promise<number>
+  {
+    const json = this.writer.json
+    json.textures = json.textures || []
+    json.images = json.images || []
+    json.samplers = json.samplers || []
+
+    // KTX2 用の LINEAR サンプラーを取得または作成
+    let linearSamplerIndex = json.samplers.findIndex(
+      (s: any) => s.magFilter === 9729 && s.minFilter === 9987
+    )
+    if (linearSamplerIndex === -1)
+    {
+      linearSamplerIndex = json.samplers.length
+      json.samplers.push({
+        magFilter: 9729, // LINEAR
+        minFilter: 9987, // LINEAR_MIPMAP_LINEAR
+        wrapS: 10497, // REPEAT
+        wrapT: 10497, // REPEAT
+      })
+    }
+
+    // 画像定義を先に追加（インデックスを確定）
+    const imageIndex = json.images.length
+    const imageDef: any = {
+      name: texture.name || 'texture',
+      mimeType: 'image/ktx2',
+    }
+    json.images.push(imageDef)
+
+    // テクスチャ定義を先に追加（KHR_texture_basisu 拡張付き）
+    const textureIndex = json.textures.length
+    json.textures.push({
+      sampler: linearSamplerIndex,
+      source: imageIndex,
+      name: texture.name || 'texture',
+      extensions: {
+        KHR_texture_basisu: {
+          source: imageIndex,
+        },
+      },
+    })
+
+    // extensionsUsed に KHR_texture_basisu を追加
+    json.extensionsUsed = json.extensionsUsed || []
+    if (!json.extensionsUsed.includes('KHR_texture_basisu'))
+    {
+      json.extensionsUsed.push('KHR_texture_basisu')
+    }
+
+    // テクスチャを KTX2 形式で圧縮
+    const bufferViewPromise = this.compressTextureToKtx2(texture)
+      .then(async (ktx2Data) =>
+      {
+        // Uint8Array を新しい ArrayBuffer にコピーして Blob を作成
+        // SharedArrayBuffer の可能性を排除
+        const arrayCopy = new Uint8Array(ktx2Data).buffer as ArrayBuffer
+        const blob = new Blob([arrayCopy], { type: 'image/ktx2' })
+        const bufferViewIndex = await this.writer.processBufferViewImage(blob)
+        imageDef.bufferView = bufferViewIndex
+        return textureIndex
+      })
+
+    // pendingに追加して完了を待つ
+    this.writer.pending.push(bufferViewPromise.then(() => { }))
+    return bufferViewPromise
+  }
+
+  /**
+   * テクスチャを KTX2 バイナリに圧縮
+   * @param texture - 処理するテクスチャ
+   * @returns KTX2 バイナリデータ
+   */
+  private async compressTextureToKtx2(texture: Texture): Promise<Uint8Array>
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const image = texture.image as any
+
+    if (!image?.data || !image.width || !image.height)
+    {
+      throw new Error('テクスチャに有効な画像データがありません')
+    }
+
+    // Float32Array の場合は Uint8Array に変換
+    const srcData = image.data
+    const isFloatData = srcData instanceof Float32Array ||
+      srcData.constructor?.name === 'Float32Array'
+    const pixelCount = image.width * image.height * 4
+
+    let rgbaData: Uint8Array
+    if (isFloatData)
+    {
+      rgbaData = new Uint8Array(pixelCount)
+      for (let i = 0; i < pixelCount; i++)
+      {
+        rgbaData[i] = Math.round(Math.min(1, Math.max(0, srcData[i])) * 255)
+      }
+    } else
+    {
+      rgbaData = new Uint8Array(srcData)
+    }
+
+    // WebGL テクスチャは左下原点、KTX2 は左上原点なので Y 軸反転
+    const flippedData = flipImageY(rgbaData, image.width, image.height)
+
+    // 圧縮オプションを構築
+    const compressionOptions: Ktx2CompressionOptions = {
+      quality: this.textureCompressionOptions?.quality,
+      compressionLevel: this.textureCompressionOptions?.compressionLevel,
+      generateMipmaps: this.textureCompressionOptions?.generateMipmaps,
+      supercompression: this.textureCompressionOptions?.supercompression,
+    }
+
+    // KTX2 圧縮を実行
+    const result = await compressToKtx2(
+      flippedData,
+      image.width,
+      image.height,
+      compressionOptions
+    )
+
+    if (result.isErr())
+    {
+      throw new Error(`KTX2圧縮に失敗: ${result.error.message}`)
+    }
+
+    return result.value.data
+  }
+
+  /**
+   * テクスチャを PNG 形式で処理してBINチャンクに書き込む（従来の処理）
+   * @param texture - 処理するテクスチャ
+   */
+  private processTextureAsPng(texture: Texture): Promise<number>
   {
     // 直接JSONにテクスチャを追加してBINチャンクに書き込む
     const json = this.writer.json

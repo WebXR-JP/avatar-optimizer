@@ -30,10 +30,14 @@ export type {
   OptimizeModelOptions,
   SimplifyOptions,
   SlotAtlasResolution,
+  TextureCompressionOptions,
   TextureSlotInfo,
   ThreeVRMDocument,
   VRMLoaderError,
 } from './types'
+
+// Re-export UastcQuality from texture-compression
+export { UastcQuality } from '@xrift/texture-compression'
 
 // Simplify
 export { simplifyMeshes, type SimplifyStatistics } from './process/simplify'

@@ -62,6 +62,9 @@ importers:
       '@xrift/mtoon-atlas':
         specifier: workspace:*
         version: link:../mtoon-atlas
+      '@xrift/texture-compression':
+        specifier: workspace:*
+        version: link:../texture-compression
       canvas:
         specifier: ^3.2.0
         version: 3.2.0
@@ -253,6 +256,9 @@ importers:
 
   packages/mtoon-atlas:
     dependencies:
+      '@xrift/texture-compression':
+        specifier: workspace:*
+        version: link:../texture-compression
       fast-png:
         specifier: ^7.0.1
         version: 7.0.1

@@ -1,5 +1,6 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { ParameterSemanticId } from '@xrift/mtoon-atlas'
+import type { UastcQuality } from '@xrift/texture-compression'
 import {
   ColorSpace,
   NoColorSpace,
@@ -280,6 +281,42 @@ export type VRMLoaderError =
   | { type: 'INVALID_VRM'; message: string }
 
 /**
+ * テクスチャ圧縮オプション
+ * エクスポート時にアトラステクスチャを KTX2 形式で圧縮する
+ */
+export interface TextureCompressionOptions {
+  /**
+   * WASM ファイルのディレクトリURL
+   * 未指定の場合はデフォルトパス（パッケージ内の wasm/）を使用
+   */
+  wasmDir?: string
+
+  /**
+   * UASTC 品質レベル (0-4)
+   * @default 2 (Default)
+   */
+  quality?: UastcQuality
+
+  /**
+   * 圧縮レベル (0-5)
+   * @default 3
+   */
+  compressionLevel?: number
+
+  /**
+   * ミップマップを生成するか
+   * @default false
+   */
+  generateMipmaps?: boolean
+
+  /**
+   * Zstandard 超圧縮を使用するか
+   * @default true
+   */
+  supercompression?: boolean
+}
+
+/**
  * VRM エクスポート時のオプション
  */
 export interface ExportVRMOptions {
@@ -288,6 +325,12 @@ export interface ExportVRMOptions {
    * @default true
    */
   binary?: boolean
+
+  /**
+   * テクスチャ圧縮オプション
+   * 指定された場合、アトラステクスチャを KTX2 形式で圧縮
+   */
+  textureCompression?: TextureCompressionOptions
 }
 
 /**

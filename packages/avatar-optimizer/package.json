@@ -79,6 +79,7 @@
     "@loaders.gl/images": "^4.3.4",
     "@loaders.gl/polyfills": "^4.3.4",
     "@xrift/mtoon-atlas": "workspace:*",
+    "@xrift/texture-compression": "workspace:*",
     "canvas": "^3.2.0",
     "commander": "^14.0.2",
     "jimp": "^1.6.0",
