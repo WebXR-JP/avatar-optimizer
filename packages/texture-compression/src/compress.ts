@@ -16,7 +16,7 @@ import {
 const DEFAULT_OPTIONS: Required<Ktx2CompressionOptions> = {
   quality: UastcQuality.Default,
   compressionLevel: 3,
-  generateMipmaps: false,
+  generateMipmaps: true,
   supercompression: true,
 }
 
