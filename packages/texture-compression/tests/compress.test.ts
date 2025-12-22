@@ -1,22 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import {
   compressToKtx2,
-  disposeBasisEncoder,
   flipImageY,
   initBasisEncoder,
   isBasisEncoderReady,
   UastcQuality,
 } from '../src'
-
-// テスト実行時のベースURL（localhostで動作）
-// vitest.config.tsでwasmがpublicDirに設定されているので、ルートから取得
-const getWasmDir = () => {
-  // ブラウザ環境ではwindow.location.originを使用
-  if (typeof window !== 'undefined') {
-    return window.location.origin + '/'
-  }
-  return '/'
-}
 
 describe('texture-compression', () => {
   describe('flipImageY', () => {
@@ -121,12 +110,11 @@ describe('texture-compression', () => {
   })
 
   describe('BasisEncoder初期化', () => {
-    afterAll(() => {
-      disposeBasisEncoder()
-    })
+    // ESMモジュールはシングルトンなのでdisposeしない
+    // （二重登録エラーを防ぐため）
 
     it('WASMモジュールを初期化できる', async () => {
-      const result = await initBasisEncoder(getWasmDir())
+      const result = await initBasisEncoder()
 
       if (result.isErr()) {
         console.error('初期化エラー:', result.error)
@@ -136,8 +124,8 @@ describe('texture-compression', () => {
     })
 
     it('初期化後はキャッシュを返す', async () => {
-      const result1 = await initBasisEncoder(getWasmDir())
-      const result2 = await initBasisEncoder(getWasmDir())
+      const result1 = await initBasisEncoder()
+      const result2 = await initBasisEncoder()
 
       expect(result1.isOk()).toBe(true)
       expect(result2.isOk()).toBe(true)
@@ -149,12 +137,9 @@ describe('texture-compression', () => {
 
   describe('実際のKTX2圧縮', () => {
     beforeAll(async () => {
-      await initBasisEncoder(getWasmDir())
+      await initBasisEncoder()
     })
-
-    afterAll(() => {
-      disposeBasisEncoder()
-    })
+    // ESMモジュールはシングルトンなのでdisposeしない
 
     it('4x4のシンプルな画像をKTX2に圧縮できる', async () => {
       // 4x4 RGBA 赤色画像

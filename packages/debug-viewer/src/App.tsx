@@ -6,7 +6,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics } from '@xrift/avatar-optimizer'
+import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics, type TextureCompressionOptions } from '@xrift/avatar-optimizer'
 import type { DebugMode } from '@xrift/mtoon-atlas'
 import './App.css'
 
@@ -31,6 +31,11 @@ function App()
   const [lastExportSize, setLastExportSize] = useState<number | null>(null)
   const [isSimplifying, setIsSimplifying] = useState(false)
   const [lastSimplifyStats, setLastSimplifyStats] = useState<SimplifyStatistics | null>(null)
+
+  // テクスチャ圧縮オプション（デフォルト有効）
+  const textureCompressionOptions: TextureCompressionOptions = {
+    supercompression: true,
+  }
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -385,7 +390,7 @@ function App()
   {
     if (!vrm) return
 
-    const result = await exportVRM(vrm)
+    const result = await exportVRM(vrm, { textureCompression: textureCompressionOptions })
 
     if (result.isErr())
     {
@@ -450,7 +455,7 @@ function App()
       }
     }
 
-    const exportResult = await exportVRM(vrm)
+    const exportResult = await exportVRM(vrm, { textureCompression: textureCompressionOptions })
 
     if (exportResult.isErr())
     {

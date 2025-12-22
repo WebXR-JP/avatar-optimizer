@@ -1,15 +1,16 @@
 import { playwright } from '@vitest/browser-playwright'
 import { resolve } from 'path'
+import topLevelAwait from 'vite-plugin-top-level-await'
+import wasm from 'vite-plugin-wasm'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  plugins: [wasm(), topLevelAwait()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
     },
   },
-  // wasmディレクトリを静的ファイルとして提供
-  publicDir: resolve(__dirname, 'wasm'),
   test: {
     globals: true,
     include: ['tests/**/*.test.ts'],

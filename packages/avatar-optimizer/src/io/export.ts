@@ -41,7 +41,7 @@ export function exportVRM(
 
   // テクスチャ圧縮が有効な場合、先に WASM エンコーダーを初期化
   const initPromise: ResultAsync<void, ExportVRMError> = textureCompression
-    ? initBasisEncoder(textureCompression.wasmDir)
+    ? initBasisEncoder()
         .map(() => undefined)
         .mapErr((err) => ({
           type: 'EXPORT_FAILED' as const,

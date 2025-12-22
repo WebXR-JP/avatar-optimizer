@@ -286,12 +286,6 @@ export type VRMLoaderError =
  */
 export interface TextureCompressionOptions {
   /**
-   * WASM ファイルのディレクトリURL
-   * 未指定の場合はデフォルトパス（パッケージ内の wasm/）を使用
-   */
-  wasmDir?: string
-
-  /**
    * UASTC 品質レベル (0-4)
    * @default 2 (Default)
    */
