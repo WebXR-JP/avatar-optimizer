@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
 import { encode as encodePng16 } from 'fast-png'
-import { compressToKtx2, flipImageY } from '@xrift/texture-compression'
+import { compressToKtx2 } from '@xrift/texture-compression'
 import type { Ktx2CompressionOptions } from '@xrift/texture-compression'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
@@ -602,8 +602,9 @@ export class MToonAtlasExporterPlugin
       throw new Error(`画像データサイズが不正: expected ${pixelCount}, got ${rgbaData.length}`)
     }
 
-    // WebGL テクスチャは左下原点、KTX2 は左上原点なので Y 軸反転
-    const flippedData = flipImageY(rgbaData, width, height)
+    // 注: Y軸反転は不要
+    // Three.jsのテクスチャ座標系とKTX2の座標系は両方とも左上原点
+    // extractRgbaDataで取得したデータはそのまま使用する
 
     // 圧縮オプションを構築
     const compressionOptions: Ktx2CompressionOptions = {
@@ -615,7 +616,7 @@ export class MToonAtlasExporterPlugin
 
     // KTX2 圧縮を実行
     const result = await compressToKtx2(
-      flippedData,
+      rgbaData,
       width,
       height,
       compressionOptions
