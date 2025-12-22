@@ -61,7 +61,11 @@ export function applyPlacementsToGeometries(
       // UV属性の配列をコピーして新しいBufferAttributeを作成
       const newUvArray = new Float32Array(uvAttr.array.length)
       newUvArray.set(uvAttr.array as Float32Array)
-      const newUvAttr = new BufferAttribute(newUvArray, uvAttr.itemSize, uvAttr.normalized)
+      const newUvAttr = new BufferAttribute(
+        newUvArray,
+        uvAttr.itemSize,
+        uvAttr.normalized,
+      )
       obj.geometry.setAttribute('uv', newUvAttr)
     }
 

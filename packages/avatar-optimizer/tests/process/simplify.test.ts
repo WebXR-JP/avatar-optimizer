@@ -16,22 +16,42 @@ describe('simplify', () => {
       const geometry = new BufferGeometry()
       // 平面: 4頂点で2三角形
       const positions = new Float32Array([
-        0, 0, 0, // 0
-        1, 0, 0, // 1
-        1, 1, 0, // 2
-        0, 1, 0, // 3
+        0,
+        0,
+        0, // 0
+        1,
+        0,
+        0, // 1
+        1,
+        1,
+        0, // 2
+        0,
+        1,
+        0, // 3
       ])
       const normals = new Float32Array([
-        0, 0, 1, // 0
-        0, 0, 1, // 1
-        0, 0, 1, // 2
-        0, 0, 1, // 3
+        0,
+        0,
+        1, // 0
+        0,
+        0,
+        1, // 1
+        0,
+        0,
+        1, // 2
+        0,
+        0,
+        1, // 3
       ])
       const uvs = new Float32Array([
-        0, 0, // 0
-        1, 0, // 1
-        1, 1, // 2
-        0, 1, // 3
+        0,
+        0, // 0
+        1,
+        0, // 1
+        1,
+        1, // 2
+        0,
+        1, // 3
       ])
       const indices = new Uint32Array([0, 1, 2, 0, 2, 3])
 
@@ -89,10 +109,7 @@ describe('simplify', () => {
         'normal',
         new BufferAttribute(new Float32Array(normals), 3),
       )
-      geometry.setAttribute(
-        'uv',
-        new BufferAttribute(new Float32Array(uvs), 2),
-      )
+      geometry.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2))
       geometry.setIndex(new BufferAttribute(new Uint32Array(indices), 1))
 
       const originalIndexCount = indices.length
@@ -122,9 +139,7 @@ describe('simplify', () => {
     it('should handle non-indexed geometry', () => {
       const geometry = new BufferGeometry()
       // 非インデックスジオメトリ（3頂点 = 1三角形）
-      const positions = new Float32Array([
-        0, 0, 0, 1, 0, 0, 0, 1, 0,
-      ])
+      const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
       geometry.setAttribute('position', new BufferAttribute(positions, 3))
 
       const result = simplifyGeometry(geometry, {
@@ -153,13 +168,13 @@ describe('simplify', () => {
     it('should preserve skinning attributes after simplification', () => {
       // SkinnedMesh用のジオメトリを作成
       const geometry = new BufferGeometry()
-      const positions = new Float32Array([
-        0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0,
-      ])
+      const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0])
       const skinWeights = new Float32Array([
         1, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1, 0, 0, 0.25, 0.25, 0.25, 0.25,
       ])
-      const skinIndices = new Uint16Array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+      const skinIndices = new Uint16Array([
+        0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,
+      ])
       const indices = new Uint32Array([0, 1, 2, 1, 3, 2])
 
       geometry.setAttribute('position', new BufferAttribute(positions, 3))

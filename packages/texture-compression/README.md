@@ -35,7 +35,9 @@ const result = await compressToKtx2(imageData, width, height)
 
 if (result.isOk()) {
   const ktx2Data = result.value.data // Uint8Array
-  console.log(`圧縮完了: ${result.value.originalSize} → ${result.value.compressedSize} bytes`)
+  console.log(
+    `圧縮完了: ${result.value.originalSize} → ${result.value.compressedSize} bytes`,
+  )
 }
 ```
 
@@ -45,10 +47,10 @@ if (result.isOk()) {
 import { compressToKtx2, UastcQuality } from '@xrift/texture-compression'
 
 const result = await compressToKtx2(imageData, width, height, {
-  quality: UastcQuality.Default,    // 品質レベル (0-4)
-  compressionLevel: 3,              // 圧縮レベル (0-5)
-  generateMipmaps: false,           // ミップマップ生成
-  supercompression: true,           // Zstandard超圧縮
+  quality: UastcQuality.Default, // 品質レベル (0-4)
+  compressionLevel: 3, // 圧縮レベル (0-5)
+  generateMipmaps: false, // ミップマップ生成
+  supercompression: true, // Zstandard超圧縮
 })
 ```
 
@@ -118,10 +120,10 @@ WASMモジュールが初期化済みかどうかを返します。
 
 ```typescript
 interface Ktx2CompressionOptions {
-  quality?: UastcQuality      // UASTC品質レベル (デフォルト: Default)
-  compressionLevel?: number   // 圧縮レベル 0-5 (デフォルト: 3)
-  generateMipmaps?: boolean   // ミップマップ生成 (デフォルト: false)
-  supercompression?: boolean  // Zstandard超圧縮 (デフォルト: true)
+  quality?: UastcQuality // UASTC品質レベル (デフォルト: Default)
+  compressionLevel?: number // 圧縮レベル 0-5 (デフォルト: 3)
+  generateMipmaps?: boolean // ミップマップ生成 (デフォルト: false)
+  supercompression?: boolean // Zstandard超圧縮 (デフォルト: true)
 }
 ```
 
@@ -129,11 +131,11 @@ interface Ktx2CompressionOptions {
 
 ```typescript
 enum UastcQuality {
-  Fastest = 0,   // 最速、最低品質
-  Faster = 1,    // 高速
-  Default = 2,   // デフォルト
-  Slower = 3,    // 低速、高品質
-  VerySlow = 4,  // 最高品質
+  Fastest = 0, // 最速、最低品質
+  Faster = 1, // 高速
+  Default = 2, // デフォルト
+  Slower = 3, // 低速、高品質
+  VerySlow = 4, // 最高品質
 }
 ```
 
@@ -141,11 +143,11 @@ enum UastcQuality {
 
 ```typescript
 interface Ktx2CompressionResult {
-  data: Uint8Array      // 圧縮後のKTX2バイナリデータ
-  originalSize: number  // 元のサイズ (bytes)
+  data: Uint8Array // 圧縮後のKTX2バイナリデータ
+  originalSize: number // 元のサイズ (bytes)
   compressedSize: number // 圧縮後のサイズ (bytes)
-  width: number         // 画像の幅
-  height: number        // 画像の高さ
+  width: number // 画像の幅
+  height: number // 画像の高さ
 }
 ```
 

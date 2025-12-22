@@ -5,11 +5,7 @@
  * 元のバッファを変更せず新しい BufferAttribute を返す。
  */
 
-import {
-  BufferAttribute,
-  InterleavedBufferAttribute,
-  TypedArray,
-} from 'three'
+import { BufferAttribute, InterleavedBufferAttribute, TypedArray } from 'three'
 
 /**
  * BufferAttribute または InterleavedBufferAttribute から

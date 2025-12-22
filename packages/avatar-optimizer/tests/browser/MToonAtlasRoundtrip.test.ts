@@ -27,7 +27,9 @@ describe('MToonAtlas Roundtrip', () => {
   /**
    * VRMを読み込むヘルパー関数
    */
-  async function loadVRM(buffer: ArrayBuffer): Promise<{ gltf: GLTF; vrm: VRM }> {
+  async function loadVRM(
+    buffer: ArrayBuffer,
+  ): Promise<{ gltf: GLTF; vrm: VRM }> {
     const loader = new GLTFLoader()
     loader.register((parser) => new VRMLoaderPlugin(parser))
     loader.register((parser) => new MToonAtlasLoaderPlugin(parser))
@@ -182,7 +184,8 @@ describe('MToonAtlas Roundtrip', () => {
     it('should preserve MToonAtlasMaterial', () => {
       const originalMaterials = findMToonAtlasMaterials(optimizedVRM)
       const originalMaterial = originalMaterials[0]
-      const originalSlotCount = originalMaterial.parameterTexture?.slotCount ?? 0
+      const originalSlotCount =
+        originalMaterial.parameterTexture?.slotCount ?? 0
       const originalTexelsPerSlot =
         originalMaterial.parameterTexture?.texelsPerSlot ?? 9
 
@@ -193,7 +196,9 @@ describe('MToonAtlas Roundtrip', () => {
       expect(reloadedMaterial.isMToonAtlasMaterial).toBe(true)
       expect(reloadedMaterial.parameterTexture).toBeDefined()
       expect(reloadedMaterial.parameterTexture?.texture).toBeDefined()
-      expect(reloadedMaterial.parameterTexture?.slotCount).toBe(originalSlotCount)
+      expect(reloadedMaterial.parameterTexture?.slotCount).toBe(
+        originalSlotCount,
+      )
       expect(reloadedMaterial.parameterTexture?.texelsPerSlot).toBe(
         originalTexelsPerSlot,
       )
@@ -205,11 +210,11 @@ describe('MToonAtlas Roundtrip', () => {
         originalMaterials[0].parameterTexture?.atlasedTextures
       const originalTextureKeys = originalAtlasedTextures
         ? Object.keys(originalAtlasedTextures).filter(
-          (key) =>
-            originalAtlasedTextures[
+            (key) =>
+              originalAtlasedTextures[
                 key as keyof typeof originalAtlasedTextures
-            ] != null,
-        )
+              ] != null,
+          )
         : []
 
       const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
@@ -247,7 +252,8 @@ describe('MToonAtlas Roundtrip', () => {
 
     it('should preserve parameter texture pixel data', () => {
       const originalMaterials = findMToonAtlasMaterials(optimizedVRM)
-      const originalParamTexture = originalMaterials[0].parameterTexture?.texture
+      const originalParamTexture =
+        originalMaterials[0].parameterTexture?.texture
       expect(originalParamTexture).toBeDefined()
 
       const originalPixelData = getTexturePixelData(originalParamTexture!)
@@ -257,7 +263,8 @@ describe('MToonAtlas Roundtrip', () => {
       expect(originalNonZeroCount).toBeGreaterThan(0)
 
       const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
-      const reloadedParamTexture = reloadedMaterials[0].parameterTexture?.texture
+      const reloadedParamTexture =
+        reloadedMaterials[0].parameterTexture?.texture
       expect(reloadedParamTexture).toBeDefined()
 
       const reloadedPixelData = getTexturePixelData(reloadedParamTexture!)
@@ -292,7 +299,9 @@ describe('MToonAtlas Roundtrip', () => {
         reloadedMaterials[0].parameterTexture?.atlasedTextures
       expect(reloadedAtlasedTextures).toBeDefined()
 
-      for (const [key, originalColorSpace] of Object.entries(originalColorSpaces)) {
+      for (const [key, originalColorSpace] of Object.entries(
+        originalColorSpaces,
+      )) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const reloadedTexture = (reloadedAtlasedTextures as any)?.[key]
         if (reloadedTexture instanceof Texture) {
@@ -304,9 +313,13 @@ describe('MToonAtlas Roundtrip', () => {
         }
       }
 
-      const originalParamTexture = originalMaterials[0].parameterTexture?.texture
-      const reloadedParamTexture = reloadedMaterials[0].parameterTexture?.texture
-      expect(reloadedParamTexture?.colorSpace).toBe(originalParamTexture?.colorSpace)
+      const originalParamTexture =
+        originalMaterials[0].parameterTexture?.texture
+      const reloadedParamTexture =
+        reloadedMaterials[0].parameterTexture?.texture
+      expect(reloadedParamTexture?.colorSpace).toBe(
+        originalParamTexture?.colorSpace,
+      )
     })
 
     it('should preserve slot attribute data', () => {
@@ -358,8 +371,14 @@ describe('MToonAtlas Roundtrip', () => {
       const originalMaterials = findMToonAtlasMaterials(optimizedVRM)
       const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
 
-      const beforeExport = captureMaterialState(originalMaterials[0], 'Before Export')
-      const afterReimport = captureMaterialState(reloadedMaterials[0], 'After Reimport')
+      const beforeExport = captureMaterialState(
+        originalMaterials[0],
+        'Before Export',
+      )
+      const afterReimport = captureMaterialState(
+        reloadedMaterials[0],
+        'After Reimport',
+      )
       const differences = compareMaterialStates(beforeExport, afterReimport)
 
       console.log('=== Material Comparison ===')
@@ -391,26 +410,33 @@ describe('MToonAtlas Roundtrip', () => {
 
     it('should check outlineWidthFactor precision', () => {
       const originalMaterials = findMToonAtlasMaterials(optimizedVRM)
-      const originalParamTexture = originalMaterials[0].parameterTexture?.texture
+      const originalParamTexture =
+        originalMaterials[0].parameterTexture?.texture
       const originalData = getParameterTextureData16bit(originalParamTexture!)
 
-      const texelsPerSlot = originalMaterials[0].parameterTexture?.texelsPerSlot ?? 9
+      const texelsPerSlot =
+        originalMaterials[0].parameterTexture?.texelsPerSlot ?? 9
       const outlineWidthIndex = 3 * 4 + 3
 
       console.log('=== outlineWidthFactor Precision Test ===')
       console.log(`texelsPerSlot: ${texelsPerSlot}`)
 
       if (originalData) {
-        console.log(`Original outlineWidthFactor: ${originalData[outlineWidthIndex]}`)
+        console.log(
+          `Original outlineWidthFactor: ${originalData[outlineWidthIndex]}`,
+        )
 
         const reloadedMaterials = findMToonAtlasMaterials(reloadedVRM)
-        const reloadedParamTexture = reloadedMaterials[0].parameterTexture?.texture
+        const reloadedParamTexture =
+          reloadedMaterials[0].parameterTexture?.texture
         const reloadedData = getParameterTextureData16bit(reloadedParamTexture!)
 
         if (reloadedData) {
           const originalOutlineWidth = originalData[outlineWidthIndex]
           const reloadedOutlineWidth = reloadedData[outlineWidthIndex]
-          const absoluteError = Math.abs(originalOutlineWidth - reloadedOutlineWidth)
+          const absoluteError = Math.abs(
+            originalOutlineWidth - reloadedOutlineWidth,
+          )
           const relativeError =
             originalOutlineWidth > 0
               ? (absoluteError / originalOutlineWidth) * 100
@@ -479,10 +505,10 @@ function captureMaterialState(
     alphaTest: material.alphaTest,
     parameterTexture: material.parameterTexture
       ? {
-        slotCount: material.parameterTexture.slotCount,
-        texelsPerSlot: material.parameterTexture.texelsPerSlot,
-        textureExists: !!material.parameterTexture.texture,
-      }
+          slotCount: material.parameterTexture.slotCount,
+          texelsPerSlot: material.parameterTexture.texelsPerSlot,
+          textureExists: !!material.parameterTexture.texture,
+        }
       : null,
     slotAttribute: material.slotAttribute,
   }
@@ -605,7 +631,15 @@ function getParameterTextureData16bit(texture: Texture): Float32Array | null {
     )
 
     const pixels = new Uint8Array(image.width * image.height * 4)
-    gl.readPixels(0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+    gl.readPixels(
+      0,
+      0,
+      image.width,
+      image.height,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      pixels,
+    )
 
     gl.deleteFramebuffer(fbo)
     gl.deleteTexture(glTexture)

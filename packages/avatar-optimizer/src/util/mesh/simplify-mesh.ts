@@ -7,7 +7,11 @@
 
 import { MeshoptSimplifier } from 'meshoptimizer'
 import { err, ok, Result, safeTry } from 'neverthrow'
-import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute } from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  InterleavedBufferAttribute,
+} from 'three'
 import { OptimizationError, SimplifyOptions } from '../../types'
 
 /** デフォルト設定 */
@@ -237,7 +241,10 @@ function rebuildGeometry(
       const normalized = attr.normalized
 
       // 属性の型を判定
-      let TypedArrayConstructor: Float32ArrayConstructor | Uint16ArrayConstructor | Uint8ArrayConstructor
+      let TypedArrayConstructor:
+        | Float32ArrayConstructor
+        | Uint16ArrayConstructor
+        | Uint8ArrayConstructor
       if (name === 'skinIndex') {
         // skinIndexはUint16Array
         TypedArrayConstructor = Uint16Array

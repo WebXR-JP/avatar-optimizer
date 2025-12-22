@@ -54,7 +54,11 @@ describe('buffer-attribute', () => {
     })
 
     it('normalized フラグを保持する', () => {
-      const original = new BufferAttribute(new Float32Array([0.5, 0.5]), 2, true)
+      const original = new BufferAttribute(
+        new Float32Array([0.5, 0.5]),
+        2,
+        true,
+      )
 
       const cloned = cloneBufferAttribute(original)
 
@@ -66,8 +70,16 @@ describe('buffer-attribute', () => {
       // 頂点0: [x0, y0, z0, u0, v0]
       // 頂点1: [x1, y1, z1, u1, v1]
       const interleavedData = new Float32Array([
-        1, 2, 3, 0.0, 0.0, // 頂点0
-        4, 5, 6, 1.0, 1.0, // 頂点1
+        1,
+        2,
+        3,
+        0.0,
+        0.0, // 頂点0
+        4,
+        5,
+        6,
+        1.0,
+        1.0, // 頂点1
       ])
       const interleavedBuffer = new InterleavedBuffer(interleavedData, 5)
 
@@ -157,8 +169,7 @@ describe('buffer-attribute', () => {
 
     it('InterleavedBufferAttribute を編集して通常の BufferAttribute を返す', () => {
       const interleavedData = new Float32Array([
-        1, 2, 3, 0.0, 0.0,
-        4, 5, 6, 1.0, 1.0,
+        1, 2, 3, 0.0, 0.0, 4, 5, 6, 1.0, 1.0,
       ])
       const interleavedBuffer = new InterleavedBuffer(interleavedData, 5)
       const positionAttr = new InterleavedBufferAttribute(

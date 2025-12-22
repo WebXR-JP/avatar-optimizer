@@ -96,7 +96,9 @@ describe('Simplify with Real VRM', () => {
 
       // 頂点が削減されていることを確認
       if (stats.processedMeshCount > 0) {
-        expect(stats.simplifiedVertexCount).toBeLessThan(stats.originalVertexCount)
+        expect(stats.simplifiedVertexCount).toBeLessThan(
+          stats.originalVertexCount,
+        )
         expect(stats.vertexReductionRatio).toBeGreaterThan(0)
       }
     }

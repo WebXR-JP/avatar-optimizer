@@ -8,7 +8,10 @@
 import { ResultAsync } from 'neverthrow'
 import { Mesh, Object3D, SkinnedMesh } from 'three'
 import { OptimizationError, SimplifyOptions } from '../types'
-import { ensureSimplifierReady, simplifyGeometry } from '../util/mesh/simplify-mesh'
+import {
+  ensureSimplifierReady,
+  simplifyGeometry,
+} from '../util/mesh/simplify-mesh'
 
 /**
  * 簡略化結果の統計情報
@@ -102,7 +105,8 @@ async function simplifyMeshesAsync(
 
   // 各メッシュを簡略化
   for (const mesh of meshesToProcess) {
-    const originalVertexCount = mesh.geometry.getAttribute('position')?.count ?? 0
+    const originalVertexCount =
+      mesh.geometry.getAttribute('position')?.count ?? 0
     const originalIndexCount = mesh.geometry.index?.count ?? originalVertexCount
     stats.originalVertexCount += originalVertexCount
     stats.originalIndexCount += originalIndexCount

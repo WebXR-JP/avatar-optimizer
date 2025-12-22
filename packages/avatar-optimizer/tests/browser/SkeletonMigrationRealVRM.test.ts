@@ -588,7 +588,9 @@ describe('Skeleton Migration with Real VRM', () => {
       const failedSamples: string[] = []
 
       for (const sample of samples) {
-        const mesh = meshesWithMorphTargets.find((m) => m.name === sample.meshName)
+        const mesh = meshesWithMorphTargets.find(
+          (m) => m.name === sample.meshName,
+        )
         if (!mesh) continue
 
         const morphPositions = mesh.geometry.morphAttributes.position
@@ -620,7 +622,9 @@ describe('Skeleton Migration with Real VRM', () => {
       }
 
       if (failedSamples.length > 0) {
-        console.error(`[MorphTarget Test] ${failedSamples.length} samples failed:`)
+        console.error(
+          `[MorphTarget Test] ${failedSamples.length} samples failed:`,
+        )
         for (const failed of failedSamples) {
           console.error(`  ${failed}`)
         }
@@ -659,7 +663,9 @@ describe('Skeleton Migration with Real VRM', () => {
       })
 
       if (!facesMesh) {
-        console.log('[MorphTarget Test] No mesh with morphTargets found, skipping')
+        console.log(
+          '[MorphTarget Test] No mesh with morphTargets found, skipping',
+        )
         return
       }
 

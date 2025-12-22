@@ -1,5 +1,8 @@
 import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
-import { MToonAtlasExporterPlugin, MToonAtlasLoaderPlugin } from '@xrift/mtoon-atlas'
+import {
+  MToonAtlasExporterPlugin,
+  MToonAtlasLoaderPlugin,
+} from '@xrift/mtoon-atlas'
 import { BufferGeometry, Scene, SkinnedMesh } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -21,7 +24,9 @@ describe('File Size Comparison', () => {
   /**
    * VRMを読み込むヘルパー関数
    */
-  async function loadVRM(buffer: ArrayBuffer): Promise<{ gltf: GLTF; vrm: VRM }> {
+  async function loadVRM(
+    buffer: ArrayBuffer,
+  ): Promise<{ gltf: GLTF; vrm: VRM }> {
     const loader = new GLTFLoader()
     loader.register((parser) => new VRMLoaderPlugin(parser))
     loader.register((parser) => new MToonAtlasLoaderPlugin(parser))
@@ -154,14 +159,18 @@ describe('File Size Comparison', () => {
       // JSON チャンク
       const jsonChunkLength = view.getUint32(12, true)
       const jsonChunkType = view.getUint32(16, true)
-      console.log(`JSON Chunk: ${formatBytes(jsonChunkLength)} (type: 0x${jsonChunkType.toString(16)})`)
+      console.log(
+        `JSON Chunk: ${formatBytes(jsonChunkLength)} (type: 0x${jsonChunkType.toString(16)})`,
+      )
 
       // BIN チャンク
       const binChunkOffset = 20 + jsonChunkLength
       if (binChunkOffset < exportedBuffer.byteLength) {
         const binChunkLength = view.getUint32(binChunkOffset, true)
         const binChunkType = view.getUint32(binChunkOffset + 4, true)
-        console.log(`BIN Chunk:  ${formatBytes(binChunkLength)} (type: 0x${binChunkType.toString(16)})`)
+        console.log(
+          `BIN Chunk:  ${formatBytes(binChunkLength)} (type: 0x${binChunkType.toString(16)})`,
+        )
       }
 
       expect(true).toBe(true)
@@ -210,7 +219,9 @@ describe('File Size Comparison', () => {
           }
         }
 
-        console.log(`  Embedded (data URI): ${embeddedCount} images, total ${formatBytes(embeddedTotalSize)}`)
+        console.log(
+          `  Embedded (data URI): ${embeddedCount} images, total ${formatBytes(embeddedTotalSize)}`,
+        )
         console.log(`  BufferView reference: ${bufferViewCount} images`)
       }
 
@@ -235,8 +246,12 @@ describe('File Size Comparison', () => {
           const mat = json.materials[i]
           if (mat.extensions?.XRIFT_mtoon_atlas) {
             const ext = mat.extensions.XRIFT_mtoon_atlas
-            console.log(`  Material ${i} (${mat.name}): parameterTexture.index=${ext.parameterTexture?.index}, isOutline=${ext.isOutline}, outlineWidthMode=${ext.outlineWidthMode}`)
-            console.log(`    atlasedTextures: ${JSON.stringify(ext.atlasedTextures)}`)
+            console.log(
+              `  Material ${i} (${mat.name}): parameterTexture.index=${ext.parameterTexture?.index}, isOutline=${ext.isOutline}, outlineWidthMode=${ext.outlineWidthMode}`,
+            )
+            console.log(
+              `    atlasedTextures: ${JSON.stringify(ext.atlasedTextures)}`,
+            )
           }
         }
       }
@@ -246,7 +261,9 @@ describe('File Size Comparison', () => {
         console.log(`\nTextures array (${json.textures.length} items):`)
         for (let i = 0; i < json.textures.length; i++) {
           const tex = json.textures[i]
-          console.log(`  [${i}]: source=${tex.source}, sampler=${tex.sampler}, name=${tex.name}`)
+          console.log(
+            `  [${i}]: source=${tex.source}, sampler=${tex.sampler}, name=${tex.name}`,
+          )
         }
       }
 
@@ -271,20 +288,40 @@ describe('File Size Comparison', () => {
             console.log(`  Material ${i}: ${indices.join(', ')}`)
           } else {
             // XRIFT_mtoon_atlas以外のマテリアル
-            console.log(`  Material ${i} (non-atlas): pbrMetallicRoughness.baseColorTexture=${mat.pbrMetallicRoughness?.baseColorTexture?.index}`)
+            console.log(
+              `  Material ${i} (non-atlas): pbrMetallicRoughness.baseColorTexture=${mat.pbrMetallicRoughness?.baseColorTexture?.index}`,
+            )
           }
         }
-        console.log(`\nUsed texture indices (by XRIFT_mtoon_atlas): ${Array.from(usedTextureIndices).sort((a, b) => a - b).join(', ')}`)
-        console.log(`Unused texture indices: ${Array.from({ length: json.textures.length }, (_, i) => i).filter(i => !usedTextureIndices.has(i)).join(', ')}`)
+        console.log(
+          `\nUsed texture indices (by XRIFT_mtoon_atlas): ${Array.from(
+            usedTextureIndices,
+          )
+            .sort((a, b) => a - b)
+            .join(', ')}`,
+        )
+        console.log(
+          `Unused texture indices: ${Array.from(
+            { length: json.textures.length },
+            (_, i) => i,
+          )
+            .filter((i) => !usedTextureIndices.has(i))
+            .join(', ')}`,
+        )
 
         // 未使用テクスチャの詳細
-        const unusedIndices = Array.from({ length: json.textures.length }, (_, i) => i).filter(i => !usedTextureIndices.has(i))
+        const unusedIndices = Array.from(
+          { length: json.textures.length },
+          (_, i) => i,
+        ).filter((i) => !usedTextureIndices.has(i))
         if (unusedIndices.length > 0) {
           console.log('\nUnused texture details:')
           for (const idx of unusedIndices) {
             const tex = json.textures[idx]
             const img = json.images[tex.source]
-            console.log(`  Texture ${idx}: source=${tex.source}, name=${tex.name || img?.name || 'unnamed'}`)
+            console.log(
+              `  Texture ${idx}: source=${tex.source}, name=${tex.name || img?.name || 'unnamed'}`,
+            )
           }
         }
       }
@@ -308,7 +345,10 @@ describe('File Size Comparison', () => {
       })
 
       // アサーションでメッシュとテクスチャの存在を確認
-      expect(meshCount, `Mesh count: ${meshCount}, Vertex count: ${vertexCount}`).toBeGreaterThan(0)
+      expect(
+        meshCount,
+        `Mesh count: ${meshCount}, Vertex count: ${vertexCount}`,
+      ).toBeGreaterThan(0)
     })
 
     it('should analyze buffer views and accessors', async () => {
@@ -353,20 +393,28 @@ describe('File Size Comparison', () => {
         }
 
         for (const [target, info] of Object.entries(byTarget)) {
-          const targetName = target === '34962' ? 'ARRAY_BUFFER' :
-            target === '34963' ? 'ELEMENT_ARRAY_BUFFER' :
-              target === '0' ? 'none (images etc)' : `unknown (${target})`
+          const targetName =
+            target === '34962'
+              ? 'ARRAY_BUFFER'
+              : target === '34963'
+                ? 'ELEMENT_ARRAY_BUFFER'
+                : target === '0'
+                  ? 'none (images etc)'
+                  : `unknown (${target})`
           analysis.bufferViews.byTarget[targetName] = info
         }
 
         // 重複チェック
         const uniqueViews = new Map<string, number[]>()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         json.bufferViews.forEach((bv: any, idx: number) => {
           const key = `${bv.buffer}:${bv.byteOffset}:${bv.byteLength}`
           if (!uniqueViews.has(key)) uniqueViews.set(key, [])
           uniqueViews.get(key)!.push(idx)
         })
-        analysis.bufferViews.duplicateGroups = Array.from(uniqueViews.values()).filter(arr => arr.length > 1).length
+        analysis.bufferViews.duplicateGroups = Array.from(
+          uniqueViews.values(),
+        ).filter((arr) => arr.length > 1).length
       }
 
       // Accessor分析
@@ -381,12 +429,15 @@ describe('File Size Comparison', () => {
 
         // 重複チェック
         const uniqueAccessors = new Map<string, number[]>()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         json.accessors.forEach((acc: any, idx: number) => {
           const key = `${acc.bufferView}:${acc.byteOffset || 0}:${acc.count}:${acc.type}:${acc.componentType}`
           if (!uniqueAccessors.has(key)) uniqueAccessors.set(key, [])
           uniqueAccessors.get(key)!.push(idx)
         })
-        analysis.accessors.duplicateGroups = Array.from(uniqueAccessors.values()).filter(arr => arr.length > 1).length
+        analysis.accessors.duplicateGroups = Array.from(
+          uniqueAccessors.values(),
+        ).filter((arr) => arr.length > 1).length
       }
 
       // Mesh分析
@@ -395,7 +446,8 @@ describe('File Size Comparison', () => {
           analysis.meshes.totalPrimitives += mesh.primitives?.length || 0
           for (const prim of mesh.primitives || []) {
             for (const attrName of Object.keys(prim.attributes || {})) {
-              analysis.meshes.attributeUsage[attrName] = (analysis.meshes.attributeUsage[attrName] || 0) + 1
+              analysis.meshes.attributeUsage[attrName] =
+                (analysis.meshes.attributeUsage[attrName] || 0) + 1
             }
           }
         }
@@ -403,14 +455,33 @@ describe('File Size Comparison', () => {
 
       // アサーションで重複がないことを確認
       // テスト失敗時に分析結果が表示されるようにする
-      expect(analysis.bufferViews.duplicateGroups, `BufferView duplicates found. Analysis: ${JSON.stringify(analysis.bufferViews, null, 2)}`).toBe(0)
-      expect(analysis.accessors.duplicateGroups, `Accessor duplicates found. Analysis: ${JSON.stringify(analysis.accessors, null, 2)}`).toBe(0)
+      expect(
+        analysis.bufferViews.duplicateGroups,
+        `BufferView duplicates found. Analysis: ${JSON.stringify(analysis.bufferViews, null, 2)}`,
+      ).toBe(0)
+      expect(
+        analysis.accessors.duplicateGroups,
+        `Accessor duplicates found. Analysis: ${JSON.stringify(analysis.accessors, null, 2)}`,
+      ).toBe(0)
 
       // 分析結果のサマリーをログ出力
-      console.log('BufferViews:', analysis.bufferViews.count, 'totalSize:', analysis.bufferViews.totalSize)
+      console.log(
+        'BufferViews:',
+        analysis.bufferViews.count,
+        'totalSize:',
+        analysis.bufferViews.totalSize,
+      )
       console.log('Accessors:', analysis.accessors.count)
-      console.log('Meshes:', analysis.meshes.count, 'primitives:', analysis.meshes.totalPrimitives)
-      console.log('Attributes:', Object.keys(analysis.meshes.attributeUsage).join(', '))
+      console.log(
+        'Meshes:',
+        analysis.meshes.count,
+        'primitives:',
+        analysis.meshes.totalPrimitives,
+      )
+      console.log(
+        'Attributes:',
+        Object.keys(analysis.meshes.attributeUsage).join(', '),
+      )
     })
 
     it('should detect duplicate binary data in BIN chunk', async () => {
@@ -467,8 +538,9 @@ describe('File Size Comparison', () => {
       }
 
       // 重複データの検出
-      const duplicates = Array.from(dataHashes.entries())
-        .filter(([, info]) => info.indices.length > 1)
+      const duplicates = Array.from(dataHashes.entries()).filter(
+        ([, info]) => info.indices.length > 1,
+      )
 
       let duplicateDataSize = 0
       const duplicateDetails: string[] = []
@@ -491,7 +563,9 @@ describe('File Size Comparison', () => {
           const acc = json.accessors[i]
           const bvIdx = acc.bufferView
           if (!bufferViewUsage[bvIdx]) bufferViewUsage[bvIdx] = []
-          bufferViewUsage[bvIdx].push(`accessor[${i}]: ${acc.type} x ${acc.count}`)
+          bufferViewUsage[bvIdx].push(
+            `accessor[${i}]: ${acc.type} x ${acc.count}`,
+          )
         }
       }
 
@@ -503,14 +577,21 @@ describe('File Size Comparison', () => {
           for (let pi = 0; pi < (mesh.primitives?.length || 0); pi++) {
             const prim = mesh.primitives[pi]
             // attributes
-            for (const [attrName, accIdx] of Object.entries(prim.attributes || {})) {
-              if (!accessorUsage[accIdx as number]) accessorUsage[accIdx as number] = []
-              accessorUsage[accIdx as number].push(`mesh[${mi}].prim[${pi}].${attrName}`)
+            for (const [attrName, accIdx] of Object.entries(
+              prim.attributes || {},
+            )) {
+              if (!accessorUsage[accIdx as number])
+                accessorUsage[accIdx as number] = []
+              accessorUsage[accIdx as number].push(
+                `mesh[${mi}].prim[${pi}].${attrName}`,
+              )
             }
             // indices
             if (prim.indices !== undefined) {
               if (!accessorUsage[prim.indices]) accessorUsage[prim.indices] = []
-              accessorUsage[prim.indices].push(`mesh[${mi}].prim[${pi}].indices`)
+              accessorUsage[prim.indices].push(
+                `mesh[${mi}].prim[${pi}].indices`,
+              )
             }
           }
         }
@@ -521,8 +602,11 @@ describe('File Size Comparison', () => {
         for (let si = 0; si < json.skins.length; si++) {
           const skin = json.skins[si]
           if (skin.inverseBindMatrices !== undefined) {
-            if (!accessorUsage[skin.inverseBindMatrices]) accessorUsage[skin.inverseBindMatrices] = []
-            accessorUsage[skin.inverseBindMatrices].push(`skin[${si}].inverseBindMatrices`)
+            if (!accessorUsage[skin.inverseBindMatrices])
+              accessorUsage[skin.inverseBindMatrices] = []
+            accessorUsage[skin.inverseBindMatrices].push(
+              `skin[${si}].inverseBindMatrices`,
+            )
           }
         }
       }
@@ -533,7 +617,9 @@ describe('File Size Comparison', () => {
         for (let mi = 0; mi < Math.min(json.meshes.length, 4); mi++) {
           const mesh = json.meshes[mi]
           for (let pi = 0; pi < (mesh.primitives?.length || 0); pi++) {
-            const attrs = Object.keys(mesh.primitives[pi].attributes || {}).join(', ')
+            const attrs = Object.keys(
+              mesh.primitives[pi].attributes || {},
+            ).join(', ')
             console.log(`  mesh[${mi}].prim[${pi}]: ${attrs}`)
           }
         }
@@ -564,8 +650,12 @@ describe('File Size Comparison', () => {
 
       console.log('\n=== Binary Duplicate Analysis ===')
       console.log(`Total BIN size: ${totalBinSize} bytes`)
-      console.log(`Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)`)
-      console.log(`Top duplicates:\n  ${duplicateUsageDetails.slice(0, 3).join('\n  ')}`)
+      console.log(
+        `Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)`,
+      )
+      console.log(
+        `Top duplicates:\n  ${duplicateUsageDetails.slice(0, 3).join('\n  ')}`,
+      )
 
       // 重複率が60%を超える場合は警告
       // 現状ではmorphTargetsやexcludedMeshesの重複が残っているため、
@@ -574,9 +664,9 @@ describe('File Size Comparison', () => {
       expect(
         duplicateRatio,
         'Duplicate binary data found:\n' +
-        `Total BIN size: ${totalBinSize} bytes\n` +
-        `Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)\n` +
-        `Top duplicates usage:\n  ${duplicateUsageDetails.join('\n\n  ')}`,
+          `Total BIN size: ${totalBinSize} bytes\n` +
+          `Duplicate data: ${duplicateDataSize} bytes (${(duplicateRatio * 100).toFixed(1)}%)\n` +
+          `Top duplicates usage:\n  ${duplicateUsageDetails.join('\n\n  ')}`,
       ).toBeLessThan(0.6) // 60%未満を許容
     })
 
@@ -613,7 +703,10 @@ describe('File Size Comparison', () => {
             meshIndex: mi,
             meshName: mesh.name || `mesh_${mi}`,
             targetCount: prim.targets.length,
-            targets: [] as Array<{ name: string; accessors: Record<string, number> }>,
+            targets: [] as Array<{
+              name: string
+              accessors: Record<string, number>
+            }>,
           }
 
           for (let ti = 0; ti < prim.targets.length; ti++) {
@@ -632,11 +725,16 @@ describe('File Size Comparison', () => {
       // morphTargetsを持つメッシュの概要
       console.log(`Meshes with morphTargets: ${morphTargetInfo.length}`)
       for (const info of morphTargetInfo) {
-        console.log(`  mesh[${info.meshIndex}] "${info.meshName}": ${info.targetCount} targets`)
+        console.log(
+          `  mesh[${info.meshIndex}] "${info.meshName}": ${info.targetCount} targets`,
+        )
       }
 
       // アクセサからBufferViewへのマッピング
-      const accessorToBufferView: Record<number, { bufferView: number; type: string; count: number }> = {}
+      const accessorToBufferView: Record<
+        number,
+        { bufferView: number; type: string; count: number }
+      > = {}
       if (json.accessors) {
         for (let i = 0; i < json.accessors.length; i++) {
           const acc = json.accessors[i]
@@ -659,9 +757,9 @@ describe('File Size Comparison', () => {
               if (!morphTargetBufferViews.has(bvIdx)) {
                 morphTargetBufferViews.set(bvIdx, [])
               }
-              morphTargetBufferViews.get(bvIdx)!.push(
-                `mesh[${info.meshIndex}].${target.name}.${attr}`,
-              )
+              morphTargetBufferViews
+                .get(bvIdx)!
+                .push(`mesh[${info.meshIndex}].${target.name}.${attr}`)
             }
           }
         }
@@ -674,7 +772,11 @@ describe('File Size Comparison', () => {
           const bv = json.bufferViews[bvIdx]
           const offset = bv.byteOffset || 0
           const length = bv.byteLength
-          const data = new Uint8Array(exportedBuffer, binChunkStart + offset, length)
+          const data = new Uint8Array(
+            exportedBuffer,
+            binChunkStart + offset,
+            length,
+          )
 
           // 簡易ハッシュ
           const sampleSize = Math.min(64, length)
@@ -708,10 +810,14 @@ describe('File Size Comparison', () => {
           const redundantSize = size * (bvIndices.length - 1)
           totalDuplicateSize += redundantSize
 
-          console.log(`  Hash group (${bvIndices.length} copies, ${size} bytes each, ${redundantSize} bytes redundant):`)
+          console.log(
+            `  Hash group (${bvIndices.length} copies, ${size} bytes each, ${redundantSize} bytes redundant):`,
+          )
           for (const bvIdx of bvIndices.slice(0, 3)) {
             const usages = morphTargetBufferViews.get(bvIdx) || []
-            console.log(`    BV[${bvIdx}]: ${usages.slice(0, 2).join(', ')}${usages.length > 2 ? '...' : ''}`)
+            console.log(
+              `    BV[${bvIdx}]: ${usages.slice(0, 2).join(', ')}${usages.length > 2 ? '...' : ''}`,
+            )
           }
           if (bvIndices.length > 3) {
             console.log(`    ... and ${bvIndices.length - 3} more`)
@@ -719,7 +825,9 @@ describe('File Size Comparison', () => {
         }
       }
 
-      console.log(`\nTotal morphTarget duplicate size: ${totalDuplicateSize} bytes (${(totalDuplicateSize / 1024 / 1024).toFixed(2)} MB)`)
+      console.log(
+        `\nTotal morphTarget duplicate size: ${totalDuplicateSize} bytes (${(totalDuplicateSize / 1024 / 1024).toFixed(2)} MB)`,
+      )
 
       // Three.js読み込み直後のメッシュを確認（最適化前）
       console.log('\n=== Meshes BEFORE optimization (from GLTFLoader) ===')
@@ -729,12 +837,18 @@ describe('File Size Comparison', () => {
 
       const freshMeshesWithMorphTargets: string[] = []
       freshVRM.scene.traverse((obj) => {
-        if (obj instanceof SkinnedMesh && obj.morphTargetInfluences && obj.morphTargetInfluences.length > 0) {
+        if (
+          obj instanceof SkinnedMesh &&
+          obj.morphTargetInfluences &&
+          obj.morphTargetInfluences.length > 0
+        ) {
           const morphCount = obj.morphTargetInfluences.length
           freshMeshesWithMorphTargets.push(`${obj.name}: ${morphCount} targets`)
         }
       })
-      console.log(`Fresh loaded VRM meshes with morphTargets: ${freshMeshesWithMorphTargets.length}`)
+      console.log(
+        `Fresh loaded VRM meshes with morphTargets: ${freshMeshesWithMorphTargets.length}`,
+      )
       for (const info of freshMeshesWithMorphTargets) {
         console.log(`  ${info}`)
       }
@@ -743,10 +857,18 @@ describe('File Size Comparison', () => {
       console.log('\n=== Meshes AFTER optimization ===')
       const geometryToMeshes = new Map<BufferGeometry, SkinnedMesh[]>()
       optimizedVRM.scene.traverse((obj) => {
-        if (obj instanceof SkinnedMesh && obj.morphTargetInfluences && obj.morphTargetInfluences.length > 0) {
+        if (
+          obj instanceof SkinnedMesh &&
+          obj.morphTargetInfluences &&
+          obj.morphTargetInfluences.length > 0
+        ) {
           const morphCount = obj.morphTargetInfluences.length
-          const morphNames = obj.morphTargetDictionary ? Object.keys(obj.morphTargetDictionary).slice(0, 5) : []
-          console.log(`  ${obj.name}: ${morphCount} morphTargets (${morphNames.join(', ')}${morphNames.length < morphCount ? '...' : ''})`)
+          const morphNames = obj.morphTargetDictionary
+            ? Object.keys(obj.morphTargetDictionary).slice(0, 5)
+            : []
+          console.log(
+            `  ${obj.name}: ${morphCount} morphTargets (${morphNames.join(', ')}${morphNames.length < morphCount ? '...' : ''})`,
+          )
 
           // geometryの共有状況を調査
           if (!geometryToMeshes.has(obj.geometry)) {
@@ -758,10 +880,14 @@ describe('File Size Comparison', () => {
 
       // ジオメトリ共有状況
       console.log('\n=== Geometry Sharing ===')
-      console.log(`Unique geometries with morphTargets: ${geometryToMeshes.size}`)
+      console.log(
+        `Unique geometries with morphTargets: ${geometryToMeshes.size}`,
+      )
       for (const [geom, meshes] of geometryToMeshes) {
         if (meshes.length > 1) {
-          console.log(`  Geometry shared by ${meshes.length} meshes: ${meshes.map(m => m.name).join(', ')}`)
+          console.log(
+            `  Geometry shared by ${meshes.length} meshes: ${meshes.map((m) => m.name).join(', ')}`,
+          )
         }
       }
 
@@ -777,9 +903,15 @@ describe('File Size Comparison', () => {
         console.log(`  position.count: ${geom.getAttribute('position')?.count}`)
 
         if (geom.morphAttributes.position) {
-          console.log(`  morphAttributes.position: ${geom.morphAttributes.position.length} targets`)
+          console.log(
+            `  morphAttributes.position: ${geom.morphAttributes.position.length} targets`,
+          )
           // 各ターゲットのデータ分析
-          for (let i = 0; i < Math.min(geom.morphAttributes.position.length, 5); i++) {
+          for (
+            let i = 0;
+            i < Math.min(geom.morphAttributes.position.length, 5);
+            i++
+          ) {
             const attr = geom.morphAttributes.position[i]
             // 非ゼロ値をカウント
             const arr = attr.array as Float32Array
@@ -787,27 +919,39 @@ describe('File Size Comparison', () => {
             for (let j = 0; j < arr.length; j++) {
               if (Math.abs(arr[j]) > 0.0001) nonZeroCount++
             }
-            console.log(`    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`)
+            console.log(
+              `    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`,
+            )
 
             // 配列参照で共有を追跡
-            if (!arrayToMeshes.has(arr.buffer)) arrayToMeshes.set(arr.buffer, [])
+            if (!arrayToMeshes.has(arr.buffer))
+              arrayToMeshes.set(arr.buffer, [])
             arrayToMeshes.get(arr.buffer)!.push(`${mesh.name}.position[${i}]`)
           }
         }
         if (geom.morphAttributes.normal) {
-          console.log(`  morphAttributes.normal: ${geom.morphAttributes.normal.length} targets`)
+          console.log(
+            `  morphAttributes.normal: ${geom.morphAttributes.normal.length} targets`,
+          )
           // normal も同様にチェック
-          for (let i = 0; i < Math.min(geom.morphAttributes.normal.length, 5); i++) {
+          for (
+            let i = 0;
+            i < Math.min(geom.morphAttributes.normal.length, 5);
+            i++
+          ) {
             const attr = geom.morphAttributes.normal[i]
             const arr = attr.array as Float32Array
             let nonZeroCount = 0
             for (let j = 0; j < arr.length; j++) {
               if (Math.abs(arr[j]) > 0.0001) nonZeroCount++
             }
-            console.log(`    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`)
+            console.log(
+              `    target[${i}]: ${attr.count} vertices, ${nonZeroCount}/${arr.length} non-zero values`,
+            )
 
             // 配列参照で共有を追跡
-            if (!arrayToMeshes.has(arr.buffer)) arrayToMeshes.set(arr.buffer, [])
+            if (!arrayToMeshes.has(arr.buffer))
+              arrayToMeshes.set(arr.buffer, [])
             arrayToMeshes.get(arr.buffer)!.push(`${mesh.name}.normal[${i}]`)
           }
         }
@@ -819,10 +963,14 @@ describe('File Size Comparison', () => {
       for (const [, usages] of arrayToMeshes) {
         if (usages.length > 1) {
           sharedCount++
-          console.log(`  Shared by: ${usages.slice(0, 5).join(', ')}${usages.length > 5 ? '...' : ''}`)
+          console.log(
+            `  Shared by: ${usages.slice(0, 5).join(', ')}${usages.length > 5 ? '...' : ''}`,
+          )
         }
       }
-      console.log(`Total shared buffers: ${sharedCount} / ${arrayToMeshes.size}`)
+      console.log(
+        `Total shared buffers: ${sharedCount} / ${arrayToMeshes.size}`,
+      )
 
       expect(true).toBe(true)
     })
@@ -842,7 +990,10 @@ describe('File Size Comparison', () => {
       console.log('\n=== Original VRM MorphTarget Analysis ===')
 
       // morphTargetsを持つメッシュを収集
-      const meshesWithMorphTargets: Array<{ name: string; targetCount: number }> = []
+      const meshesWithMorphTargets: Array<{
+        name: string
+        targetCount: number
+      }> = []
       if (json.meshes) {
         for (const mesh of json.meshes) {
           const prim = mesh.primitives?.[0]
@@ -867,7 +1018,11 @@ describe('File Size Comparison', () => {
           const bv = json.bufferViews[i]
           const offset = bv.byteOffset || 0
           const length = bv.byteLength
-          const data = new Uint8Array(originalBuffer, binChunkStart + offset, length)
+          const data = new Uint8Array(
+            originalBuffer,
+            binChunkStart + offset,
+            length,
+          )
 
           const sampleSize = Math.min(64, length)
           const samples: number[] = []
@@ -882,19 +1037,24 @@ describe('File Size Comparison', () => {
           }
           const hash = `${length}:${samples.join(',')}`
 
-          if (!dataHashes.has(hash)) dataHashes.set(hash, { indices: [], size: length })
+          if (!dataHashes.has(hash))
+            dataHashes.set(hash, { indices: [], size: length })
           dataHashes.get(hash)!.indices.push(i)
         }
       }
 
-      const duplicates = Array.from(dataHashes.entries()).filter(([, info]) => info.indices.length > 1)
+      const duplicates = Array.from(dataHashes.entries()).filter(
+        ([, info]) => info.indices.length > 1,
+      )
       let totalDuplicateSize = 0
       for (const [, info] of duplicates) {
         totalDuplicateSize += info.size * (info.indices.length - 1)
       }
 
       const binChunkLength = view.getUint32(binChunkOffset, true)
-      console.log(`\nOriginal VRM duplicate data: ${totalDuplicateSize} bytes (${(totalDuplicateSize / binChunkLength * 100).toFixed(1)}%)`)
+      console.log(
+        `\nOriginal VRM duplicate data: ${totalDuplicateSize} bytes (${((totalDuplicateSize / binChunkLength) * 100).toFixed(1)}%)`,
+      )
       console.log(`Total BIN size: ${binChunkLength} bytes`)
 
       expect(true).toBe(true)
@@ -914,32 +1074,34 @@ describe('File Size Comparison', () => {
         return plugin
       })
 
-      const noOptExportBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const exportScene = new Scene()
-        const children = [...vrm.scene.children].filter(
-          (child) =>
-            child.name !== 'VRMHumanoidRig' &&
-            !child.name.startsWith('VRMExpression'),
-        )
-        children.forEach((child) => exportScene.add(child))
+      const noOptExportBuffer = await new Promise<ArrayBuffer>(
+        (resolve, reject) => {
+          const exportScene = new Scene()
+          const children = [...vrm.scene.children].filter(
+            (child) =>
+              child.name !== 'VRMHumanoidRig' &&
+              !child.name.startsWith('VRMExpression'),
+          )
+          children.forEach((child) => exportScene.add(child))
 
-        exporter.parse(
-          exportScene,
-          (result) => {
-            children.forEach((child) => vrm.scene.add(child))
-            if (result instanceof ArrayBuffer) {
-              resolve(result)
-            } else {
-              reject(new Error('Expected ArrayBuffer output'))
-            }
-          },
-          (error) => {
-            children.forEach((child) => vrm.scene.add(child))
-            reject(error)
-          },
-          { binary: true },
-        )
-      })
+          exporter.parse(
+            exportScene,
+            (result) => {
+              children.forEach((child) => vrm.scene.add(child))
+              if (result instanceof ArrayBuffer) {
+                resolve(result)
+              } else {
+                reject(new Error('Expected ArrayBuffer output'))
+              }
+            },
+            (error) => {
+              children.forEach((child) => vrm.scene.add(child))
+              reject(error)
+            },
+            { binary: true },
+          )
+        },
+      )
 
       const originalSize = originalBuffer.byteLength
       const noOptSize = noOptExportBuffer.byteLength
@@ -947,9 +1109,15 @@ describe('File Size Comparison', () => {
 
       console.log('\n=== Roundtrip Size Comparison ===')
       console.log(`Original file:                 ${formatBytes(originalSize)}`)
-      console.log(`Export without optimization:   ${formatBytes(noOptSize)} (${(noOptSize / originalSize).toFixed(2)}x)`)
-      console.log(`Export with optimization:      ${formatBytes(optimizedSize)} (${(optimizedSize / originalSize).toFixed(2)}x)`)
-      console.log(`Optimization overhead:         ${formatBytes(optimizedSize - noOptSize)}`)
+      console.log(
+        `Export without optimization:   ${formatBytes(noOptSize)} (${(noOptSize / originalSize).toFixed(2)}x)`,
+      )
+      console.log(
+        `Export with optimization:      ${formatBytes(optimizedSize)} (${(optimizedSize / originalSize).toFixed(2)}x)`,
+      )
+      console.log(
+        `Optimization overhead:         ${formatBytes(optimizedSize - noOptSize)}`,
+      )
 
       expect(true).toBe(true)
     })
