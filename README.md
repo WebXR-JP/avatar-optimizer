@@ -9,6 +9,7 @@ WebXR アプリケーション向け VRM モデル最適化ライブラリ。
 - **マテリアル統合**: MToon マテリアルを統合してドローコール数を削減
 - **VRM0 → VRM1 マイグレーション**: スケルトン・SpringBone の自動変換
 - **メッシュ簡略化**: meshoptimizer による頂点削減でポリゴン数を削減
+- **テクスチャ圧縮**: KTX2 形式（UASTC）でアトラステクスチャを圧縮し、ファイルサイズとメモリ効率を改善
 
 ## インストール
 
@@ -67,6 +68,25 @@ if (result.isOk()) {
   // fs.writeFileSync('output.vrm', Buffer.from(result.value))
 }
 ```
+
+### テクスチャ圧縮 (KTX2)
+
+エクスポート時に `textureCompression` オプションを指定すると、アトラステクスチャを KTX2 形式（UASTC）で圧縮できます。GPU 対応の圧縮フォーマットでファイルサイズを削減しつつ、ランタイムのメモリ効率を向上させます。
+
+```typescript
+import { exportVRM, UastcQuality } from '@xrift/avatar-optimizer'
+
+const result = await exportVRM(vrm, {
+  textureCompression: {
+    quality: UastcQuality.Default,  // 品質レベル (0-4)
+    compressionLevel: 3,            // 圧縮レベル (0-5)
+    generateMipmaps: false,         // ミップマップ生成
+    supercompression: true,         // Zstandard 超圧縮
+  },
+})
+```
+
+> **注意**: テクスチャ圧縮はブラウザ環境専用です（WebAssembly 使用）。KTX2 テクスチャを読み込むには `KTX2Loader` が必要です。
 
 ### VRM の最適化
 
@@ -127,6 +147,16 @@ VRM をバイナリとしてエクスポートします。
 |-----------|-----|------|
 | `vrm` | `VRM` | エクスポート対象 |
 | `options.binary` | `boolean` | バイナリ形式で出力 (default: `true`) |
+| `options.textureCompression` | `TextureCompressionOptions` | テクスチャ圧縮オプション（省略時は圧縮なし） |
+
+#### TextureCompressionOptions
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|------------|------|
+| `quality` | `UastcQuality` | `2` (Default) | UASTC 品質レベル (0=Fastest, 4=VerySlow) |
+| `compressionLevel` | `number` | `3` | 圧縮レベル (0-5) |
+| `generateMipmaps` | `boolean` | `false` | ミップマップを生成するか |
+| `supercompression` | `boolean` | `true` | Zstandard 超圧縮を使用するか |
 
 ### `optimizeModel(vrm, options?): ResultAsync<CombinedMeshResult, OptimizationError>`
 
@@ -166,9 +196,10 @@ VRM のマテリアルを最適化します。
 
 ```
 packages/
-├── avatar-optimizer/    # メインライブラリ
-├── mtoon-atlas/         # MToon Atlas マテリアル
-└── debug-viewer/        # VRM デバッグビューア
+├── avatar-optimizer/      # メインライブラリ
+├── mtoon-atlas/           # MToon Atlas マテリアル
+├── texture-compression/   # KTX2 テクスチャ圧縮ユーティリティ
+└── debug-viewer/          # VRM デバッグビューア
 ```
 
 ## 開発
@@ -228,7 +259,3 @@ pnpm -F debug-viewer run build
 # debug-viewer の開発モード
 pnpm -F debug-viewer run dev
 ```
-
-## ライセンス
-
-MIT
