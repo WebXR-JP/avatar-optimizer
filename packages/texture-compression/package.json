@@ -1,5 +1,5 @@
 {
-  "name": "@xrift/texture-compression",
+  "name": "@webxr-jp/texture-compression",
   "version": "0.1.0",
   "description": "Texture compression utilities for avatar-optimizer using WebAssembly",
   "type": "module",
@@ -35,7 +35,7 @@
     "basis",
     "uastc"
   ],
-  "author": "xrift",
+  "author": "HALBY",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

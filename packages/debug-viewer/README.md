@@ -1,4 +1,4 @@
-# @xrift/avatar-optimizer Debug Viewer
+# @webxr-jp/avatar-optimizer Debug Viewer
 
 VRM デバッグビューア - React Three Fiber ベースの VRM モデル表示ツール。
 

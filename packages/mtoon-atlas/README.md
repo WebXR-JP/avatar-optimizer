@@ -1,10 +1,10 @@
-# @xrift/mtoon-atlas
+# @webxr-jp/mtoon-atlas
 
 MToon shader atlas optimization utilities for three-vrm WebGL applications.
 
 ## Overview
 
-`@xrift/mtoon-atlas` provides `MToonAtlasMaterial` - a WebGL-based custom MToon material that consumes the atlas + packed parameter textures produced by `@xrift/avatar-optimizer`.
+`@webxr-jp/mtoon-atlas` provides `MToonAtlasMaterial` - a WebGL-based custom MToon material that consumes the atlas + packed parameter textures produced by `@webxr-jp/avatar-optimizer`.
 
 本パッケージは `SkinnedMesh` で使用中の複数 `MToonMaterial` を 1 つにまとめ、頂点属性経由で元マテリアルを参照する形に統一することを目的としています。
 
@@ -27,7 +27,7 @@ MToon shader atlas optimization utilities for three-vrm WebGL applications.
 ## Installation
 
 ```bash
-pnpm add @xrift/mtoon-atlas
+pnpm add @webxr-jp/mtoon-atlas
 ```
 
 ## Requirements
@@ -42,7 +42,7 @@ pnpm add @xrift/mtoon-atlas
 
 ```typescript
 import { Float32BufferAttribute, Mesh } from 'three'
-import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
+import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
 
 // 1. SkinnedMesh のジオメトリに slot index 属性を追加する
 const slotIndices = new Float32Array(vertexCount) // avatar-optimizer から得たインデックス

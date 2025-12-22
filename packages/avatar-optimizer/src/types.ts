@@ -1,6 +1,6 @@
 import type { VRM } from '@pixiv/three-vrm'
-import { ParameterSemanticId } from '@xrift/mtoon-atlas'
-import type { UastcQuality } from '@xrift/texture-compression'
+import { ParameterSemanticId } from '@webxr-jp/mtoon-atlas'
+import type { UastcQuality } from '@webxr-jp/texture-compression'
 import {
   ColorSpace,
   NoColorSpace,

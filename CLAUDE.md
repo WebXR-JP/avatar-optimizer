@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-このファイルは、@xrift/avatar-optimizer (3D モデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
+このファイルは、@webxr-jp/avatar-optimizer (3D モデル最適化ユーティリティライブラリ) を扱う際に Claude Code へのガイダンスを提供します。
 
 ## 会話について
 
@@ -8,7 +8,7 @@
 
 ## プロジェクト概要
 
-**@xrift/avatar-optimizer** は WebXR アプリケーション向けの 3D モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザ環境で動作します。
+**@webxr-jp/avatar-optimizer** は WebXR アプリケーション向けの 3D モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザ環境で動作します。
 
 ## プロジェクト構成
 
@@ -387,7 +387,7 @@ export type { OptimizationOptions, VRMStatistics }
 
 ## MToon atlas パッケージについて
 
-**@xrift/mtoon-atlas** (`packages/mtoon-atlas/`) はアトラス化したテクスチャを使って MToon と同等の表現をするための専門的なマテリアルです。`@xrift/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
+**@webxr-jp/mtoon-atlas** (`packages/mtoon-atlas/`) はアトラス化したテクスチャを使って MToon と同等の表現をするための専門的なマテリアルです。`@webxr-jp/avatar-optimizer` で生成されたパラメータテクスチャとテクスチャアトラスを消費し、SkinnedMesh でマテリアルを統合できます。
 
 ### 主な機能
 
@@ -400,7 +400,7 @@ export type { OptimizationOptions, VRMStatistics }
 ### API 利用例
 
 ```typescript
-import { MToonatlasMaterial } from '@xrift/mtoon-atlas'
+import { MToonatlasMaterial } from '@webxr-jp/mtoon-atlas'
 
 const material = new MToonatlasMaterial()
 material.setParameterTexture({
@@ -440,7 +440,7 @@ cat packages/mtoon-atlas/README.md
 
 ## Debug-Viewer パッケージについて
 
-**@xrift/avatar-optimizer-debug-viewer** (`packages/debug-viewer/`) は最適化済み VRM の挙動を即座に確認する lightweight ビューアです。Three.js と @pixiv/three-vrm を使用し、neverthrow ベースの Result 型でエラーを通知します。
+**@webxr-jp/avatar-optimizer-debug-viewer** (`packages/debug-viewer/`) は最適化済み VRM の挙動を即座に確認する lightweight ビューアです。Three.js と @pixiv/three-vrm を使用し、neverthrow ベースの Result 型でエラーを通知します。
 
 - `src/viewer/`: シーン初期化、リサイズ、破棄
 - `src/utils/`: Canvas/loader 周辺のユーティリティ

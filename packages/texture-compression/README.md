@@ -1,4 +1,4 @@
-# @xrift/texture-compression
+# @webxr-jp/texture-compression
 
 avatar-optimizer向けのテクスチャ圧縮ユーティリティパッケージ。Basis Universal WASMを使用してKTX2形式（UASTC）でテクスチャを圧縮します。
 
@@ -12,7 +12,7 @@ avatar-optimizer向けのテクスチャ圧縮ユーティリティパッケー�
 ## インストール
 
 ```bash
-pnpm add @xrift/texture-compression
+pnpm add @webxr-jp/texture-compression
 ```
 
 ## 使用方法
@@ -20,7 +20,7 @@ pnpm add @xrift/texture-compression
 ### 基本的な圧縮
 
 ```typescript
-import { compressToKtx2, initBasisEncoder } from '@xrift/texture-compression'
+import { compressToKtx2, initBasisEncoder } from '@webxr-jp/texture-compression'
 
 // WASMモジュールを初期化（初回のみ）
 const initResult = await initBasisEncoder()
@@ -44,7 +44,7 @@ if (result.isOk()) {
 ### オプション設定
 
 ```typescript
-import { compressToKtx2, UastcQuality } from '@xrift/texture-compression'
+import { compressToKtx2, UastcQuality } from '@webxr-jp/texture-compression'
 
 const result = await compressToKtx2(imageData, width, height, {
   quality: UastcQuality.Default, // 品質レベル (0-4)
@@ -59,7 +59,7 @@ const result = await compressToKtx2(imageData, width, height, {
 WebGLテクスチャ座標系（左下原点）からKTX2座標系（左上原点）への変換が必要な場合：
 
 ```typescript
-import { flipImageY, compressToKtx2 } from '@xrift/texture-compression'
+import { flipImageY, compressToKtx2 } from '@webxr-jp/texture-compression'
 
 const flippedData = flipImageY(imageData, width, height)
 const result = await compressToKtx2(flippedData, width, height)
@@ -72,7 +72,7 @@ import {
   initBasisEncoder,
   disposeBasisEncoder,
   isBasisEncoderReady,
-} from '@xrift/texture-compression'
+} from '@webxr-jp/texture-compression'
 
 // 初期化確認
 if (!isBasisEncoderReady()) {

@@ -14,8 +14,8 @@ export default defineConfig({
   resolve: {
     alias: {
       // monorepo 開発中だけ src を直参照
-      '@xrift/avatar-optimizer': path.resolve(__dirname, '../avatar-optimizer/src'),
-      '@xrift/mtoon-atlas': path.resolve(__dirname, '../mtoon-atlas/src'),
+      '@webxr-jp/avatar-optimizer': path.resolve(__dirname, '../avatar-optimizer/src'),
+      '@webxr-jp/mtoon-atlas': path.resolve(__dirname, '../mtoon-atlas/src'),
     },
   },
   server: {

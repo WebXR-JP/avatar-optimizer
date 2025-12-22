@@ -1,5 +1,5 @@
 {
-  "name": "@xrift/avatar-optimizer",
+  "name": "@webxr-jp/avatar-optimizer",
   "version": "0.1.0",
   "description": "3D model optimization library for WebXR applications",
   "type": "module",
@@ -33,7 +33,7 @@
     "gltf",
     "3d"
   ],
-  "author": "xrift",
+  "author": "HALBY",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
@@ -78,8 +78,8 @@
     "@loaders.gl/gltf": "^4.3.4",
     "@loaders.gl/images": "^4.3.4",
     "@loaders.gl/polyfills": "^4.3.4",
-    "@xrift/mtoon-atlas": "workspace:^",
-    "@xrift/texture-compression": "workspace:^",
+    "@webxr-jp/mtoon-atlas": "workspace:^",
+    "@webxr-jp/texture-compression": "workspace:^",
     "canvas": "^3.2.0",
     "jimp": "^1.6.0",
     "meshoptimizer": "^1.0.1",

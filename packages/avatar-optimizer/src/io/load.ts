@@ -4,7 +4,7 @@
  */
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMLoaderPlugin } from '@pixiv/three-vrm'
-import { MToonAtlasLoaderPlugin } from '@xrift/mtoon-atlas'
+import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
 import { WebGLRenderer } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'

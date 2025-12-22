@@ -6,8 +6,8 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics, type TextureCompressionOptions } from '@xrift/avatar-optimizer'
-import type { DebugMode } from '@xrift/mtoon-atlas'
+import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
+import type { DebugMode } from '@webxr-jp/mtoon-atlas'
 import './App.css'
 
 function App()

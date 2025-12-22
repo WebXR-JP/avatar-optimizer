@@ -2,7 +2,7 @@
 
 ## 概要
 
-このドキュメントは、`@xrift/mtoon-atlas` パッケージの `MToonAtlasMaterial` クラスの実装方針をまとめています。
+このドキュメントは、`@webxr-jp/mtoon-atlas` パッケージの `MToonAtlasMaterial` クラスの実装方針をまとめています。
 
 ## 設計背景
 

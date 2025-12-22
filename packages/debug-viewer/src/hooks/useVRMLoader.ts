@@ -1,8 +1,8 @@
 /**
  * VRM ローダーのラッパー
- * @xrift/avatar-optimizer の loadVRM を re-export
+ * @webxr-jp/avatar-optimizer の loadVRM を re-export
  */
-import { loadVRM as loadVRMCore, type VRMLoaderError } from '@xrift/avatar-optimizer'
+import { loadVRM as loadVRMCore, type VRMLoaderError } from '@webxr-jp/avatar-optimizer'
 
 export type { VRMLoaderError }
 

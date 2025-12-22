@@ -4,8 +4,8 @@ import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera } from 'three'
 import VRMScene from './VRMScene'
-import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
-import type { AtlasGenerationOptions, SimplifyStatistics } from '@xrift/avatar-optimizer'
+import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
+import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
 
 import './VRMCanvas.css'
 

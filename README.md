@@ -1,4 +1,4 @@
-# @xrift/avatar-optimizer
+# @webxr-jp/avatar-optimizer
 
 WebXR アプリケーション向け VRM モデル最適化ライブラリ。
 
@@ -14,9 +14,9 @@ WebXR アプリケーション向け VRM モデル最適化ライブラリ。
 ## インストール
 
 ```bash
-npm install @xrift/avatar-optimizer
+npm install @webxr-jp/avatar-optimizer
 # または
-pnpm add @xrift/avatar-optimizer
+pnpm add @webxr-jp/avatar-optimizer
 ```
 
 ### Peer Dependencies
@@ -30,7 +30,7 @@ npm install @gltf-transform/core @gltf-transform/extensions @pixiv/three-vrm @pi
 ### VRM の読み込み
 
 ```typescript
-import { loadVRM } from '@xrift/avatar-optimizer'
+import { loadVRM } from '@webxr-jp/avatar-optimizer'
 
 // URL から読み込み
 const result = await loadVRM('/path/to/model.vrm')
@@ -50,7 +50,7 @@ const bufferResult = await loadVRM(arrayBuffer)
 ### VRM のエクスポート
 
 ```typescript
-import { exportVRM } from '@xrift/avatar-optimizer'
+import { exportVRM } from '@webxr-jp/avatar-optimizer'
 
 const result = await exportVRM(vrm)
 
@@ -74,7 +74,7 @@ if (result.isOk()) {
 エクスポート時に `textureCompression` オプションを指定すると、アトラステクスチャを KTX2 形式（UASTC）で圧縮できます。GPU 対応の圧縮フォーマットでファイルサイズを削減しつつ、ランタイムのメモリ効率を向上させます。
 
 ```typescript
-import { exportVRM, UastcQuality } from '@xrift/avatar-optimizer'
+import { exportVRM, UastcQuality } from '@webxr-jp/avatar-optimizer'
 
 const result = await exportVRM(vrm, {
   textureCompression: {
@@ -91,7 +91,7 @@ const result = await exportVRM(vrm, {
 ### VRM の最適化
 
 ```typescript
-import { loadVRM, optimizeModel, exportVRM } from '@xrift/avatar-optimizer'
+import { loadVRM, optimizeModel, exportVRM } from '@webxr-jp/avatar-optimizer'
 
 // VRM を読み込み
 const loadResult = await loadVRM('/model.vrm')

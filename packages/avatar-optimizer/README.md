@@ -1,4 +1,4 @@
-# @xrift/avatar-optimizer
+# @webxr-jp/avatar-optimizer
 
 3D model optimization library for WebXR applications.
 
@@ -13,7 +13,7 @@
 ## Installation
 
 ```bash
-npm install @xrift/avatar-optimizer
+npm install @webxr-jp/avatar-optimizer
 ```
 
 ### Peer Dependencies
@@ -27,7 +27,7 @@ npm install @gltf-transform/core @gltf-transform/extensions @pixiv/three-vrm @pi
 ### Basic Optimization
 
 ```typescript
-import { loadVRM, optimizeModel, exportVRM } from '@xrift/avatar-optimizer'
+import { loadVRM, optimizeModel, exportVRM } from '@webxr-jp/avatar-optimizer'
 
 // Load VRM file
 const vrmResult = await loadVRM(file)
@@ -61,7 +61,7 @@ const blob = new Blob([exportResult.value], { type: 'model/gltf-binary' })
 ### With Texture Compression
 
 ```typescript
-import { exportVRM, UastcQuality } from '@xrift/avatar-optimizer'
+import { exportVRM, UastcQuality } from '@webxr-jp/avatar-optimizer'
 
 const exportResult = await exportVRM(vrm, {
   textureCompression: {
@@ -74,7 +74,7 @@ const exportResult = await exportVRM(vrm, {
 ### Mesh Simplification
 
 ```typescript
-import { simplifyMeshes } from '@xrift/avatar-optimizer'
+import { simplifyMeshes } from '@webxr-jp/avatar-optimizer'
 
 const result = await simplifyMeshes(vrm, {
   targetRatio: 0.5,

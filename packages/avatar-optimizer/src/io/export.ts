@@ -3,8 +3,8 @@
  * VRM を Uint8Array (バイナリ) としてエクスポートする
  */
 import type { VRM } from '@pixiv/three-vrm'
-import { MToonAtlasExporterPlugin } from '@xrift/mtoon-atlas'
-import { initBasisEncoder } from '@xrift/texture-compression'
+import { MToonAtlasExporterPlugin } from '@webxr-jp/mtoon-atlas'
+import { initBasisEncoder } from '@webxr-jp/texture-compression'
 import { okAsync, ResultAsync } from 'neverthrow'
 import { Scene } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'

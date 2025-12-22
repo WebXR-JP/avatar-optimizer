@@ -4,7 +4,7 @@
  */
 
 import { MToonMaterial } from '@pixiv/three-vrm'
-import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
+import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
 import { Matrix3, Mesh } from 'three'
 import type { SimplifyStatistics } from '../../process/simplify'
 import { OffsetScale } from '../../types'

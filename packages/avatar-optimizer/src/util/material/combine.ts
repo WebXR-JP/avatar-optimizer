@@ -15,8 +15,8 @@ import type {
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
   ParameterTextureDescriptor,
-} from '@xrift/mtoon-atlas'
-import { MToonAtlasMaterial } from '@xrift/mtoon-atlas'
+} from '@webxr-jp/mtoon-atlas'
+import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import { BufferGeometry, DataTexture, Mesh, SkinnedMesh } from 'three'
 import type { OptimizationError } from '../../types'

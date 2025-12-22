@@ -1,5 +1,5 @@
 /**
- * @xrift/avatar-optimizer - avatar optimization library for XRift
+ * @webxr-jp/avatar-optimizer - avatar optimization library for XRift
  */
 
 // メイン処理のエクスポート
@@ -37,7 +37,7 @@ export type {
 } from './types'
 
 // Re-export UastcQuality from texture-compression
-export { UastcQuality } from '@xrift/texture-compression'
+export { UastcQuality } from '@webxr-jp/texture-compression'
 
 // Simplify
 export { simplifyMeshes, type SimplifyStatistics } from './process/simplify'

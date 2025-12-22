@@ -1,10 +1,10 @@
 /**
- * @xrift/mtoon-atlas
+ * @webxr-jp/mtoon-atlas
  *
  * MToon shader atlas optimization material for three-vrm WebGL applications.
  *
  * Provides MToonAtlasMaterial that consumes atlas + packed parameter textures
- * produced by @xrift/avatar-optimizer.
+ * produced by @webxr-jp/avatar-optimizer.
  */
 
 // クラスエクスポート

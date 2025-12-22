@@ -5,7 +5,7 @@ import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh, 
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMSpringBoneColliderHelper } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
-import { MToonAtlasMaterial, type DebugMode } from '@xrift/mtoon-atlas'
+import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
 import { createBonePointsHelper, updateBonePointsHelper } from '../utils/skeleton-helper'
 
 interface VRMSceneProps

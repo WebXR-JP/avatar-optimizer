@@ -2,7 +2,7 @@ import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
 import {
   MToonAtlasExporterPlugin,
   MToonAtlasLoaderPlugin,
-} from '@xrift/mtoon-atlas'
+} from '@webxr-jp/mtoon-atlas'
 import { BufferGeometry, Scene, SkinnedMesh } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'

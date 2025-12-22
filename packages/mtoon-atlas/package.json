@@ -1,5 +1,5 @@
 {
-  "name": "@xrift/mtoon-atlas",
+  "name": "@webxr-jp/mtoon-atlas",
   "version": "0.1.0",
   "description": "アトラス化したテクスチャのためのMToonMaterial",
   "type": "module",
@@ -52,14 +52,14 @@
     "instancing",
     "optimization"
   ],
-  "author": "xrift",
+  "author": "HALBY",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
   "packageManager": "pnpm@10.22.0",
   "dependencies": {
-    "@xrift/texture-compression": "workspace:^",
+    "@webxr-jp/texture-compression": "workspace:^",
     "fast-png": "^7.0.1",
     "upng-js": "^2.1.0"
   }

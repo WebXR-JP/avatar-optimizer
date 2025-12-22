@@ -1,5 +1,5 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
-import { ParameterSemanticId } from '@xrift/mtoon-atlas'
+import { ParameterSemanticId } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import {
   Color,

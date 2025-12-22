@@ -3,7 +3,7 @@ import {
   MToonAtlasExporterPlugin,
   MToonAtlasLoaderPlugin,
   MToonAtlasMaterial,
-} from '@xrift/mtoon-atlas'
+} from '@webxr-jp/mtoon-atlas'
 import { Object3D, Scene, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'

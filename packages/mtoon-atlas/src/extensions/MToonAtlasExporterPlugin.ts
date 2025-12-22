@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
 import { encode as encodePng16 } from 'fast-png'
-import { compressToKtx2 } from '@xrift/texture-compression'
-import type { Ktx2CompressionOptions } from '@xrift/texture-compression'
+import { compressToKtx2 } from '@webxr-jp/texture-compression'
+import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import
 {

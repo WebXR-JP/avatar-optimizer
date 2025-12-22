@@ -1,5 +1,5 @@
 /**
- * @xrift/texture-compression
+ * @webxr-jp/texture-compression
  *
  * テクスチャ圧縮ユーティリティパッケージ
  * avatar-optimizerで利用するためのWASMベースのKTX2圧縮機能を提供
