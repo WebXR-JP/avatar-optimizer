@@ -10,7 +10,8 @@
     "lint": "pnpm -r run lint",
     "lint:fix": "pnpm -r run lint:fix",
     "format": "pnpm -r run format",
-    "prepublishOnly": "pnpm -r run prepublishOnly"
+    "prepublishOnly": "pnpm -r run prepublishOnly",
+    "publish:all": "pnpm build && pnpm -F @xrift/texture-compression publish && pnpm -F @xrift/mtoon-atlas publish && pnpm -F @xrift/avatar-optimizer publish"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

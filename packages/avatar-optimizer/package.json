@@ -11,9 +11,6 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "bin": {
-    "xrift-optimize": "./dist/cli.mjs"
-  },
   "files": [
     "dist"
   ],
@@ -36,8 +33,11 @@
     "gltf",
     "3d"
   ],
-  "author": "",
+  "author": "xrift",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "@gltf-transform/core": "^4.0.0",
     "@gltf-transform/extensions": "^4.0.0",
@@ -78,10 +78,9 @@
     "@loaders.gl/gltf": "^4.3.4",
     "@loaders.gl/images": "^4.3.4",
     "@loaders.gl/polyfills": "^4.3.4",
-    "@xrift/mtoon-atlas": "workspace:*",
-    "@xrift/texture-compression": "workspace:*",
+    "@xrift/mtoon-atlas": "workspace:^",
+    "@xrift/texture-compression": "workspace:^",
     "canvas": "^3.2.0",
-    "commander": "^14.0.2",
     "jimp": "^1.6.0",
     "meshoptimizer": "^1.0.1",
     "neverthrow": "^8.2.0",

@@ -4,10 +4,10 @@
  */
 
 import { ResultAsync } from 'neverthrow'
-// @ts-expect-error - Vite ?url import
-import wasmUrl from '../wasm/basis_encoder.wasm?url'
 // @ts-expect-error - Emscripten module
 import BASIS from '../wasm/basis_encoder.js'
+// @ts-expect-error - Vite ?url import
+import wasmUrl from '../wasm/basis_encoder.wasm?url'
 import { BasisEncoderModule, CompressionError } from './types'
 
 /** モジュールキャッシュ */

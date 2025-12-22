@@ -54,9 +54,12 @@
   ],
   "author": "xrift",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.22.0",
   "dependencies": {
-    "@xrift/texture-compression": "workspace:*",
+    "@xrift/texture-compression": "workspace:^",
     "fast-png": "^7.0.1",
     "upng-js": "^2.1.0"
   }
