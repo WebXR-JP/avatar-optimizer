@@ -32,6 +32,16 @@ function App()
   const [isSimplifying, setIsSimplifying] = useState(false)
   const [lastSimplifyStats, setLastSimplifyStats] = useState<SimplifyStatistics | null>(null)
 
+  // エラーを設定すると同時にコンソールにも出力するヘルパー
+  const setErrorWithLog = useCallback((message: string | null) =>
+  {
+    if (message)
+    {
+      console.error(message)
+    }
+    setError(message)
+  }, [])
+
   // テクスチャ圧縮オプション（デフォルト有効）
   const textureCompressionOptions: TextureCompressionOptions = {
     supercompression: true,
@@ -81,7 +91,7 @@ function App()
 
       if (result.isErr())
       {
-        setError(result.error.message)
+        setErrorWithLog(result.error.message)
         setIsLoading(false)
         return
       }
@@ -91,7 +101,7 @@ function App()
     }
 
     loadDefaultVRM()
-  }, [])
+  }, [setErrorWithLog])
 
   const handleFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) =>
@@ -106,7 +116,7 @@ function App()
 
       if (result.isErr())
       {
-        setError(result.error.message)
+        setErrorWithLog(result.error.message)
         setIsLoading(false)
         return
       }
@@ -114,7 +124,7 @@ function App()
       setVRM(result.value)
       setIsLoading(false)
     },
-    [],
+    [setErrorWithLog],
   )
 
   const handleOptimize = useCallback(async () =>
@@ -129,8 +139,7 @@ function App()
     if (result.isErr())
     {
       const err = result.error
-      console.error(err)
-      setError(`Optimization failed (${err.type}): ${err.message}`)
+      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
       setIsOptimizing(false)
       return
     }
@@ -141,7 +150,7 @@ function App()
       console.log('Optimization successful:', optimizationResult.statistics)
     }
     setIsOptimizing(false)
-  }, [vrm, atlasOptions])
+  }, [vrm, atlasOptions, setErrorWithLog])
 
   // マイグレーションなしの最適化のみ（デバッグ用）
   const handleOptimizeOnly = useCallback(async () =>
@@ -157,15 +166,14 @@ function App()
     if (result.isErr())
     {
       const err = result.error
-      console.error(err)
-      setError(`Optimization failed (${err.type}): ${err.message}`)
+      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
       setIsOptimizing(false)
       return
     }
 
     console.log('Optimization (without migration) successful:', result.value.statistics)
     setIsOptimizing(false)
-  }, [vrm, atlasOptions])
+  }, [vrm, atlasOptions, setErrorWithLog])
 
   // マイグレーションのみ（デバッグ用）
   const handleMigrateOnly = useCallback(() =>
@@ -187,8 +195,7 @@ function App()
     if (result.isErr())
     {
       const err = result.error
-      console.error(err)
-      setError(`Migration failed (${err.type}): ${err.message}`)
+      setErrorWithLog(`Migration failed (${err.type}): ${err.message}`)
       // SpringBoneManagerを復元
       ;(vrm as any).springBoneManager = springBoneManager
       return
@@ -201,7 +208,7 @@ function App()
     migrateSpringBone(vrm)
 
     console.log('Migration successful')
-  }, [vrm])
+  }, [vrm, setErrorWithLog])
 
   // メッシュ簡略化のみ（デバッグ用）
   const handleSimplifyOnly = useCallback(async () =>
@@ -245,8 +252,7 @@ function App()
     if (result.isErr())
     {
       const err = result.error
-      console.error(err)
-      setError(`Simplify failed (${err.type}): ${err.message}`)
+      setErrorWithLog(`Simplify failed (${err.type}): ${err.message}`)
       setIsSimplifying(false)
       return
     }
@@ -344,7 +350,7 @@ function App()
     console.log('=== End Debug Info ===')
 
     setIsSimplifying(false)
-  }, [vrm])
+  }, [vrm, setErrorWithLog])
 
   const handleReplaceTextures = useCallback(async () =>
   {
@@ -357,11 +363,11 @@ function App()
 
     if (result.isErr())
     {
-      setError(`Texture replacement failed: ${result.error.message}`)
+      setErrorWithLog(`Texture replacement failed: ${result.error.message}`)
     }
 
     setIsReplacingTextures(false)
-  }, [vrm])
+  }, [vrm, setErrorWithLog])
 
   const handleExportScene = useCallback(() =>
   {
@@ -382,9 +388,9 @@ function App()
       URL.revokeObjectURL(url)
     } catch (err)
     {
-      setError(`Export failed: ${String(err)}`)
+      setErrorWithLog(`Export failed: ${String(err)}`)
     }
-  }, [vrm])
+  }, [vrm, setErrorWithLog])
 
   const handleExportGLTF = useCallback(async () =>
   {
@@ -394,7 +400,7 @@ function App()
 
     if (result.isErr())
     {
-      setError(`VRM export failed: ${result.error.message}`)
+      setErrorWithLog(`VRM export failed: ${result.error.message}`)
       return
     }
 
@@ -415,7 +421,7 @@ function App()
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [vrm, setLastExportSize])
+  }, [vrm, setLastExportSize, setErrorWithLog])
 
   const handlePlayAnimation = useCallback(async () =>
   {
@@ -426,14 +432,14 @@ function App()
 
     if (result.isErr())
     {
-      setError(result.error.message)
+      setErrorWithLog(result.error.message)
       setIsLoading(false)
       return
     }
 
     setVRMAnimation(result.value)
     setIsLoading(false)
-  }, [])
+  }, [setErrorWithLog])
 
   // Export VRM後にそのまま再読み込みする（エクスポート結果の確認用）
   const handleReloadExport = useCallback(async () =>
@@ -459,7 +465,7 @@ function App()
 
     if (exportResult.isErr())
     {
-      setError(`Export for reload failed: ${exportResult.error.message}`)
+      setErrorWithLog(`Export for reload failed: ${exportResult.error.message}`)
       setIsReloading(false)
       restoreSpringBone()
       return
@@ -477,7 +483,7 @@ function App()
 
     if (loadResult.isErr())
     {
-      setError(`Reload failed: ${loadResult.error.message}`)
+      setErrorWithLog(`Reload failed: ${loadResult.error.message}`)
       setIsReloading(false)
       restoreSpringBone()
       return
@@ -487,7 +493,7 @@ function App()
     setVRMAnimation(null)
     setIsReloading(false)
     restoreSpringBone()
-  }, [vrm, springBoneEnabled])
+  }, [vrm, springBoneEnabled, setErrorWithLog])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
