@@ -557,7 +557,7 @@ export class VRMExporterPlugin {
       let tailNode = lastJoint?.child
 
       // child がない場合、bone.children から子ボーンを探す
-      // (beforeParseで作成した仮想tailノードを含む)
+      // (beforeParseで作成した仮想tailノード、またはmigrateSpringBoneで作成されたものを含む)
       if (!tailNode && lastJoint?.bone) {
         const boneChildren = lastJoint.bone.children.filter(
           (child: any) => child.type === 'Bone' || child.isBone,
@@ -568,13 +568,45 @@ export class VRMExporterPlugin {
       }
 
       if (tailNode) {
-        const tailNodeIndex = this.writer.nodeMap.get(tailNode)
-        if (tailNodeIndex !== undefined) {
-          // tailノードをjointsに追加（nodeのみ、物理パラメータなし）
-          jointDefs.push({
-            node: tailNodeIndex,
-          })
+        let tailNodeIndex = this.writer.nodeMap.get(tailNode)
+
+        // nodeMapに含まれていない場合（skeleton.bonesに追加されていない仮想tailノードの場合）
+        // GLTFのnodes配列に直接追加する
+        if (tailNodeIndex === undefined) {
+          const json = this.writer.json
+          if (!json.nodes) {
+            json.nodes = []
+          }
+
+          // tailノードの親ボーン（lastJoint.bone）のインデックスを取得
+          const parentBoneIndex = this.writer.nodeMap.get(lastJoint.bone)
+
+          // tailノードを新しいノードとしてGLTF JSONに追加
+          tailNodeIndex = json.nodes.length
+          const tailNodeDef: any = {
+            name: tailNode.name || `${lastJoint.bone.name}_tail`,
+            translation: [
+              tailNode.position.x,
+              tailNode.position.y,
+              tailNode.position.z,
+            ],
+          }
+          json.nodes.push(tailNodeDef)
+
+          // 親ノードのchildrenにtailノードを追加
+          if (parentBoneIndex !== undefined) {
+            const parentNodeDef = json.nodes[parentBoneIndex]
+            if (!parentNodeDef.children) {
+              parentNodeDef.children = []
+            }
+            parentNodeDef.children.push(tailNodeIndex)
+          }
         }
+
+        // tailノードをjointsに追加（nodeのみ、物理パラメータなし）
+        jointDefs.push({
+          node: tailNodeIndex,
+        })
       }
 
       if (jointDefs.length === 0) return
