@@ -282,6 +282,10 @@ function createCombinedMesh(
     mesh.name = name
   }
 
+  // 影の設定を有効化（元のメッシュの設定を引き継ぐ）
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+
   return { mesh, firstSkinnedMesh }
 }
 
