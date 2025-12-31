@@ -24,6 +24,7 @@ function App()
   const [springBoneEnabled, setSpringBoneEnabled] = useState(true)
   const [showBones, setShowBones] = useState(false)
   const [showColliders, setShowColliders] = useState(false)
+  const [showPointLights, setShowPointLights] = useState(false)
   const [isReloading, setIsReloading] = useState(false)
   const [atlasOptions, setAtlasOptions] = useState<AtlasGenerationOptions>({
     defaultResolution: 2048,
@@ -530,6 +531,8 @@ function App()
           onShowBonesChange={setShowBones}
           showColliders={showColliders}
           onShowCollidersChange={setShowColliders}
+          showPointLights={showPointLights}
+          onShowPointLightsChange={setShowPointLights}
           onReloadExport={handleReloadExport}
           isReloading={isReloading}
           atlasOptions={atlasOptions}

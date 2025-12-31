@@ -123,6 +123,8 @@ interface VRMCanvasProps
   onShowBonesChange: (show: boolean) => void
   showColliders: boolean
   onShowCollidersChange: (show: boolean) => void
+  showPointLights: boolean
+  onShowPointLightsChange: (show: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
   atlasOptions: AtlasGenerationOptions
@@ -184,6 +186,8 @@ function VRMCanvas({
   onShowBonesChange,
   showColliders,
   onShowCollidersChange,
+  showPointLights,
+  onShowPointLightsChange,
   onReloadExport,
   isReloading,
   atlasOptions,
@@ -212,6 +216,7 @@ function VRMCanvas({
       }}
     >
       <Canvas
+        shadows
         camera={{
           position: [0, 1.5, 3],
           fov: 45,
@@ -224,7 +229,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -374,6 +379,14 @@ function VRMCanvas({
                 onChange={(e) => onShowCollidersChange(e.target.checked)}
               />
               Show Colliders
+            </label>
+            <label className="vrm-canvas__pointlights-toggle">
+              <input
+                type="checkbox"
+                checked={showPointLights}
+                onChange={(e) => onShowPointLightsChange(e.target.checked)}
+              />
+              Point Lights
             </label>
           </div>
 

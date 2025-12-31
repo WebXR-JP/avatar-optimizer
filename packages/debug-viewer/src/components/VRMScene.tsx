@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { GridHelper, DirectionalLight, AmbientLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial, type Material } from 'three'
+import { GridHelper, DirectionalLight, AmbientLight, PointLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial, type Material } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMSpringBoneColliderHelper } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
@@ -16,6 +16,7 @@ interface VRMSceneProps
   springBoneEnabled?: boolean
   showBones?: boolean
   showColliders?: boolean
+  showPointLights?: boolean
 }
 
 /**
@@ -23,7 +24,7 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false, showPointLights = false }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
@@ -240,6 +241,34 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
       scene.remove(ambientLight)
     }
   }, [scene])
+
+  // PointLight（オプション）
+  useEffect(() =>
+  {
+    if (!showPointLights) return
+
+    // ポイントライト1（左斜め前）
+    const pointLight1 = new PointLight(0xff0000, 2, 10)
+    pointLight1.position.set(-1.5, 1, 1.5)
+    pointLight1.castShadow = true
+    pointLight1.shadow.mapSize.width = 1024
+    pointLight1.shadow.mapSize.height = 1024
+    scene.add(pointLight1)
+
+    // ポイントライト2（右斜め後）
+    const pointLight2 = new PointLight(0x0000ff, 2, 10)
+    pointLight2.position.set(1.5, 1, -1.5)
+    pointLight2.castShadow = true
+    pointLight2.shadow.mapSize.width = 1024
+    pointLight2.shadow.mapSize.height = 1024
+    scene.add(pointLight2)
+
+    return () =>
+    {
+      scene.remove(pointLight1)
+      scene.remove(pointLight2)
+    }
+  }, [scene, showPointLights])
 
   return (
     <>
