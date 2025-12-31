@@ -55,7 +55,8 @@
   "author": "HALBY",
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "packageManager": "pnpm@10.22.0",
   "dependencies": {

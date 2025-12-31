@@ -36,7 +36,8 @@
   "author": "HALBY",
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "peerDependencies": {
     "@gltf-transform/core": "^4.0.0",
