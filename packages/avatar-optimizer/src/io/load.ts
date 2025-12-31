@@ -138,6 +138,13 @@ export function loadVRM(source: VRMSource): ResultAsync<VRM, VRMLoaderError> {
           throw new Error('VRM data not found in loaded file')
         }
 
+        // VRM 1.0 の VRMLoaderPlugin では _v1Import 内で scene.updateMatrixWorld() が
+        // 呼ばれないため、SpringBone の setInitState() で matrixWorld が未初期化の状態で
+        // エラーが発生する場合がある。
+        // VRM を読み込んだ後にシーン全体の matrixWorld を更新することで、
+        // すべてのノード（特に動的に追加された tail ノード）の matrixWorld を初期化する。
+        vrm.scene.updateMatrixWorld(true)
+
         return vrm
       } finally {
         // すべての読み込みが完了した後にblob URLを解放

@@ -123,6 +123,10 @@ interface VRMCanvasProps
   onShowBonesChange: (show: boolean) => void
   showColliders: boolean
   onShowCollidersChange: (show: boolean) => void
+  showPointLights: boolean
+  onShowPointLightsChange: (show: boolean) => void
+  logShaderInfo: boolean
+  onLogShaderInfoChange: (log: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
   atlasOptions: AtlasGenerationOptions
@@ -184,6 +188,10 @@ function VRMCanvas({
   onShowBonesChange,
   showColliders,
   onShowCollidersChange,
+  showPointLights,
+  onShowPointLightsChange,
+  logShaderInfo,
+  onLogShaderInfoChange,
   onReloadExport,
   isReloading,
   atlasOptions,
@@ -212,6 +220,7 @@ function VRMCanvas({
       }}
     >
       <Canvas
+        shadows
         camera={{
           position: [0, 1.5, 3],
           fov: 45,
@@ -222,9 +231,13 @@ function VRMCanvas({
           antialias: true,
           alpha: true,
         }}
+        onCreated={({ gl }) =>
+        {
+          gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
+        }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -374,6 +387,22 @@ function VRMCanvas({
                 onChange={(e) => onShowCollidersChange(e.target.checked)}
               />
               Show Colliders
+            </label>
+            <label className="vrm-canvas__pointlights-toggle">
+              <input
+                type="checkbox"
+                checked={showPointLights}
+                onChange={(e) => onShowPointLightsChange(e.target.checked)}
+              />
+              Point Lights
+            </label>
+            <label className="vrm-canvas__shaderlog-toggle">
+              <input
+                type="checkbox"
+                checked={logShaderInfo}
+                onChange={(e) => onLogShaderInfoChange(e.target.checked)}
+              />
+              Log Shader
             </label>
           </div>
 
