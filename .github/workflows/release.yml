@@ -42,7 +42,9 @@ jobs:
       - name: Check for changesets
         id: check
         run: |
-          if ls .changeset/*.md 1> /dev/null 2>&1; then
+          # README.md と config.json 以外の .md ファイルがあるかチェック
+          CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | head -1)
+          if [ -n "$CHANGESETS" ]; then
             echo "has_changesets=true" >> $GITHUB_OUTPUT
           else
             echo "has_changesets=false" >> $GITHUB_OUTPUT
