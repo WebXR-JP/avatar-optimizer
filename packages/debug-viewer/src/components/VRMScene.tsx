@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { GridHelper, DirectionalLight, AmbientLight, PointLight, AnimationMixer, type Mesh, SkeletonHelper, type Group, type LineBasicMaterial, type Material } from 'three'
+import { GridHelper, DirectionalLight, AmbientLight, PointLight, SpotLight, AnimationMixer, Mesh, SkeletonHelper, type Group, type LineBasicMaterial, type Material, PlaneGeometry, MeshStandardMaterial, DoubleSide, BoxGeometry } from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMSpringBoneColliderHelper } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
@@ -40,6 +40,15 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
 
     scene.add(vrm.scene)
     vrm.scene.position.set(0, 0, 0)
+
+    // 全メッシュに影を落とす設定を追加
+    vrm.scene.traverse((object) =>
+    {
+      if ((object as Mesh).isMesh)
+      {
+        object.castShadow = true
+      }
+    })
 
     return () =>
     {
@@ -109,8 +118,8 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
           console.log('=== Material:', material.name || material.type, '===')
           console.log('Defines:', (material as Material & { defines?: Record<string, unknown> }).defines)
           console.log('Uniforms:', Object.keys(shader.uniforms))
-          console.log('Vertex Shader:', shader.vertexShader)
-          console.log('Fragment Shader:', shader.fragmentShader)
+          // console.log('Vertex Shader:', shader.vertexShader)
+          // console.log('Fragment Shader:', shader.fragmentShader)
         }
 
         // シェーダー再コンパイルをトリガー
@@ -260,18 +269,61 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
     gridHelper.position.y = 0
     scene.add(gridHelper)
 
+    // 床（影を受け取る）
+    const floorGeometry = new PlaneGeometry(10, 10)
+    const floorMaterial = new MeshStandardMaterial({
+      color: 0xBBBBBB,
+      side: DoubleSide,
+      roughness: 0.8,
+      metalness: 0.2,
+    })
+    const floor = new Mesh(floorGeometry, floorMaterial)
+    floor.rotation.x = -Math.PI / 2
+    floor.position.y = 0
+    floor.receiveShadow = true
+    scene.add(floor)
+
+    // テスト用キューブ（影のデバッグ用）
+    const cubeGeometry = new BoxGeometry(0.3, 0.3, 0.3)
+    const cubeMaterial = new MeshStandardMaterial({
+      color: 0x44aa88,
+      roughness: 0.5,
+      metalness: 0.1,
+    })
+    const cube = new Mesh(cubeGeometry, cubeMaterial)
+    cube.position.set(0.5, 0.15, 0.5)
+    cube.castShadow = true
+    cube.receiveShadow = true
+    scene.add(cube)
+
     // 主光（太陽光）
     const directionalLight = new DirectionalLight(0xffffff, 1.5)
-    directionalLight.position.set(1, 2, 1).normalize()
+    directionalLight.position.set(2, 4, 2)
+    directionalLight.castShadow = true
+    directionalLight.shadow.mapSize.width = 2048
+    directionalLight.shadow.mapSize.height = 2048
+    directionalLight.shadow.camera.near = 0.1
+    directionalLight.shadow.camera.far = 20
+    directionalLight.shadow.camera.left = -5
+    directionalLight.shadow.camera.right = 5
+    directionalLight.shadow.camera.top = 5
+    directionalLight.shadow.camera.bottom = -5
+    directionalLight.shadow.bias = -0.0005
     scene.add(directionalLight)
 
     // 環境光（柔らかい全方向光）
-    const ambientLight = new AmbientLight(0xffffff, 0.7)
+    const ambientLight = new AmbientLight(0xffffff, 0.3)
     scene.add(ambientLight)
 
     return () =>
     {
       scene.remove(gridHelper)
+      scene.remove(floor)
+      floorGeometry.dispose()
+      floorMaterial.dispose()
+      scene.remove(cube)
+      cubeGeometry.dispose()
+      cubeMaterial.dispose()
       scene.remove(directionalLight)
       scene.remove(ambientLight)
     }
@@ -283,25 +335,34 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
     if (!showPointLights) return
 
     // ポイントライト1（左斜め前）
-    const pointLight1 = new PointLight(0xff0000, 2, 10)
+    const pointLight1 = new PointLight(0xff0000, 4, 10)
     pointLight1.position.set(-1.5, 1, 1.5)
     pointLight1.castShadow = true
     pointLight1.shadow.mapSize.width = 1024
     pointLight1.shadow.mapSize.height = 1024
+    pointLight1.shadow.camera.near = 0.1
+    pointLight1.shadow.camera.far = 10
+    pointLight1.shadow.bias = -0.001
     scene.add(pointLight1)
 
-    // ポイントライト2（右斜め後）
-    const pointLight2 = new PointLight(0x0000ff, 2, 10)
-    pointLight2.position.set(1.5, 1, -1.5)
-    pointLight2.castShadow = true
-    pointLight2.shadow.mapSize.width = 1024
-    pointLight2.shadow.mapSize.height = 1024
-    scene.add(pointLight2)
+    // スポットライト（右斜め後）
+    const spotLight = new SpotLight(0x0000ff, 4, 10, Math.PI / 6, 0.5, 1)
+    spotLight.position.set(1.5, 2, -1.5)
+    spotLight.target.position.set(0, 0.5, 0)
+    spotLight.castShadow = true
+    spotLight.shadow.mapSize.width = 1024
+    spotLight.shadow.mapSize.height = 1024
+    spotLight.shadow.camera.near = 0.1
+    spotLight.shadow.camera.far = 10
+    spotLight.shadow.bias = -0.001
+    scene.add(spotLight)
+    scene.add(spotLight.target)
 
     return () =>
     {
       scene.remove(pointLight1)
-      scene.remove(pointLight2)
+      scene.remove(spotLight)
+      scene.remove(spotLight.target)
     }
   }, [scene, showPointLights])
 

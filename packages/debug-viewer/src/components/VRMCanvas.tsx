@@ -231,6 +231,10 @@ function VRMCanvas({
           antialias: true,
           alpha: true,
         }}
+        onCreated={({ gl }) =>
+        {
+          gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
+        }}
       >
         <CameraAspectUpdater />
         <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
