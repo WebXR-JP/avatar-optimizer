@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/webxr-jp/avatar-optimizer.git",
+    "url": "https://github.com/WebXR-JP/avatar-optimizer.git",
     "directory": "packages/avatar-optimizer"
   },
   "publishConfig": {

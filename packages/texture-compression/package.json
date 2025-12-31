@@ -37,8 +37,14 @@
   ],
   "author": "HALBY",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WebXR-JP/avatar-optimizer.git",
+    "directory": "packages/texture-compression"
+  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
