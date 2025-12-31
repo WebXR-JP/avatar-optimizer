@@ -25,6 +25,7 @@ function App()
   const [showBones, setShowBones] = useState(false)
   const [showColliders, setShowColliders] = useState(false)
   const [showPointLights, setShowPointLights] = useState(false)
+  const [logShaderInfo, setLogShaderInfo] = useState(false)
   const [isReloading, setIsReloading] = useState(false)
   const [atlasOptions, setAtlasOptions] = useState<AtlasGenerationOptions>({
     defaultResolution: 2048,
@@ -533,6 +534,8 @@ function App()
           onShowCollidersChange={setShowColliders}
           showPointLights={showPointLights}
           onShowPointLightsChange={setShowPointLights}
+          logShaderInfo={logShaderInfo}
+          onLogShaderInfoChange={setLogShaderInfo}
           onReloadExport={handleReloadExport}
           isReloading={isReloading}
           atlasOptions={atlasOptions}

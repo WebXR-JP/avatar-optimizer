@@ -17,6 +17,7 @@ interface VRMSceneProps
   showBones?: boolean
   showColliders?: boolean
   showPointLights?: boolean
+  logShaderInfo?: boolean
 }
 
 /**
@@ -24,7 +25,7 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false, showPointLights = false }: VRMSceneProps)
+function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false, showPointLights = false, logShaderInfo = false }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
@@ -83,6 +84,40 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
       }
     })
   }, [vrm, debugMode])
+
+  // シェーダーキーワード確認用（onBeforeCompile）
+  useEffect(() =>
+  {
+    if (!vrm || !logShaderInfo) return
+
+    vrm.scene.traverse((object) =>
+    {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials)
+      {
+        const originalOnBeforeCompile = material.onBeforeCompile
+
+        material.onBeforeCompile = (shader, renderer) =>
+        {
+          // 元のonBeforeCompileがあれば呼ぶ
+          originalOnBeforeCompile?.call(material, shader, renderer)
+
+          // シェーダー情報をログ出力
+          console.log('=== Material:', material.name || material.type, '===')
+          console.log('Defines:', (material as Material & { defines?: Record<string, unknown> }).defines)
+          console.log('Uniforms:', Object.keys(shader.uniforms))
+          console.log('Vertex Shader:', shader.vertexShader)
+          console.log('Fragment Shader:', shader.fragmentShader)
+        }
+
+        // シェーダー再コンパイルをトリガー
+        material.needsUpdate = true
+      }
+    })
+  }, [vrm, logShaderInfo])
 
   // SpringBone無効時にリセット
   useEffect(() =>

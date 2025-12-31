@@ -125,6 +125,8 @@ interface VRMCanvasProps
   onShowCollidersChange: (show: boolean) => void
   showPointLights: boolean
   onShowPointLightsChange: (show: boolean) => void
+  logShaderInfo: boolean
+  onLogShaderInfoChange: (log: boolean) => void
   onReloadExport: () => void
   isReloading: boolean
   atlasOptions: AtlasGenerationOptions
@@ -188,6 +190,8 @@ function VRMCanvas({
   onShowCollidersChange,
   showPointLights,
   onShowPointLightsChange,
+  logShaderInfo,
+  onLogShaderInfoChange,
   onReloadExport,
   isReloading,
   atlasOptions,
@@ -229,7 +233,7 @@ function VRMCanvas({
         }}
       >
         <CameraAspectUpdater />
-        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} />
+        <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
       </Canvas>
 
       {/* 3D Viewport タブのときのみ UI を表示 */}
@@ -387,6 +391,14 @@ function VRMCanvas({
                 onChange={(e) => onShowPointLightsChange(e.target.checked)}
               />
               Point Lights
+            </label>
+            <label className="vrm-canvas__shaderlog-toggle">
+              <input
+                type="checkbox"
+                checked={logShaderInfo}
+                onChange={(e) => onLogShaderInfoChange(e.target.checked)}
+              />
+              Log Shader
             </label>
           </div>
 
