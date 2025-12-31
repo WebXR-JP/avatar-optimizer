@@ -61,10 +61,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      # changeset がない場合: npm に publish
+      # changeset がない場合: npm に publish（未公開バージョンのみ）
       - name: Publish to npm
         if: steps.check.outputs.has_changesets == 'false'
         run: |
-          pnpm -r --filter "./packages/*" exec npm publish --access public --provenance
+          for pkg in packages/*/; do
+            if [ -f "$pkg/package.json" ]; then
+              name=$(node -p "require('./$pkg/package.json').name")
+              version=$(node -p "require('./$pkg/package.json').version")
+              private=$(node -p "require('./$pkg/package.json').private || false")
+
+              if [ "$private" = "true" ]; then
+                echo "Skipping $name (private)"
+                continue
+              fi
+
+              # npm に公開済みかチェック
+              published=$(npm view "$name@$version" version 2>/dev/null || echo "")
+              if [ -z "$published" ]; then
+                echo "Publishing $name@$version"
+                (cd "$pkg" && npm publish --access public --provenance)
+              else
+                echo "Skipping $name@$version (already published)"
+              fi
+            fi
+          done
         env:
           NPM_CONFIG_PROVENANCE: true
