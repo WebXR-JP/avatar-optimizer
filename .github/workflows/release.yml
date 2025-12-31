@@ -31,6 +31,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -38,19 +39,30 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Setup npm for publishing
+      - name: Check for changesets
+        id: check
         run: |
-          echo "//registry.npmjs.org/:_authToken=" >> ~/.npmrc
-          echo "registry=https://registry.npmjs.org/" >> ~/.npmrc
+          if ls .changeset/*.md 1> /dev/null 2>&1; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Create Release Pull Request or Publish
-        id: changesets
+      # changeset がある場合: Release PR を作成
+      - name: Create Release Pull Request
+        if: steps.check.outputs.has_changesets == 'true'
         uses: changesets/action@v1
         with:
           version: pnpm changeset:version
-          publish: pnpm changeset:publish
           commit: 'chore: release packages'
           title: 'chore: release packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      # changeset がない場合: npm に publish
+      - name: Publish to npm
+        if: steps.check.outputs.has_changesets == 'false'
+        run: |
+          pnpm -r --filter "./packages/*" exec npm publish --access public --provenance
+        env:
           NPM_CONFIG_PROVENANCE: true
