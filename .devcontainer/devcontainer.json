@@ -29,7 +29,9 @@
 		"POWERLEVEL9K_DISABLE_GITSTATUS": "true"
 	},
 	// Features to add to the dev container. More info: https://containers.dev/features.
-	"features": {},
+	"features": {
+		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
