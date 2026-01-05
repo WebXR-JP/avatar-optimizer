@@ -590,6 +590,13 @@ export class VRMExporterPlugin {
               tailNode.position.y,
               tailNode.position.z,
             ],
+            rotation: [
+              tailNode.quaternion.x,
+              tailNode.quaternion.y,
+              tailNode.quaternion.z,
+              tailNode.quaternion.w,
+            ],
+            scale: [tailNode.scale.x, tailNode.scale.y, tailNode.scale.z],
           }
           json.nodes.push(tailNodeDef)
 
