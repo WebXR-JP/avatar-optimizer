@@ -4,6 +4,7 @@
  */
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMLoaderPlugin } from '@pixiv/three-vrm'
+import { VRMMetaLoaderPlugin } from '@pixiv/three-vrm-core'
 import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
 import { WebGLRenderer } from 'three'
@@ -108,7 +109,31 @@ export function loadVRM(source: VRMSource): ResultAsync<VRM, VRMLoaderError> {
         loader.setKTX2Loader(ktx2Loader)
       }
 
-      loader.register((parser) => new VRMLoaderPlugin(parser))
+      loader.register((parser) => {
+        // VRMMetaLoaderPlugin をインスタンス化して広範囲のライセンスを許可
+        const metaPlugin = new VRMMetaLoaderPlugin(parser, {
+          acceptLicenseUrls: [
+            // VRM 1.0 公式ライセンス
+            'https://vrm.dev/licenses/1.0/',
+            // CC0 (パブリックドメイン)
+            'https://creativecommons.org/publicdomain/zero/1.0/',
+            // CC BY
+            'https://creativecommons.org/licenses/by/4.0/',
+            // CC BY-NC
+            'https://creativecommons.org/licenses/by-nc/4.0/',
+            // CC BY-SA
+            'https://creativecommons.org/licenses/by-sa/4.0/',
+            // CC BY-NC-SA
+            'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+            // CC BY-ND
+            'https://creativecommons.org/licenses/by-nd/4.0/',
+            // CC BY-NC-ND
+            'https://creativecommons.org/licenses/by-nc-nd/4.0/',
+          ],
+        })
+
+        return new VRMLoaderPlugin(parser, { metaPlugin })
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       loader.register((parser) => new MToonAtlasLoaderPlugin(parser as any))
 
