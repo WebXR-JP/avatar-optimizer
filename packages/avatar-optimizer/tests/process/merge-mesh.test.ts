@@ -3,12 +3,17 @@ import {
   Bone,
   BufferAttribute,
   BufferGeometry,
+  Matrix4,
   Mesh,
   Skeleton,
   SkinnedMesh,
 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { mergeGeometriesWithSlotAttribute } from '../../src/util/mesh/merge-mesh'
+import {
+  createMergedSkeleton,
+  findBoneInverse,
+  mergeGeometriesWithSlotAttribute,
+} from '../../src/util/mesh/merge-mesh'
 
 describe('merge-mesh', () => {
   describe('mergeGeometriesWithSlotAttribute', () => {
@@ -262,6 +267,204 @@ describe('merge-mesh', () => {
           '有効なジオメトリを持つメッシュがありません',
         )
       }
+    })
+  })
+
+  describe('findBoneInverse', () => {
+    /**
+     * SkinnedMeshとスケルトンを作成するヘルパー
+     * bind()を呼ばずにskeletonを直接設定してboneInversesを保持
+     */
+    function createSkinnedMeshWithSkeleton(boneInverses?: Matrix4[]) {
+      const geometry = new BufferGeometry()
+      const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
+      geometry.setAttribute('position', new BufferAttribute(positions, 3))
+
+      const bone0 = new Bone()
+      bone0.name = 'bone0'
+      const bone1 = new Bone()
+      bone1.name = 'bone1'
+      const bones = [bone0, bone1]
+
+      const skeleton = boneInverses
+        ? new Skeleton(bones, boneInverses)
+        : new Skeleton(bones)
+
+      const material = new MToonMaterial()
+      const skinnedMesh = new SkinnedMesh(geometry, material)
+      // bind()を呼ばず直接skeletonを設定（boneInversesが再計算されないように）
+      skinnedMesh.skeleton = skeleton
+
+      return { skinnedMesh, bones, skeleton }
+    }
+
+    it('should find boneInverse from SkinnedMesh', () => {
+      const customInverse = new Matrix4().set(
+        1, 0, 0, 10,
+        0, 1, 0, 20,
+        0, 0, 1, 30,
+        0, 0, 0, 1,
+      )
+      const { skinnedMesh, bones } = createSkinnedMeshWithSkeleton([
+        customInverse.clone(),
+        new Matrix4(),
+      ])
+
+      const result = findBoneInverse(bones[0], [skinnedMesh])
+
+      // 元のboneInverseがクローンされて返される
+      expect(result.elements).toEqual(customInverse.elements)
+    })
+
+    it('should return cloned matrix (not reference)', () => {
+      const customInverse = new Matrix4().set(
+        1, 0, 0, 5,
+        0, 1, 0, 5,
+        0, 0, 1, 5,
+        0, 0, 0, 1,
+      )
+      const { skinnedMesh, bones } = createSkinnedMeshWithSkeleton([
+        customInverse.clone(),
+        new Matrix4(),
+      ])
+
+      const result = findBoneInverse(bones[0], [skinnedMesh])
+
+      // 参照ではなくクローンであることを確認
+      expect(result).not.toBe(skinnedMesh.skeleton!.boneInverses[0])
+      expect(result.elements).toEqual(customInverse.elements)
+    })
+
+    it('should search across multiple SkinnedMeshes', () => {
+      const { skinnedMesh: mesh1 } = createSkinnedMeshWithSkeleton()
+      const { skinnedMesh: mesh2, bones: bones2 } = createSkinnedMeshWithSkeleton([
+        new Matrix4().set(2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1),
+        new Matrix4(),
+      ])
+
+      // mesh2のbone0を検索（mesh1には存在しないボーン）
+      const result = findBoneInverse(bones2[0], [mesh1, mesh2])
+
+      // mesh2からboneInverseが見つかる
+      expect(result.elements[0]).toBe(2) // スケール2
+    })
+
+    it('should return inverted world matrix when bone not found', () => {
+      const { skinnedMesh } = createSkinnedMeshWithSkeleton()
+      const orphanBone = new Bone()
+      orphanBone.position.set(10, 20, 30)
+      orphanBone.updateMatrixWorld(true)
+
+      const result = findBoneInverse(orphanBone, [skinnedMesh])
+
+      // ワールド行列の逆行列が返される
+      const expectedInverse = orphanBone.matrixWorld.clone().invert()
+      expect(result.elements).toEqual(expectedInverse.elements)
+    })
+
+    it('should skip SkinnedMesh without skeleton', () => {
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0]), 3),
+      )
+      const meshWithoutSkeleton = new SkinnedMesh(geometry, new MToonMaterial())
+      // skeletonを設定しない
+
+      const { skinnedMesh: meshWithSkeleton, bones } = createSkinnedMeshWithSkeleton([
+        new Matrix4().set(3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1),
+        new Matrix4(),
+      ])
+
+      const result = findBoneInverse(bones[0], [meshWithoutSkeleton, meshWithSkeleton])
+
+      // skeletonがないメッシュをスキップして、次のメッシュから取得
+      expect(result.elements[0]).toBe(3)
+    })
+  })
+
+  describe('createMergedSkeleton', () => {
+    it('should create skeleton with correct boneInverses', () => {
+      const bone0 = new Bone()
+      const bone1 = new Bone()
+      const bones = [bone0, bone1]
+
+      const inverse0 = new Matrix4().set(1, 0, 0, 1, 0, 1, 0, 2, 0, 0, 1, 3, 0, 0, 0, 1)
+      const inverse1 = new Matrix4().set(1, 0, 0, 4, 0, 1, 0, 5, 0, 0, 1, 6, 0, 0, 0, 1)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0]), 3),
+      )
+      const skeleton = new Skeleton(bones, [inverse0.clone(), inverse1.clone()])
+      const skinnedMesh = new SkinnedMesh(geometry, new MToonMaterial())
+      // bind()を呼ばず直接skeletonを設定
+      skinnedMesh.skeleton = skeleton
+
+      const result = createMergedSkeleton(bones, [skinnedMesh])
+
+      expect(result.bones).toHaveLength(2)
+      expect(result.boneInverses).toHaveLength(2)
+      expect(result.boneInverses[0].elements).toEqual(inverse0.elements)
+      expect(result.boneInverses[1].elements).toEqual(inverse1.elements)
+    })
+
+    it('should handle bones from multiple SkinnedMeshes', () => {
+      // 2つのSkinnedMeshから異なるボーンを持つ場合
+      const boneA = new Bone()
+      boneA.name = 'boneA'
+      const boneB = new Bone()
+      boneB.name = 'boneB'
+
+      const inverseA = new Matrix4().set(1, 0, 0, 10, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+      const inverseB = new Matrix4().set(1, 0, 0, 20, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+
+      const geometry1 = new BufferGeometry()
+      geometry1.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0]), 3),
+      )
+      const skeleton1 = new Skeleton([boneA], [inverseA.clone()])
+      const mesh1 = new SkinnedMesh(geometry1, new MToonMaterial())
+      mesh1.skeleton = skeleton1
+
+      const geometry2 = new BufferGeometry()
+      geometry2.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0]), 3),
+      )
+      const skeleton2 = new Skeleton([boneB], [inverseB.clone()])
+      const mesh2 = new SkinnedMesh(geometry2, new MToonMaterial())
+      mesh2.skeleton = skeleton2
+
+      // 両方のボーンを含むスケルトンを作成
+      const result = createMergedSkeleton([boneA, boneB], [mesh1, mesh2])
+
+      expect(result.bones).toHaveLength(2)
+      expect(result.boneInverses[0].elements).toEqual(inverseA.elements)
+      expect(result.boneInverses[1].elements).toEqual(inverseB.elements)
+    })
+
+    it('should create independent boneInverses (not shared references)', () => {
+      const bone = new Bone()
+      const inverse = new Matrix4().set(1, 0, 0, 5, 0, 1, 0, 5, 0, 0, 1, 5, 0, 0, 0, 1)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0]), 3),
+      )
+      const skeleton = new Skeleton([bone], [inverse.clone()])
+      const skinnedMesh = new SkinnedMesh(geometry, new MToonMaterial())
+      skinnedMesh.skeleton = skeleton
+
+      const result = createMergedSkeleton([bone], [skinnedMesh])
+
+      // 元のスケルトンのboneInversesと参照が異なることを確認
+      expect(result.boneInverses[0]).not.toBe(skeleton.boneInverses[0])
+      // 値は同じ
+      expect(result.boneInverses[0].elements).toEqual(inverse.elements)
     })
   })
 })

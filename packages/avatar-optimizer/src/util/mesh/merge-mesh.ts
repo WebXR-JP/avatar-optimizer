@@ -17,8 +17,9 @@ import { OptimizationError } from '../../types'
  * @param bone - 検索対象のボーン
  * @param skinnedMeshes - 検索対象のSkinnedMesh配列
  * @returns 見つかったboneInverseのクローン、見つからない場合はワールド行列の逆行列
+ * @internal テスト用にエクスポート
  */
-function findBoneInverse(bone: Bone, skinnedMeshes: SkinnedMesh[]): Matrix4 {
+export function findBoneInverse(bone: Bone, skinnedMeshes: SkinnedMesh[]): Matrix4 {
   for (const mesh of skinnedMeshes) {
     if (!mesh.skeleton) continue
 
@@ -40,8 +41,9 @@ function findBoneInverse(bone: Bone, skinnedMeshes: SkinnedMesh[]): Matrix4 {
  * @param allBones - 統合されたボーン配列
  * @param skinnedMeshes - 元のSkinnedMesh配列
  * @returns 統合されたSkeleton
+ * @internal テスト用にエクスポート
  */
-function createMergedSkeleton(
+export function createMergedSkeleton(
   allBones: Bone[],
   skinnedMeshes: SkinnedMesh[],
 ): Skeleton {
