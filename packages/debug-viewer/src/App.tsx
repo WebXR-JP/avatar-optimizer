@@ -430,7 +430,7 @@ function App()
     setIsLoading(true)
     setError(null)
 
-    const result = await loadVRMAnimation('/vrma/VRMA_03.vrma')
+    const result = await loadVRMAnimation('/vrma/running.vrma')
 
     if (result.isErr())
     {
