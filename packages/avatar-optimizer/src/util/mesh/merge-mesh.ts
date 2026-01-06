@@ -140,8 +140,32 @@ export function mergeGeometriesWithSlotAttribute(
   const mergedGeometry = mergeGeometries(transformedGeometries)
 
   // 統合されたスケルトンをuserDataに保存
+  // 元のメッシュの boneInverses を使用する（bindMatrix を適用済みのため再計算しない）
   if (hasSkinnedMesh) {
-    mergedGeometry.userData.skeleton = new Skeleton(allBones)
+    // 最初の SkinnedMesh から boneInverses を取得
+    const firstSkinnedMesh = validMeshes.find(
+      ({ mesh }) => mesh instanceof SkinnedMesh,
+    )?.mesh as SkinnedMesh | undefined
+
+    if (firstSkinnedMesh?.skeleton) {
+      // 元の boneInverses をコピーして使用
+      const boneInverses = allBones.map((bone) => {
+        // 元のスケルトンから対応する boneInverse を探す
+        for (const { mesh } of validMeshes) {
+          if (mesh instanceof SkinnedMesh && mesh.skeleton) {
+            const boneIndex = mesh.skeleton.bones.indexOf(bone)
+            if (boneIndex !== -1) {
+              return mesh.skeleton.boneInverses[boneIndex].clone()
+            }
+          }
+        }
+        // 見つからない場合は identity を返す
+        return bone.matrixWorld.clone().invert()
+      })
+      mergedGeometry.userData.skeleton = new Skeleton(allBones, boneInverses)
+    } else {
+      mergedGeometry.userData.skeleton = new Skeleton(allBones)
+    }
   }
 
   // スロット属性を追加
