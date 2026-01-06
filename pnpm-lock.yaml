@@ -59,6 +59,9 @@ importers:
       '@pixiv/three-vrm':
         specifier: ^3.4.4
         version: 3.4.4(three@0.181.1)
+      '@pixiv/three-vrm-core':
+        specifier: ^3.4.4
+        version: 3.4.4(three@0.181.1)
       '@pixiv/three-vrm-materials-mtoon':
         specifier: ^3.4.4
         version: 3.4.4(three@0.181.1)
@@ -5160,6 +5163,7 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@3.0.0:
     resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
@@ -10778,7 +10782,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.0
-      '@vitest/browser-playwright': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(playwright@1.57.0)(vite@7.2.2(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.12.3(@types/node@24.10.0)(typescript@5.9.3))(playwright@1.57.0)(vite@6.4.1(@types/node@24.10.0)(tsx@4.20.6))(vitest@4.0.16)
       happy-dom: 20.0.10
       jsdom: 27.3.0(canvas@3.2.0)
     transitivePeerDependencies:
