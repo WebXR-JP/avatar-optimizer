@@ -40,6 +40,7 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
 
     scene.add(vrm.scene)
     vrm.scene.position.set(0, 0, 0)
+    vrm.scene.rotation.set(0, Math.PI, 0) // カメラの方を向くように180度回転
 
     // 全メッシュに影を落とす設定を追加
     vrm.scene.traverse((object) =>
