@@ -640,50 +640,12 @@ export class VRMExporterPlugin {
       }
 
       // センターノードのインデックス
-      // centerノードもtailノードと同様にisBone: trueを設定する必要がある
-      // GLTFLoaderがBoneとしてインスタンス化し、matrixWorldを正しく初期化するため
-      let centerNodeIndex: number | undefined
-      if (firstJoint.center) {
-        const centerNode = firstJoint.center
-        centerNodeIndex = this.writer.nodeMap.get(centerNode)
-
-        const json = this.writer.json
-        if (centerNodeIndex === undefined) {
-          // nodeMapに含まれていない場合、GLTF JSONに直接追加
-          if (!json.nodes) {
-            json.nodes = []
-          }
-
-          centerNodeIndex = json.nodes.length
-          const centerNodeDef: any = {
-            name: centerNode.name || 'SpringBoneCenter',
-            translation: [
-              centerNode.position.x,
-              centerNode.position.y,
-              centerNode.position.z,
-            ],
-            rotation: [
-              centerNode.quaternion.x,
-              centerNode.quaternion.y,
-              centerNode.quaternion.z,
-              centerNode.quaternion.w,
-            ],
-            scale: [centerNode.scale.x, centerNode.scale.y, centerNode.scale.z],
-            isBone: true,
-          }
-          json.nodes.push(centerNodeDef)
-
-          // シーンのノードリストに追加（ルートレベルのノードとして）
-          if (json.scenes && json.scenes[0] && json.scenes[0].nodes) {
-            json.scenes[0].nodes.push(centerNodeIndex)
-          }
-        } else {
-          // nodeMapに含まれている場合でも、isBone: trueを設定
-          if (json.nodes && centerNodeIndex < json.nodes.length) {
-            json.nodes[centerNodeIndex].isBone = true
-          }
-        }
-      }
+      // Note: centerノードのエクスポートは、three-vrmの読み込み時にMatrix4InverseCacheの
+      // matrixWorld参照の問題を引き起こすため、現在は無効化している。
+      // centerノードなしでも、SpringBoneはワールド空間で正常に動作する。
+      // TODO: three-vrmの問題が解決されたら、centerノードのエクスポートを再有効化する
+      const centerNodeIndex: number | undefined = undefined
+      // if (firstJoint.center) { ... } - 一時的に無効化
 
       const springDef: any = {
         joints: jointDefs,

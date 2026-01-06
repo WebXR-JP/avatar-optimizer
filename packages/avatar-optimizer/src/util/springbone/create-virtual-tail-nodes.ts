@@ -243,6 +243,11 @@ export function restoreSpringBoneState(
     return
   }
 
+  // Y軸180度回転行列
+  // マイグレーションでボーンのローカル座標系が回転するため、
+  // _boneAxisも同様に回転させる必要がある
+  const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   joints.forEach((joint: any) => {
     const bone = joint.bone as Bone | undefined
@@ -250,10 +255,12 @@ export function restoreSpringBoneState(
 
     const state = preRecordedState.get(bone)!
 
-    // _boneAxisを元の値に復元
+    // _boneAxisをY軸180度回転させて復元
+    // ローカル座標系がY軸180度回転しているため、
+    // 古い_boneAxisをそのまま使うとワールド空間での方向が逆になる
     const boneAxis = joint._boneAxis as Vector3 | undefined
     if (boneAxis) {
-      boneAxis.copy(state.boneAxis)
+      boneAxis.copy(state.boneAxis).applyMatrix4(rotationMatrix)
     }
 
     // _currentTailと_prevTailを調整
@@ -379,17 +386,27 @@ export function rotateSpringBoneColliderOffsets(vrm: VRM): void {
  * VRM0→VRM1マイグレーション後にSpringBone関連の調整を一括で実行
  *
  * 以下の処理を順番に実行:
- * 1. 末端ジョイントに仮想tailノードを作成
+ * 1. 末端ジョイントに仮想tailノードを作成（事前記録した方向を使用）
  * 2. 重力方向（gravityDir）をY軸180度回転
  * 3. コライダーオフセットをY軸180度回転
  * 4. SpringBoneの初期状態を再設定
  *
+ * Note: _boneAxisはreset()で正しく再計算されるため、復元は不要。
+ * スケルトンマイグレーションでボーン位置が調整されているため、
+ * _initialLocalChildPositionから計算される_boneAxisは既に正しい。
+ *
  * @param vrm - VRMオブジェクト
+ * @param preRecordedDirections - recordSpringBoneDirectionsで記録した方向（オプション）
+ * @param _preRecordedState - 現在は未使用（後方互換性のため残す）
  * @returns 作成された仮想tailノードの配列（クリーンアップ用）
  */
-export function migrateSpringBone(vrm: VRM): Bone[] {
-  // 末端ジョイントに仮想tailノードを作成
-  const tailNodes = createVirtualTailNodes(vrm)
+export function migrateSpringBone(
+  vrm: VRM,
+  preRecordedDirections?: Map<Bone, Vector3>,
+  _preRecordedState?: Map<Bone, { currentTail: Vector3; boneAxis: Vector3 }>,
+): Bone[] {
+  // 末端ジョイントに仮想tailノードを作成（事前記録した方向を使用）
+  const tailNodes = createVirtualTailNodes(vrm, preRecordedDirections)
 
   // 重力方向をY軸180度回転
   rotateSpringBoneGravityDirections(vrm)
@@ -398,6 +415,8 @@ export function migrateSpringBone(vrm: VRM): Bone[] {
   rotateSpringBoneColliderOffsets(vrm)
 
   // SpringBoneの初期状態を再設定
+  // setInitState()で_initialLocalChildPositionを記録し、
+  // reset()で_boneAxisを再計算する
   vrm.springBoneManager?.setInitState()
   vrm.springBoneManager?.reset()
 

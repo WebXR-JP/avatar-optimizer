@@ -14,7 +14,11 @@ import {
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
-import { migrateSpringBone } from './util/springbone'
+import {
+  migrateSpringBone,
+  recordSpringBoneDirections,
+  recordSpringBoneState,
+} from './util/springbone'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -195,7 +199,9 @@ export function optimizeModel(
     }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
-    if (options.migrateVRM0ToVRM1) {
+    // VRM 1.0の場合は既にスケルトンがVRM 1.0形式なのでマイグレーション不要
+    const isVrm0 = vrm.meta?.metaVersion === '0'
+    if (options.migrateVRM0ToVRM1 && isVrm0) {
       // SpringBoneManagerを一時的に退避
       // マイグレーション中に外部からvrm.update()が呼ばれても
       // SpringBoneが動かないようにする
@@ -207,6 +213,16 @@ export function optimizeModel(
       // マイグレーションはボーンのワールド座標を記録するため、
       // 物理演算で変形した状態だと正しい座標が記録されない
       springBoneManager?.reset()
+
+      // SpringBone状態をマイグレーション前に記録
+      // VRM0ではボーンの回転がボーンの向きを表すため、
+      // マイグレーションで回転がidentityになる前にこの情報を保存
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(vrm as any).springBoneManager = springBoneManager
+      const preRecordedDirections = recordSpringBoneDirections(vrm)
+      const preRecordedState = recordSpringBoneState(vrm)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(vrm as any).springBoneManager = null
 
       // Humanoid Boneのセットを構築
       // VRM1.0仕様ではHumanoid Boneのみ回転がidentityである必要がある
@@ -228,11 +244,12 @@ export function optimizeModel(
       ;(vrm as any).springBoneManager = springBoneManager
 
       // SpringBone関連の調整を一括で実行
-      // - 末端ジョイントに仮想tailノードを作成
+      // - 末端ジョイントに仮想tailノードを作成（事前記録した方向を使用）
       // - 重力方向（gravityDir）をY軸180度回転
       // - コライダーオフセットをY軸180度回転
       // - SpringBoneの初期状態を再設定
-      migrateSpringBone(vrm)
+      // - _boneAxis方向を復元
+      migrateSpringBone(vrm, preRecordedDirections, preRecordedState)
     }
 
     // 簡略化統計を結果に追加
