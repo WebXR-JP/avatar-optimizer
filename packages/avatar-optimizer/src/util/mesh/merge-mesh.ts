@@ -19,7 +19,10 @@ import { OptimizationError } from '../../types'
  * @returns 見つかったboneInverseのクローン、見つからない場合はワールド行列の逆行列
  * @internal テスト用にエクスポート
  */
-export function findBoneInverse(bone: Bone, skinnedMeshes: SkinnedMesh[]): Matrix4 {
+export function findBoneInverse(
+  bone: Bone,
+  skinnedMeshes: SkinnedMesh[],
+): Matrix4 {
   for (const mesh of skinnedMeshes) {
     if (!mesh.skeleton) continue
 
@@ -185,12 +188,17 @@ export function mergeGeometriesWithSlotAttribute(
   // 統合されたスケルトンをuserDataに保存
   // 元のメッシュの boneInverses を使用する（bindMatrix を適用済みのため再計算しない）
   if (hasSkinnedMesh) {
-    const skinnedMeshes = validMeshes
-      .filter(({ mesh }): mesh is { mesh: SkinnedMesh; geometry: BufferGeometry } =>
-        mesh instanceof SkinnedMesh)
-      .map(({ mesh }) => mesh)
+    const skinnedMeshes: SkinnedMesh[] = []
+    for (const { mesh } of validMeshes) {
+      if (mesh instanceof SkinnedMesh) {
+        skinnedMeshes.push(mesh)
+      }
+    }
 
-    mergedGeometry.userData.skeleton = createMergedSkeleton(allBones, skinnedMeshes)
+    mergedGeometry.userData.skeleton = createMergedSkeleton(
+      allBones,
+      skinnedMeshes,
+    )
   }
 
   // スロット属性を追加
