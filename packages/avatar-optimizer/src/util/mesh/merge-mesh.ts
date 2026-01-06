@@ -3,12 +3,53 @@ import {
   Bone,
   BufferGeometry,
   Float32BufferAttribute,
+  Matrix4,
   Mesh,
   Skeleton,
   SkinnedMesh,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { OptimizationError } from '../../types'
+
+/**
+ * 複数のSkinnedMeshから指定されたボーンに対応するboneInverseを探す
+ *
+ * @param bone - 検索対象のボーン
+ * @param skinnedMeshes - 検索対象のSkinnedMesh配列
+ * @returns 見つかったboneInverseのクローン、見つからない場合はワールド行列の逆行列
+ */
+function findBoneInverse(bone: Bone, skinnedMeshes: SkinnedMesh[]): Matrix4 {
+  for (const mesh of skinnedMeshes) {
+    if (!mesh.skeleton) continue
+
+    const boneIndex = mesh.skeleton.bones.indexOf(bone)
+    if (boneIndex !== -1) {
+      return mesh.skeleton.boneInverses[boneIndex].clone()
+    }
+  }
+  // 見つからない場合はワールド行列の逆行列を返す
+  return bone.matrixWorld.clone().invert()
+}
+
+/**
+ * 統合されたスケルトンを作成
+ *
+ * 複数のSkinnedMeshから収集したボーンと、それぞれの元のboneInversesを使用して
+ * 新しいSkeletonを作成します。
+ *
+ * @param allBones - 統合されたボーン配列
+ * @param skinnedMeshes - 元のSkinnedMesh配列
+ * @returns 統合されたSkeleton
+ */
+function createMergedSkeleton(
+  allBones: Bone[],
+  skinnedMeshes: SkinnedMesh[],
+): Skeleton {
+  const boneInverses = allBones.map((bone) =>
+    findBoneInverse(bone, skinnedMeshes),
+  )
+  return new Skeleton(allBones, boneInverses)
+}
 
 /**
  * ジオメトリを結合してスロット属性を追加
@@ -142,30 +183,12 @@ export function mergeGeometriesWithSlotAttribute(
   // 統合されたスケルトンをuserDataに保存
   // 元のメッシュの boneInverses を使用する（bindMatrix を適用済みのため再計算しない）
   if (hasSkinnedMesh) {
-    // 最初の SkinnedMesh から boneInverses を取得
-    const firstSkinnedMesh = validMeshes.find(
-      ({ mesh }) => mesh instanceof SkinnedMesh,
-    )?.mesh as SkinnedMesh | undefined
+    const skinnedMeshes = validMeshes
+      .filter(({ mesh }): mesh is { mesh: SkinnedMesh; geometry: BufferGeometry } =>
+        mesh instanceof SkinnedMesh)
+      .map(({ mesh }) => mesh)
 
-    if (firstSkinnedMesh?.skeleton) {
-      // 元の boneInverses をコピーして使用
-      const boneInverses = allBones.map((bone) => {
-        // 元のスケルトンから対応する boneInverse を探す
-        for (const { mesh } of validMeshes) {
-          if (mesh instanceof SkinnedMesh && mesh.skeleton) {
-            const boneIndex = mesh.skeleton.bones.indexOf(bone)
-            if (boneIndex !== -1) {
-              return mesh.skeleton.boneInverses[boneIndex].clone()
-            }
-          }
-        }
-        // 見つからない場合は identity を返す
-        return bone.matrixWorld.clone().invert()
-      })
-      mergedGeometry.userData.skeleton = new Skeleton(allBones, boneInverses)
-    } else {
-      mergedGeometry.userData.skeleton = new Skeleton(allBones)
-    }
+    mergedGeometry.userData.skeleton = createMergedSkeleton(allBones, skinnedMeshes)
   }
 
   // スロット属性を追加
