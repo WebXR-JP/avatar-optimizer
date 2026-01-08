@@ -19,6 +19,30 @@
   color: #fff;
 }
 
+.vrm-canvas__model-select {
+  padding: 0.5rem 0.75rem;
+  background-color: #2a2a2a;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.vrm-canvas__model-select:hover:not(:disabled) {
+  border-color: #777;
+}
+
+.vrm-canvas__model-select:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.vrm-canvas__model-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .vrm-canvas__upload-btn,
 .vrm-canvas__optimize-btn,
 .vrm-canvas__export-btn,

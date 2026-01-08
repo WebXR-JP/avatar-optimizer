@@ -81,6 +81,14 @@ function App()
     }
   }
 
+  // 利用可能なデフォルトモデル一覧
+  const defaultModels = [
+    { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
+    { name: 'Vivi', path: '/Vivi.vrm' },
+    { name: 'Vita', path: '/Vita.vrm' },
+  ]
+  const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
+
   // 起動時にデフォルト VRM を読み込み
   useEffect(() =>
   {
@@ -89,7 +97,7 @@ function App()
       setIsLoading(true)
       setError(null)
 
-      const result = await loadVRM('/AliciaSolid.vrm')
+      const result = await loadVRM(selectedModel)
 
       if (result.isErr())
       {
@@ -103,7 +111,7 @@ function App()
     }
 
     loadDefaultVRM()
-  }, [setErrorWithLog])
+  }, [selectedModel, setErrorWithLog])
 
   const handleFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) =>
@@ -544,6 +552,9 @@ function App()
           onSimplifyOnly={handleSimplifyOnly}
           isSimplifying={isSimplifying}
           lastSimplifyStats={lastSimplifyStats}
+          defaultModels={defaultModels}
+          selectedModel={selectedModel}
+          onSelectModel={setSelectedModel}
         />
 
         {/* Routes でオーバーレイを管理 */}

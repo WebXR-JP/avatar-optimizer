@@ -461,3 +461,22 @@ pnpm -F debug-viewer run test
 # ドキュメント
 cat packages/debug-viewer/README.md
 ```
+
+### Playwright MCP から VRM をアップロードする
+
+debug-viewer が起動している状態で、Playwright MCP を使って VRM ファイルをアップロードできる。
+
+```
+1. browser_click(element="Upload VRM button", ref="e19")
+   → File Chooser が開く
+
+2. browser_file_upload(paths=["/absolute/path/to/file.vrm"])
+   → VRM が読み込まれる
+
+3. browser_snapshot で「VRM loaded: モデル名」が表示されていれば成功
+```
+
+テスト用 VRM ファイル:
+- `playwright-test-assets/Vivi.vrm` (Playwright MCP デバッグ用、優先して使用)
+- `packages/debug-viewer/public/AliciaSolid.vrm`
+- `packages/avatar-optimizer/tests/fixtures/AliciaSolid.vrm`

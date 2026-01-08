@@ -135,6 +135,9 @@ interface VRMCanvasProps
   onSimplifyOnly: () => Promise<void>
   isSimplifying: boolean
   lastSimplifyStats: SimplifyStatistics | null
+  defaultModels: { name: string; path: string }[]
+  selectedModel: string
+  onSelectModel: (path: string) => void
 }
 
 /**
@@ -200,6 +203,9 @@ function VRMCanvas({
   onSimplifyOnly,
   isSimplifying,
   lastSimplifyStats,
+  defaultModels,
+  selectedModel,
+  onSelectModel,
 }: VRMCanvasProps)
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -245,6 +251,18 @@ function VRMCanvas({
         <>
           <div className="vrm-canvas__header">
             <h1>VRM Debug Viewer</h1>
+            <select
+              className="vrm-canvas__model-select"
+              value={selectedModel}
+              onChange={(e) => onSelectModel(e.target.value)}
+              disabled={isLoading}
+            >
+              {defaultModels.map((model) => (
+                <option key={model.path} value={model.path}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
             <button
               className="vrm-canvas__upload-btn"
               onClick={handleButtonClick}
