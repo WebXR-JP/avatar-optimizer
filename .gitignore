@@ -17,3 +17,4 @@ packages/avatar-optimizer/coverage/
 three-vrm-materials-mtoon/
 react-three-fiber/
 *.local.json
+.playwright-mcp/

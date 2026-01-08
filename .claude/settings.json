@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__playwright",
+      "mcp__pixtool-mcp"
+    ]
+  }
+}

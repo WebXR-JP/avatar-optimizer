@@ -33,9 +33,13 @@
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+	"forwardPorts": [9222],
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "yarn install",
+	// postStartCommand で socat によるポートフォワードを起動（バックグラウンド）
+	// localhost:9223 → host.docker.internal:9222 で Chrome DevTools Protocol に接続
+	// setsid で新しいセッションを作成し、親プロセス終了後も継続させる
+	"postStartCommand": "setsid socat TCP-LISTEN:9223,fork,reuseaddr TCP:host.docker.internal:9222 </dev/null &>/dev/null &",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
@@ -71,5 +75,6 @@
 		"PATH": "/home/node/.local/share/pnpm:${containerEnv:PATH}"
 	},
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+	// "remoteUser": "root",
+	"runArgs": ["--add-host=host.docker.internal:host-gateway"]
 }

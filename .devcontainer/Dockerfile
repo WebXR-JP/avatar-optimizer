@@ -9,6 +9,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     git \
     unzip \
+    # socat: CDP ポートフォワード用 (localhost:9223 → host.docker.internal:9222)
+    socat \
     # Playwright Chromium依存関係
     libnss3 \
     libnspr4 \
