@@ -339,3 +339,45 @@
 .vrm-canvas__simplify-stats div {
   font-family: monospace;
 }
+
+/* Spector.js キャプチャボタン */
+.vrm-canvas__spector-btn {
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background-color: #2d5a27;
+  color: #fff;
+  border: 1px solid #4a9d40;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.vrm-canvas__spector-btn:hover {
+  background-color: #3a7a30;
+}
+
+.vrm-canvas__spector-btn:active {
+  background-color: #1e4a1a;
+}
+
+/* WebGLデバッグボタン（PlaywrightMCP用コンソール出力） */
+.vrm-canvas__debug-btn {
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.65rem;
+  background-color: #4a3a6a;
+  color: #fff;
+  border: 1px solid #7a5aaa;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.vrm-canvas__debug-btn:hover {
+  background-color: #5a4a7a;
+}
+
+.vrm-canvas__debug-btn:active {
+  background-color: #3a2a5a;
+}

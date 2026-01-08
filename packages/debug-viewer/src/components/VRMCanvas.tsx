@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
-import type { PerspectiveCamera } from 'three'
+import type { PerspectiveCamera, WebGLRenderer, Texture } from 'three'
 import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
 import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
+import { useSpector } from '../hooks/useSpector'
+import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
 import './VRMCanvas.css'
 
@@ -210,6 +212,45 @@ function VRMCanvas({
 {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null)
+  const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
+
+  // Spector.js WebGLデバッグ（開発環境のみ）
+  const { captureFrame, displayUI: displaySpectorUI, isReady: isSpectorReady } = useSpector(canvasElement)
+
+  // WebGLデバッグユーティリティ
+  const { dumpTexture, dumpFramebuffer, dumpWebGLInfo, listTextures } = useWebGLDebug(glRenderer)
+
+  // テクスチャリストをコンソール出力
+  const handleListTextures = useCallback(() => {
+    if (vrm) {
+      listTextures(vrm.scene)
+    }
+  }, [vrm, listTextures])
+
+  // フレームバッファをコンソール出力
+  const handleDumpFramebuffer = useCallback(() => {
+    dumpFramebuffer('current-frame', 512)
+  }, [dumpFramebuffer])
+
+  // WebGL情報をコンソール出力
+  const handleDumpWebGLInfo = useCallback(() => {
+    dumpWebGLInfo()
+  }, [dumpWebGLInfo])
+
+  // 特定のテクスチャをダンプ（最初のbaseColorテクスチャ）
+  const handleDumpFirstTexture = useCallback(() => {
+    if (!vrm) return
+
+    // 最初に見つかったmapテクスチャをダンプ
+    vrm.scene.traverse((obj) => {
+      const mesh = obj as { material?: { map?: Texture; name?: string } }
+      if (mesh.material?.map) {
+        dumpTexture(mesh.material.map, mesh.material.name || 'first-texture', 256)
+        return
+      }
+    })
+  }, [vrm, dumpTexture])
 
   const handleButtonClick = useCallback(() =>
   {
@@ -240,6 +281,8 @@ function VRMCanvas({
         onCreated={({ gl }) =>
         {
           gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
+          setCanvasElement(gl.domElement)
+          setGlRenderer(gl)
         }}
       >
         <CameraAspectUpdater />
@@ -422,6 +465,57 @@ function VRMCanvas({
               />
               Log Shader
             </label>
+            {isSpectorReady && (
+              <>
+                <button
+                  className="vrm-canvas__spector-btn"
+                  onClick={captureFrame}
+                  title="Spector.jsでフレームをキャプチャ"
+                >
+                  Capture Frame
+                </button>
+                <button
+                  className="vrm-canvas__spector-btn"
+                  onClick={displaySpectorUI}
+                  title="Spector.js UIを表示"
+                >
+                  Spector UI
+                </button>
+              </>
+            )}
+            {/* WebGLデバッグ: コンソール出力ボタン（PlaywrightMCP用） */}
+            {glRenderer && (
+              <>
+                <button
+                  className="vrm-canvas__debug-btn"
+                  onClick={handleListTextures}
+                  title="テクスチャ一覧をコンソール出力"
+                >
+                  List Tex
+                </button>
+                <button
+                  className="vrm-canvas__debug-btn"
+                  onClick={handleDumpFirstTexture}
+                  title="最初のテクスチャをBase64でコンソール出力"
+                >
+                  Dump Tex
+                </button>
+                <button
+                  className="vrm-canvas__debug-btn"
+                  onClick={handleDumpFramebuffer}
+                  title="フレームバッファをBase64でコンソール出力"
+                >
+                  Dump FB
+                </button>
+                <button
+                  className="vrm-canvas__debug-btn"
+                  onClick={handleDumpWebGLInfo}
+                  title="WebGL情報をコンソール出力"
+                >
+                  GL Info
+                </button>
+              </>
+            )}
           </div>
 
           {/* アトラス解像度設定パネル */}
