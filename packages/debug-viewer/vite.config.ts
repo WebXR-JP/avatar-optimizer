@@ -19,6 +19,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true, // コンテナ外からのアクセスを許可
     fs: {
       allow: [
         path.resolve(__dirname),

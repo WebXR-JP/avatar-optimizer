@@ -2,11 +2,15 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--cdp-endpoint", "http://127.0.0.1:9223"]
+      "args": [
+        "@playwright/mcp@latest",
+        "--cdp-endpoint",
+        "http://localhost:9222"
+      ]
     },
     "pixtool-mcp": {
       "type": "http",
-      "url": "http://host.docker.internal:8000/mcp"
+      "url": "http://localhost:8000/mcp"
     }
   }
 }

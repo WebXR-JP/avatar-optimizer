@@ -11,7 +11,9 @@ RUN apt-get update \
     unzip \
     # socat: CDP ポートフォワード用 (localhost:9223 → host.docker.internal:9222)
     socat \
-    # Playwright Chromium依存関係
+    # Chromium ブラウザ (WSLg 経由で GUI 表示可能)
+    chromium \
+    # Playwright/Chromium 依存関係
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -27,6 +29,26 @@ RUN apt-get update \
     libxrandr2 \
     libgbm1 \
     libasound2 \
+    # X11/WSLg GUI 表示用
+    libx11-6 \
+    libxext6 \
+    libxi6 \
+    libxtst6 \
+    libxrender1 \
+    libxss1 \
+    fonts-liberation \
+    fonts-noto-cjk \
+    # GPU/OpenGL/Vulkan サポート
+    mesa-utils \
+    libgl1-mesa-dri \
+    libgl1-mesa-glx \
+    libegl1 \
+    # Vulkan (NVIDIA GPU用)
+    mesa-vulkan-drivers \
+    libvulkan1 \
+    vulkan-tools \
+    # Mesa D3D12バックエンド (WSLg用)
+    libd3dadapter9-mesa \
   && rm -rf /var/lib/apt/lists/*
 
 USER node

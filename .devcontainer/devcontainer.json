@@ -10,6 +10,12 @@
 			"VARIANT": "1-22-bookworm"
 		}
 	},
+	// NVIDIA GPU をコンテナにマウント (WSLg対応)
+	"runArgs": [
+		"--gpus", "all",
+		"--cap-add=SYS_PTRACE",
+		"--security-opt=seccomp=unconfined"
+	],
 	"mounts": [
 		// 履歴や設定が保存されるディレクトリをマウント
 		"source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached",
@@ -26,20 +32,22 @@
 		"CODEX_CONFIG_DIR": "/home/node/.codex",
 		"GEMINI_CONFIG_DIR": "/home/node/.gemini",
 		"OPENCODE_CONFIG_DIR": "/home/node/.opencode",
-		"POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+		"POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+		// NVIDIA GPU コンテナ用環境変数
+		"NVIDIA_VISIBLE_DEVICES": "all",
+		"NVIDIA_DRIVER_CAPABILITIES": "all",
+		// Mesa D3D12バックエンド (WSLg経由でNVIDIA GPUを使用)
+		"MESA_D3D12_DEFAULT_ADAPTER_NAME": "NVIDIA",
+		"LIBGL_ALWAYS_SOFTWARE": "0"
 	},
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	"forwardPorts": [9222],
+	"forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "yarn install",
-	// postStartCommand で socat によるポートフォワードを起動（バックグラウンド）
-	// localhost:9223 → host.docker.internal:9222 で Chrome DevTools Protocol に接続
-	// setsid で新しいセッションを作成し、親プロセス終了後も継続させる
-	"postStartCommand": "setsid socat TCP-LISTEN:9223,fork,reuseaddr TCP:host.docker.internal:9222 </dev/null &>/dev/null &",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
@@ -73,8 +81,7 @@
 	"remoteEnv": {
 		"PNPM_HOME": "/home/node/.local/share/pnpm",
 		"PATH": "/home/node/.local/share/pnpm:${containerEnv:PATH}"
-	},
+	}
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root",
-	"runArgs": ["--add-host=host.docker.internal:host-gateway"]
 }
