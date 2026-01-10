@@ -26,5 +26,6 @@ export default defineConfig({
         path.resolve(__dirname, '..'), // 親ディレクトリを許可
       ],
     },
+    port: 5173,
   },
 })

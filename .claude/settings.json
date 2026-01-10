@@ -4,5 +4,9 @@
       "mcp__playwright",
       "mcp__pixtool-mcp"
     ]
+  },
+  "enabledPlugins": {
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true
   }
 }
