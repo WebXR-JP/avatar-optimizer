@@ -374,6 +374,7 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
         enableDamping
         enableZoom
         enablePan
+        target={[0, 1., 0]}
       />
     </>
   )

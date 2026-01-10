@@ -86,6 +86,7 @@ function App()
     { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
+    { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
 

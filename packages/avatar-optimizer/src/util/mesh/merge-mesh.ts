@@ -1,14 +1,107 @@
 import { err, ok, Result } from 'neverthrow'
 import {
   Bone,
+  BufferAttribute,
   BufferGeometry,
   Float32BufferAttribute,
+  Matrix4,
   Mesh,
   Skeleton,
   SkinnedMesh,
+  Uint16BufferAttribute,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { OptimizationError } from '../../types'
+
+/**
+ * ジオメトリの属性を正規化し、マージ可能な状態にする
+ *
+ * SkinnedMeshと通常Meshが混在する場合、skinIndex/skinWeight属性の有無が
+ * 異なるためマージに失敗する。この関数は全ジオメトリの属性を統一する。
+ *
+ * @param geometries - 正規化対象のジオメトリ配列
+ * @param hasSkinnedMesh - SkinnedMeshが含まれるかどうか
+ */
+function normalizeGeometryAttributes(
+  geometries: BufferGeometry[],
+  hasSkinnedMesh: boolean,
+): void {
+  if (geometries.length === 0) return
+
+  // 全ジオメトリから使用されている属性名を収集
+  const allAttributeNames = new Set<string>()
+  for (const geometry of geometries) {
+    for (const name of Object.keys(geometry.attributes)) {
+      allAttributeNames.add(name)
+    }
+  }
+
+  // SkinnedMeshがある場合、skinIndex/skinWeight属性が必須
+  if (hasSkinnedMesh) {
+    allAttributeNames.add('skinIndex')
+    allAttributeNames.add('skinWeight')
+  }
+
+  // 各ジオメトリに欠けている属性を追加
+  for (const geometry of geometries) {
+    const vertexCount = geometry.attributes.position?.count ?? 0
+    if (vertexCount === 0) continue
+
+    for (const attrName of allAttributeNames) {
+      if (geometry.attributes[attrName]) continue
+
+      // 属性が欠けている場合、デフォルト値で埋める
+      const referenceAttr = findReferenceAttribute(geometries, attrName)
+      if (referenceAttr) {
+        const itemSize = referenceAttr.itemSize
+        const normalized = referenceAttr.normalized
+
+        // skinIndex用の特別処理（Uint16を使用）
+        if (attrName === 'skinIndex') {
+          const array = new Uint16Array(vertexCount * itemSize)
+          geometry.setAttribute(
+            attrName,
+            new Uint16BufferAttribute(array, itemSize, normalized),
+          )
+        }
+        // skinWeight用の特別処理（最初のウェイトを1.0に）
+        else if (attrName === 'skinWeight') {
+          const array = new Float32Array(vertexCount * itemSize)
+          // 各頂点の最初のウェイトを1.0にして、ルートボーン（インデックス0）に完全にバインド
+          for (let i = 0; i < vertexCount; i++) {
+            array[i * itemSize] = 1.0 // 最初のウェイト = 1.0
+          }
+          geometry.setAttribute(
+            attrName,
+            new Float32BufferAttribute(array, itemSize, normalized),
+          )
+        }
+        // その他の属性は0で埋める
+        else {
+          const array = new Float32Array(vertexCount * itemSize)
+          geometry.setAttribute(
+            attrName,
+            new Float32BufferAttribute(array, itemSize, normalized),
+          )
+        }
+      }
+    }
+  }
+}
+
+/**
+ * ジオメトリ配列から指定属性の参照を取得
+ */
+function findReferenceAttribute(
+  geometries: BufferGeometry[],
+  attrName: string,
+): BufferAttribute | null {
+  for (const geometry of geometries) {
+    const attr = geometry.attributes[attrName]
+    if (attr) return attr as BufferAttribute
+  }
+  return null
+}
 
 /**
  * ジオメトリを結合してスロット属性を追加
@@ -54,24 +147,32 @@ export function mergeGeometriesWithSlotAttribute(
   }
 
   // 全てのSkinnedMeshからボーンを収集して統合リストを作成
+  // 各SkinnedMeshは使用するボーンのみを持つため、全体を収集する必要がある
   const allBones: Bone[] = []
-  const boneUniqueMap = new Map<string, number>() // uuid -> newIndex
-  const hasSkinnedMesh = validMeshes.some(
-    ({ mesh }) => mesh instanceof SkinnedMesh,
-  )
+  const boneUuidToIndex = new Map<string, number>() // uuid -> 統合リスト内のインデックス
+  const boneInversesMap = new Map<string, Matrix4>() // uuid -> boneInverse行列
+  let firstSkinnedMesh: SkinnedMesh | null = null
 
-  if (hasSkinnedMesh) {
-    for (const { mesh } of validMeshes) {
-      if (mesh instanceof SkinnedMesh && mesh.skeleton) {
-        for (const bone of mesh.skeleton.bones) {
-          if (!boneUniqueMap.has(bone.uuid)) {
-            boneUniqueMap.set(bone.uuid, allBones.length)
-            allBones.push(bone)
+  for (const { mesh } of validMeshes) {
+    if (mesh instanceof SkinnedMesh && mesh.skeleton) {
+      if (!firstSkinnedMesh) {
+        firstSkinnedMesh = mesh
+      }
+      // 各ボーンとそのboneInverseを収集
+      mesh.skeleton.bones.forEach((bone, idx) => {
+        if (!boneUuidToIndex.has(bone.uuid)) {
+          boneUuidToIndex.set(bone.uuid, allBones.length)
+          allBones.push(bone)
+          // 元のスケルトンからboneInverseをコピー
+          if (mesh.skeleton.boneInverses[idx]) {
+            boneInversesMap.set(bone.uuid, mesh.skeleton.boneInverses[idx].clone())
           }
         }
-      }
+      })
     }
   }
+
+  const hasSkinnedMesh = firstSkinnedMesh !== null
 
   // 各ジオメトリをワールド座標に変換
   const transformedGeometries: BufferGeometry[] = []
@@ -100,26 +201,35 @@ export function mergeGeometriesWithSlotAttribute(
           // 古いインデックス -> ボーン -> UUID -> 新しいインデックス
           // ボーンが存在しない場合（ありえないはずだが）は0にしておく
           const newA = oldBones[a]
-            ? (boneUniqueMap.get(oldBones[a].uuid) ?? 0)
+            ? (boneUuidToIndex.get(oldBones[a].uuid) ?? 0)
             : 0
           const newB = oldBones[b]
-            ? (boneUniqueMap.get(oldBones[b].uuid) ?? 0)
+            ? (boneUuidToIndex.get(oldBones[b].uuid) ?? 0)
             : 0
           const newC = oldBones[c]
-            ? (boneUniqueMap.get(oldBones[c].uuid) ?? 0)
+            ? (boneUuidToIndex.get(oldBones[c].uuid) ?? 0)
             : 0
           const newD = oldBones[d]
-            ? (boneUniqueMap.get(oldBones[d].uuid) ?? 0)
+            ? (boneUuidToIndex.get(oldBones[d].uuid) ?? 0)
             : 0
 
           skinIndexAttr.setXYZW(i, newA, newB, newC, newD)
         }
       }
     }
-    // 通常のMeshの場合はワールド変換を適用
+    // 通常のMeshの場合
     else {
       mesh.updateMatrixWorld(true)
-      transformedGeometry.applyMatrix4(mesh.matrixWorld)
+      // SkinnedMeshと混在する場合は、スケルトン空間に変換する必要がある
+      if (firstSkinnedMesh) {
+        // ワールド空間に変換してからスケルトン空間に変換
+        // スケルトン空間 = bindMatrixInverse * worldMatrix
+        transformedGeometry.applyMatrix4(mesh.matrixWorld)
+        transformedGeometry.applyMatrix4(firstSkinnedMesh.bindMatrixInverse)
+      } else {
+        // SkinnedMeshがない場合は通常のワールド変換
+        transformedGeometry.applyMatrix4(mesh.matrixWorld)
+      }
     }
 
     // TODO: 顔メッシュを判別して、顔メッシュの場合はモーフターゲットを残す
@@ -136,12 +246,40 @@ export function mergeGeometriesWithSlotAttribute(
     }
   }
 
+  // ジオメトリの属性を正規化（SkinnedMeshと通常Meshの混在に対応）
+  normalizeGeometryAttributes(transformedGeometries, hasSkinnedMesh)
+
   // BufferGeometryUtils.mergeBufferGeometriesを使用してジオメトリをマージ
   const mergedGeometry = mergeGeometries(transformedGeometries)
 
-  // 統合されたスケルトンをuserDataに保存
-  if (hasSkinnedMesh) {
-    mergedGeometry.userData.skeleton = new Skeleton(allBones)
+  // mergeGeometriesが失敗した場合（属性の不一致など）nullを返す
+  if (mergedGeometry === null) {
+    return err({
+      type: 'ASSET_ERROR',
+      message:
+        'ジオメトリのマージに失敗しました。全てのジオメトリが同じ属性を持っているか確認してください。',
+    })
+  }
+
+  // 統合されたスケルトンとbindMatrixをuserDataに保存
+  if (hasSkinnedMesh && firstSkinnedMesh) {
+    // 収集したboneInversesを使って統合スケルトンを作成
+    // new Skeleton(bones)はcalculateInverses()を呼び出すため、
+    // 手動でboneInversesを設定する必要がある
+    const boneInverses = allBones.map((bone) => {
+      const inverse = boneInversesMap.get(bone.uuid)
+      if (inverse) {
+        return inverse
+      }
+      // boneInverseが見つからない場合は現在のmatrixWorldから計算
+      bone.updateMatrixWorld(true)
+      return bone.matrixWorld.clone().invert()
+    })
+
+    const skeleton = new Skeleton(allBones, boneInverses)
+    mergedGeometry.userData.skeleton = skeleton
+    // 結合メッシュのbind時に使用するbindMatrix（最初のSkinnedMeshのものを使用）
+    mergedGeometry.userData.bindMatrix = firstSkinnedMesh.bindMatrix.clone()
   }
 
   // スロット属性を追加
