@@ -413,7 +413,10 @@ void main() {
 
   // #include <alphamap_fragment>
 
-  #include <alphatest_fragment>
+  // alphaTest処理（Three.jsのalphatest_fragmentを直接実装）
+  #ifdef ALPHATEST
+    if (diffuseColor.a < ALPHATEST) discard;
+  #endif
 
   // #include <specularmap_fragment>
 

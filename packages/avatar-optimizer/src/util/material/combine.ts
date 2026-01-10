@@ -437,7 +437,8 @@ function createMToonAtlasMaterial(
     material.depthWrite = false
   } else if (renderMode === 'alphaTest') {
     material.transparent = false
-    material.alphaTest = representativeMaterial.alphaTest
+    material.alphaTest = 0.5
+    material.updateDefines() // ALPHATESTのdefineを更新
   } else {
     material.transparent = false
   }

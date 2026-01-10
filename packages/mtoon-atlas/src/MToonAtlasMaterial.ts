@@ -264,15 +264,18 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       this.uniforms.uTexelsPerSlot.value = 9
     }
 
-    this._updateDefines()
+    this.updateDefines()
 
     return this
   }
 
   /**
    * Definesを更新
+   *
+   * テクスチャの有無やalphaTestの設定に応じてシェーダーdefinesを更新します。
+   * alphaTestを変更した後などに呼び出してください。
    */
-  private _updateDefines(): void
+  updateDefines(): void
   {
     if (!this.defines) return
 
@@ -318,6 +321,17 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     // アウトライン関連
     setDefine('OUTLINE', this._isOutline)
     setDefine('OUTLINE_WIDTH_SCREEN', this._isOutline && this._outlineWidthMode === 'screenCoordinates')
+
+    // alphaTest が有効な場合、ALPHATEST define を設定
+    if (this.alphaTest === 0) {
+      console.log('[MToonAtlasMaterial] updateDefines alphaTest: 0, stack:', new Error().stack)
+    }
+    if (this.alphaTest > 0) {
+      this.defines!['ALPHATEST'] = this.alphaTest.toString()
+      console.log('[MToonAtlasMaterial] ALPHATEST define set to:', this.alphaTest.toString())
+    } else {
+      delete this.defines!['ALPHATEST']
+    }
 
     this.needsUpdate = true
   }
@@ -443,7 +457,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     this._outlineWidthMode = source._outlineWidthMode
 
     // アウトラインプロパティを反映するため defines を更新
-    this._updateDefines()
+    this.updateDefines()
 
     return this
   }
@@ -487,7 +501,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     // アウトラインモードでは裏面を描画
     this.side = value ? THREE.BackSide : THREE.FrontSide
 
-    this._updateDefines()
+    this.updateDefines()
   }
 
   /**
@@ -510,7 +524,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     if (this._outlineWidthMode === value) return
 
     this._outlineWidthMode = value
-    this._updateDefines()
+    this.updateDefines()
   }
 
   /**
