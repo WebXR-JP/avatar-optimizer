@@ -193,6 +193,13 @@ function App()
 
     setError(null)
 
+    // VRM1.0の場合はスキップ
+    if (vrm.meta?.metaVersion === '1')
+    {
+      console.log('VRM1.0 detected, skipping migration')
+      return
+    }
+
     // SpringBoneManagerを一時的に退避（useFrameでのupdate呼び出しを防ぐ）
     const springBoneManager = vrm.springBoneManager
     ;(vrm as any).springBoneManager = null

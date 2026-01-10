@@ -165,7 +165,10 @@ export function mergeGeometriesWithSlotAttribute(
           allBones.push(bone)
           // 元のスケルトンからboneInverseをコピー
           if (mesh.skeleton.boneInverses[idx]) {
-            boneInversesMap.set(bone.uuid, mesh.skeleton.boneInverses[idx].clone())
+            boneInversesMap.set(
+              bone.uuid,
+              mesh.skeleton.boneInverses[idx].clone(),
+            )
           }
         }
       })
