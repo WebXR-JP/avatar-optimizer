@@ -63,3 +63,7 @@ RUN npm install -g \
     @gltf-transform/cli
 
 RUN echo "alias codex='codex --yolo'" >> /home/node/.bashrc
+
+# socat: コンテナ内localhost:9222 → ホスト側9222へ転送 (CDP用)
+# デーモンとして起動し、tail -f /dev/null でコンテナを維持
+CMD socat TCP-LISTEN:9222,fork,reuseaddr TCP:host.docker.internal:9222 & tail -f /dev/null
