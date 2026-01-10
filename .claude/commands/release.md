@@ -1,3 +1,19 @@
+---
+allowed-tools:
+  - Bash(git status:*)
+  - Bash(git fetch:*)
+  - Bash(git checkout:*)
+  - Bash(git pull:*)
+  - Bash(git merge:*)
+  - Bash(git push:*)
+  - Bash(git branch:*)
+  - Bash(gh run:*)
+  - Bash(gh pr:*)
+  - Bash(ls:*)
+  - Bash(cat:*)
+  - Bash(npm view:*)
+---
+
 現在のブランチを main にマージし、npm パッケージを公開する。
 
 ## 実行手順
