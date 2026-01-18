@@ -86,6 +86,7 @@ function App()
     { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
+    { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
 
@@ -191,6 +192,13 @@ function App()
     if (!vrm) return
 
     setError(null)
+
+    // VRM1.0の場合はスキップ
+    if (vrm.meta?.metaVersion === '1')
+    {
+      console.log('VRM1.0 detected, skipping migration')
+      return
+    }
 
     // SpringBoneManagerを一時的に退避（useFrameでのupdate呼び出しを防ぐ）
     const springBoneManager = vrm.springBoneManager

@@ -195,7 +195,9 @@ export function optimizeModel(
     }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
-    if (options.migrateVRM0ToVRM1) {
+    // VRM1.0の場合はスキップ（metaVersion === '1'）
+    const isVRM1 = vrm.meta?.metaVersion === '1'
+    if (options.migrateVRM0ToVRM1 && !isVRM1) {
       // SpringBoneManagerを一時的に退避
       // マイグレーション中に外部からvrm.update()が呼ばれても
       // SpringBoneが動かないようにする

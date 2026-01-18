@@ -269,11 +269,15 @@ function createCombinedMesh(
 
     if (geometry.userData.skeleton) {
       const skeleton = geometry.userData.skeleton
-      const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-      skinnedMesh.bind(skeleton, identityMatrix)
+      // userDataに保存されたbindMatrixを使用（なければ最初のSkinnedMeshのものを使用）
+      const bindMatrix =
+        geometry.userData.bindMatrix ?? firstSkinnedMesh.bindMatrix.clone()
+      skinnedMesh.bind(skeleton, bindMatrix)
     } else if (firstSkinnedMesh.skeleton) {
-      const identityMatrix = firstSkinnedMesh.matrixWorld.clone().identity()
-      skinnedMesh.bind(firstSkinnedMesh.skeleton, identityMatrix)
+      skinnedMesh.bind(
+        firstSkinnedMesh.skeleton,
+        firstSkinnedMesh.bindMatrix.clone(),
+      )
     }
 
     mesh = skinnedMesh
