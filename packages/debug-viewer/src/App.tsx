@@ -87,6 +87,7 @@ function App()
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
     { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
+    { name: 'seedsan', path: '/seedsan.vrm' },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
 
