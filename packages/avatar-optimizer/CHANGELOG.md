@@ -1,5 +1,11 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.1.3
+
+### Patch Changes
+
+- 8ca8223: NodeConstraint拡張（aim/roll/rotation制約）のロード・エクスポートに対応
+
 ## 0.1.2
 
 ### Patch Changes
