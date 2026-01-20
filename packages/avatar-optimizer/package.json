@@ -85,6 +85,7 @@
     "@loaders.gl/images": "^4.3.4",
     "@loaders.gl/polyfills": "^4.3.4",
     "@pixiv/three-vrm-core": "^3.4.4",
+    "@pixiv/three-vrm-node-constraint": "^3.4.5",
     "@webxr-jp/mtoon-atlas": "workspace:^",
     "@webxr-jp/texture-compression": "workspace:^",
     "canvas": "^3.2.0",

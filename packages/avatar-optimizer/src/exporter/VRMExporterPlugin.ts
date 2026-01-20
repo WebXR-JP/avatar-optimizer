@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VRM } from '@pixiv/three-vrm'
+import {
+  VRMAimConstraint,
+  VRMRollConstraint,
+  VRMRotationConstraint,
+} from '@pixiv/three-vrm-node-constraint'
 import { Bone, Object3D, Vector3 } from 'three'
 
 export class VRMExporterPlugin {
@@ -134,6 +139,9 @@ export class VRMExporterPlugin {
         json.extensionsUsed.push('VRMC_springBone')
       }
     }
+
+    // NodeConstraint拡張をエクスポート（各ノードに設定）
+    this.exportNodeConstraints(vrm)
   }
 
   private exportMeta(vrm: VRM) {
@@ -666,5 +674,82 @@ export class VRMExporterPlugin {
     }
 
     return result
+  }
+
+  /**
+   * VRMC_node_constraint 拡張をエクスポート
+   * three-vrm の VRMNodeConstraintManager から各制約をノードごとに設定
+   *
+   * VRM1.0仕様: NodeConstraintは各ノードのextensionsに設定される
+   * https://github.com/vrm-c/vrm-specification/tree/master/specification/VRMC_node_constraint-1.0
+   */
+  private exportNodeConstraints(vrm: VRM): void {
+    const manager = vrm.nodeConstraintManager
+    if (!manager || manager.constraints.size === 0) return
+
+    const json = this.writer.json
+    let hasConstraints = false
+
+    for (const constraint of manager.constraints) {
+      // destination（制約を受けるノード）のインデックスを取得
+      const destIndex = this.writer.nodeMap.get(constraint.destination)
+      if (destIndex === undefined) continue
+
+      // source（制約を与えるノード）のインデックスを取得
+      const sourceIndex = this.writer.nodeMap.get(constraint.source)
+      if (sourceIndex === undefined) continue
+
+      // ノードにextensionsを追加
+      const node = json.nodes[destIndex]
+      if (!node) continue
+      node.extensions = node.extensions || {}
+
+      // 制約タイプに応じてJSON構造を作成
+      const constraintData: any = {}
+
+      if (constraint instanceof VRMRollConstraint) {
+        constraintData.roll = {
+          source: sourceIndex,
+          rollAxis: constraint.rollAxis,
+        }
+        // weight が 1.0 以外の場合のみ出力
+        if (constraint.weight !== 1.0) {
+          constraintData.roll.weight = constraint.weight
+        }
+      } else if (constraint instanceof VRMAimConstraint) {
+        constraintData.aim = {
+          source: sourceIndex,
+          aimAxis: constraint.aimAxis,
+        }
+        if (constraint.weight !== 1.0) {
+          constraintData.aim.weight = constraint.weight
+        }
+      } else if (constraint instanceof VRMRotationConstraint) {
+        constraintData.rotation = {
+          source: sourceIndex,
+        }
+        if (constraint.weight !== 1.0) {
+          constraintData.rotation.weight = constraint.weight
+        }
+      } else {
+        // 不明な制約タイプはスキップ
+        continue
+      }
+
+      node.extensions.VRMC_node_constraint = {
+        specVersion: '1.0',
+        constraint: constraintData,
+      }
+
+      hasConstraints = true
+    }
+
+    // extensionsUsed に登録
+    if (hasConstraints) {
+      json.extensionsUsed = json.extensionsUsed || []
+      if (!json.extensionsUsed.includes('VRMC_node_constraint')) {
+        json.extensionsUsed.push('VRMC_node_constraint')
+      }
+    }
   }
 }
