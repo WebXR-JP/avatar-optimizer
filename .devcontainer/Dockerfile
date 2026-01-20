@@ -9,6 +9,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     git \
     unzip \
+    # Python (MCP サーバー等で使用)
+    python3 \
+    python3-pip \
+    python3-venv \
     # socat: CDP ポートフォワード用 (localhost:9223 → host.docker.internal:9222)
     socat \
     # Chromium ブラウザ (WSLg 経由で GUI 表示可能)
