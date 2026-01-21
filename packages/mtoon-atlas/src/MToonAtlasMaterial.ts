@@ -150,6 +150,7 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     this.uniforms = THREE.UniformsUtils.merge([
       THREE.UniformsLib.common,
       THREE.UniformsLib.lights,
+      THREE.UniformsLib.fog,
       {
         // パラメータテクスチャ関連
         uParameterTexture: { value: null },
