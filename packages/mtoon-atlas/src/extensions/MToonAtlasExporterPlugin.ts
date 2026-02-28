@@ -243,12 +243,11 @@ export class MToonAtlasExporterPlugin
       return accessorIndex
     }
 
-    // afterParseでログ出力するためのフック
+    // afterParseでフック
     const originalAfterParse = this.afterParse.bind(this)
     this.afterParse = (input: Object3D | Object3D[]) =>
     {
       originalAfterParse(input)
-      console.log(`[MToonAtlasExporterPlugin] processAccessor cache: ${cacheHits}/${totalCalls} hits (${fingerprintToAccessor.size} unique)`)
     }
   }
 

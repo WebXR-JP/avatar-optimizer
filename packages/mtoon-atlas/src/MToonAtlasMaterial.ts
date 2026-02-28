@@ -324,12 +324,8 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     setDefine('OUTLINE_WIDTH_SCREEN', this._isOutline && this._outlineWidthMode === 'screenCoordinates')
 
     // alphaTest が有効な場合、ALPHATEST define を設定
-    if (this.alphaTest === 0) {
-      console.log('[MToonAtlasMaterial] updateDefines alphaTest: 0, stack:', new Error().stack)
-    }
     if (this.alphaTest > 0) {
       this.defines!['ALPHATEST'] = this.alphaTest.toString()
-      console.log('[MToonAtlasMaterial] ALPHATEST define set to:', this.alphaTest.toString())
     } else {
       delete this.defines!['ALPHATEST']
     }
