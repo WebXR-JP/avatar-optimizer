@@ -1,5 +1,12 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result, safeTry } from 'neverthrow'
+import {
+  DataTexture,
+  NoColorSpace,
+  RGBAFormat,
+  Texture,
+  UnsignedByteType,
+} from 'three'
 import { OptimizationError } from '..'
 import {
   AtlasGenerationOptions,
@@ -15,6 +22,48 @@ import { ImageMatrixPair } from '../util/texture/types'
 
 /** デフォルトのアトラス解像度 */
 const DEFAULT_ATLAS_RESOLUTION = 2048
+
+/**
+ * テクスチャスロットごとのデフォルト塗りつぶし色（RGBA 0-255）
+ *
+ * テクスチャを持たないマテリアルがアトラス内で黒(0,0,0,0)にならないよう、
+ * 各スロットの「無影響」な中立色でダミーテクスチャを生成する
+ */
+const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, number, number]> = {
+  map: [255, 255, 255, 255], // 乗算なので白=無影響
+  shadeMultiplyTexture: [255, 255, 255, 255],
+  emissiveMap: [0, 0, 0, 255], // 加算なので黒=発光なし
+  normalMap: [128, 128, 255, 255], // フラット法線 (0,0,1)
+  shadingShiftTexture: [0, 0, 0, 255],
+  matcapTexture: [0, 0, 0, 255],
+  rimMultiplyTexture: [255, 255, 255, 255],
+  outlineWidthMultiplyTexture: [255, 255, 255, 255],
+  uvAnimationMaskTexture: [0, 0, 0, 255],
+}
+
+/**
+ * 指定色で塗りつぶされた小さなDataTextureを生成する
+ */
+function createSolidColorTexture(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  width = 4,
+  height = 4,
+): Texture {
+  const data = new Uint8Array(width * height * 4)
+  for (let i = 0; i < width * height; i++) {
+    data[i * 4] = r
+    data[i * 4 + 1] = g
+    data[i * 4 + 2] = b
+    data[i * 4 + 3] = a
+  }
+  const tex = new DataTexture(data, width, height, RGBAFormat, UnsignedByteType)
+  tex.needsUpdate = true
+  tex.colorSpace = NoColorSpace
+  return tex
+}
 
 /**
  * スロットのアトラス解像度を取得
@@ -56,6 +105,12 @@ export function generateAtlasImagesFromPatterns(
     for (const slot of MTOON_TEXTURE_SLOTS) {
       const layers: ImageMatrixPair[] = []
 
+      // このスロットに1つでもテクスチャを持つマテリアルがあるかチェック
+      const anyTextureExists = patternMappings.some((mapping) => {
+        const material = materials[mapping.materialIndices[0]]
+        return material[slot] != null
+      })
+
       // 各パターンについて、最初のマテリアルからテクスチャを取得
       for (let i = 0; i < patternMappings.length; i++) {
         const mapping = patternMappings[i]
@@ -69,6 +124,14 @@ export function generateAtlasImagesFromPatterns(
         if (texture) {
           layers.push({
             image: texture,
+            uvTransform: placement,
+          })
+        } else if (anyTextureExists) {
+          // テクスチャを持たないマテリアルにはデフォルト色のダミーテクスチャを生成
+          // アトラスの該当領域が黒(0,0,0,0)のまま残ることを防ぐ
+          const [r, g, b, a] = SLOT_DEFAULT_FILL[slot]
+          layers.push({
+            image: createSolidColorTexture(r, g, b, a),
             uvTransform: placement,
           })
         }
