@@ -38,7 +38,7 @@ const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, numb
   matcapTexture: [0, 0, 0, 255],
   rimMultiplyTexture: [255, 255, 255, 255],
   outlineWidthMultiplyTexture: [255, 255, 255, 255],
-  uvAnimationMaskTexture: [0, 0, 0, 255],
+  uvAnimationMaskTexture: [255, 255, 255, 255], // シェーダーが .b チャンネルを使用、デフォルト1.0=アニメーション有効
 }
 
 /**
