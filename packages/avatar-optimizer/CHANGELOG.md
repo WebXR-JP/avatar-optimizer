@@ -1,5 +1,13 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.1.4
+
+### Patch Changes
+
+- e8e9155: fix: テクスチャなしマテリアルがアトラス統合時に黒くなる問題を修正、デバッグ用console.logを削除
+- Updated dependencies [e8e9155]
+  - @webxr-jp/mtoon-atlas@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes
