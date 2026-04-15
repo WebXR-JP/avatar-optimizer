@@ -170,9 +170,6 @@ export function optimizeModel(
       }
     }
 
-    // 最初のメッシュの親を取得（結合後のメッシュを同じ親に追加するため）
-    const firstMeshParent = meshesToRemove[0]?.parent || rootNode
-
     meshesToRemove.forEach((mesh) => mesh.parent?.remove(mesh))
 
     // バッファを削除
@@ -186,11 +183,11 @@ export function optimizeModel(
     for (const group of combineResult.groups.values()) {
       // アウトラインを先に追加（先に描画される = 後ろに表示される）
       if (group.outlineMesh) {
-        firstMeshParent.add(group.outlineMesh)
+        rootNode.add(group.outlineMesh)
       }
       // excludedMeshes専用グループの場合はmeshがnull
       if (group.mesh) {
-        firstMeshParent.add(group.mesh)
+        rootNode.add(group.mesh)
       }
     }
 
