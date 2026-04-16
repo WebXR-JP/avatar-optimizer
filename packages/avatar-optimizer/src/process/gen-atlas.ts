@@ -29,7 +29,7 @@ const DEFAULT_ATLAS_RESOLUTION = 2048
  * テクスチャを持たないマテリアルがアトラス内で黒(0,0,0,0)にならないよう、
  * 各スロットの「無影響」な中立色でダミーテクスチャを生成する
  */
-const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, number, number]> = {
+export const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, number, number]> = {
   map: [255, 255, 255, 255], // 乗算なので白=無影響
   shadeMultiplyTexture: [255, 255, 255, 255],
   emissiveMap: [0, 0, 0, 255], // 加算なので黒=発光なし
@@ -44,7 +44,7 @@ const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, numb
 /**
  * 指定色で塗りつぶされた小さなDataTextureを生成する
  */
-function createSolidColorTexture(
+export function createSolidColorTexture(
   r: number,
   g: number,
   b: number,
@@ -77,6 +77,51 @@ function getSlotResolution(
 }
 
 /**
+ * 指定スロットについて、各パターンのイメージレイヤーを構築する
+ * テクスチャがないマテリアルにはSLOT_DEFAULT_FILLに基づくダミーテクスチャを生成
+ *
+ * @param materials - 全マテリアル配列
+ * @param patternMappings - パターンとマテリアルのマッピング
+ * @param patternPlacements - パターンごとのUV変換行列
+ * @param slot - 処理対象のテクスチャスロット
+ */
+export function buildLayersForSlot(
+  materials: MToonMaterial[],
+  patternMappings: PatternMaterialMapping[],
+  patternPlacements: OffsetScale[],
+  slot: MToonTextureSlot,
+): ImageMatrixPair[] {
+  const layers: ImageMatrixPair[] = []
+
+  for (let i = 0; i < patternMappings.length; i++) {
+    const mapping = patternMappings[i]
+    const placement = patternPlacements[i]
+
+    // このパターンの最初のマテリアルを代表として使用
+    const representativeMaterialIndex = mapping.materialIndices[0]
+    const material = materials[representativeMaterialIndex]
+
+    const texture = material[slot]
+    if (texture) {
+      layers.push({
+        image: texture,
+        uvTransform: placement,
+      })
+    } else {
+      // テクスチャを持たないマテリアルにはデフォルト色のダミーテクスチャを生成
+      // アトラスの該当領域が黒(0,0,0,0)のまま残ることを防ぐ
+      const [r, g, b, a] = SLOT_DEFAULT_FILL[slot]
+      layers.push({
+        image: createSolidColorTexture(r, g, b, a),
+        uvTransform: placement,
+      })
+    }
+  }
+
+  return layers
+}
+
+/**
  * テクスチャ組み合わせパターンに基づいてアトラス画像を生成
  * 各スロットごとに、一意なパターンのテクスチャのみをアトラス化
  *
@@ -103,33 +148,12 @@ export function generateAtlasImagesFromPatterns(
     const atlasMap: Partial<AtlasImageMap> = {}
 
     for (const slot of MTOON_TEXTURE_SLOTS) {
-      const layers: ImageMatrixPair[] = []
-
-      // 各パターンについて、最初のマテリアルからテクスチャを取得
-      for (let i = 0; i < patternMappings.length; i++) {
-        const mapping = patternMappings[i]
-        const placement = patternPlacements[i]
-
-        // このパターンの最初のマテリアルを代表として使用
-        const representativeMaterialIndex = mapping.materialIndices[0]
-        const material = materials[representativeMaterialIndex]
-
-        const texture = material[slot]
-        if (texture) {
-          layers.push({
-            image: texture,
-            uvTransform: placement,
-          })
-        } else {
-          // テクスチャを持たないマテリアルにはデフォルト色のダミーテクスチャを生成
-          // アトラスの該当領域が黒(0,0,0,0)のまま残ることを防ぐ
-          const [r, g, b, a] = SLOT_DEFAULT_FILL[slot]
-          layers.push({
-            image: createSolidColorTexture(r, g, b, a),
-            uvTransform: placement,
-          })
-        }
-      }
+      const layers = buildLayersForSlot(
+        materials,
+        patternMappings,
+        patternPlacements,
+        slot,
+      )
 
       const resolution = getSlotResolution(slot, options)
       const atlas = yield* composeImagesToAtlas(layers, {

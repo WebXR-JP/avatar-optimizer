@@ -1,6 +1,6 @@
 import { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { Bone, BufferAttribute, Mesh, SkinnedMesh } from 'three'
+import { Bone, BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
@@ -13,6 +13,11 @@ import {
   getMToonMaterialInfoFromObject3D,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
+import {
+  collectExpressionMeshes,
+  collectNonSkinnedMeshes,
+  createEmptyCombinedMeshResult,
+} from './util/optimize-helpers'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
 import { migrateSpringBone } from './util/springbone'
 
@@ -84,39 +89,16 @@ export function optimizeModel(
 
       // 顔メッシュ（表情で使われているメッシュ）を特定
       // 簡略化とメッシュ統合から除外するメッシュのSet
-      if (vrm.expressionManager) {
-        for (const expression of vrm.expressionManager.expressions) {
-          for (const bind of expression.binds) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const bindAny = bind as any
-
-            // MorphTargetBind
-            if (bindAny.primitives) {
-              for (const mesh of bindAny.primitives) {
-                if (mesh && mesh.isMesh) {
-                  excludedMeshes.add(mesh)
-                }
-              }
-            }
-
-            // MaterialColorBind / TextureTransformBind
-            if (bindAny.material) {
-              const meshes = materialMeshMap.get(bindAny.material)
-              if (meshes) {
-                meshes.forEach((mesh) => excludedMeshes.add(mesh))
-              }
-            }
-          }
-        }
+      for (const mesh of collectExpressionMeshes(
+        vrm.expressionManager ?? null,
+        materialMeshMap,
+      )) {
+        excludedMeshes.add(mesh)
       }
 
       // 非SkinnedMeshはメッシュ統合から除外（ボーンペアレントを保持するため）
-      for (const meshes of materialMeshMap.values()) {
-        for (const mesh of meshes) {
-          if (!(mesh instanceof SkinnedMesh)) {
-            excludedMeshes.add(mesh)
-          }
-        }
+      for (const mesh of collectNonSkinnedMeshes(materialMeshMap)) {
+        excludedMeshes.add(mesh)
       }
 
       // メッシュ簡略化（オプションが設定されている場合）
@@ -213,20 +195,10 @@ export function optimizeModel(
       }
     } else {
       // MToonMaterialがない場合: アトラス化・マテリアル統合をスキップ
-      if (vrm.expressionManager) {
-        for (const expression of vrm.expressionManager.expressions) {
-          for (const bind of expression.binds) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const bindAny = bind as any
-            if (bindAny.primitives) {
-              for (const mesh of bindAny.primitives) {
-                if (mesh && mesh.isMesh) {
-                  excludedMeshes.add(mesh)
-                }
-              }
-            }
-          }
-        }
+      for (const mesh of collectExpressionMeshes(
+        vrm.expressionManager ?? null,
+      )) {
+        excludedMeshes.add(mesh)
       }
 
       if (options.simplify) {
@@ -237,16 +209,7 @@ export function optimizeModel(
         )
       }
 
-      combineResult = {
-        groups: new Map(),
-        materialSlotIndex: new Map(),
-        statistics: {
-          originalMeshCount: 0,
-          originalMaterialCount: 0,
-          reducedDrawCalls: 0,
-          simplify: simplifyStats,
-        },
-      }
+      combineResult = createEmptyCombinedMeshResult(simplifyStats)
     }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
