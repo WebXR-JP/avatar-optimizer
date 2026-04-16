@@ -105,12 +105,6 @@ export function generateAtlasImagesFromPatterns(
     for (const slot of MTOON_TEXTURE_SLOTS) {
       const layers: ImageMatrixPair[] = []
 
-      // このスロットに1つでもテクスチャを持つマテリアルがあるかチェック
-      const anyTextureExists = patternMappings.some((mapping) => {
-        const material = materials[mapping.materialIndices[0]]
-        return material[slot] != null
-      })
-
       // 各パターンについて、最初のマテリアルからテクスチャを取得
       for (let i = 0; i < patternMappings.length; i++) {
         const mapping = patternMappings[i]
@@ -126,7 +120,7 @@ export function generateAtlasImagesFromPatterns(
             image: texture,
             uvTransform: placement,
           })
-        } else if (anyTextureExists) {
+        } else {
           // テクスチャを持たないマテリアルにはデフォルト色のダミーテクスチャを生成
           // アトラスの該当領域が黒(0,0,0,0)のまま残ることを防ぐ
           const [r, g, b, a] = SLOT_DEFAULT_FILL[slot]
