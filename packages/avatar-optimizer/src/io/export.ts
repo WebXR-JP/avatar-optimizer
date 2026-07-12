@@ -42,11 +42,11 @@ export function exportVRM(
   // テクスチャ圧縮が有効な場合、先に WASM エンコーダーを初期化
   const initPromise: ResultAsync<void, ExportVRMError> = textureCompression
     ? initBasisEncoder()
-        .map(() => undefined)
-        .mapErr((err) => ({
-          type: 'EXPORT_FAILED' as const,
-          message: `Basis WASM 初期化に失敗: ${err.message}`,
-        }))
+      .map(() => undefined)
+      .mapErr((err) => ({
+        type: 'EXPORT_FAILED' as const,
+        message: `Basis WASM 初期化に失敗: ${err.message}`,
+      }))
     : okAsync(undefined)
 
   return initPromise.andThen(() =>

@@ -1,10 +1,10 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
 import {
+  Bone,
   BoxGeometry,
   Mesh,
   Skeleton,
   SkinnedMesh,
-  Bone,
 } from 'three'
 import { describe, expect, it } from 'vitest'
 import {
@@ -82,8 +82,10 @@ describe('optimize-helpers', () => {
         ],
       }
 
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      const result = collectExpressionMeshes(mockExpressionManager as any)
+      const result = collectExpressionMeshes(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+        mockExpressionManager as any,
+      )
 
       expect(result.size).toBe(2)
       expect(result.has(mesh1)).toBe(true)
@@ -109,8 +111,8 @@ describe('optimize-helpers', () => {
         ],
       }
 
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
       const result = collectExpressionMeshes(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
         mockExpressionManager as any,
         materialMeshMap,
       )
@@ -135,8 +137,10 @@ describe('optimize-helpers', () => {
         ],
       }
 
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      const result = collectExpressionMeshes(mockExpressionManager as any)
+      const result = collectExpressionMeshes(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+        mockExpressionManager as any,
+      )
 
       expect(result.size).toBe(1)
       expect(result.has(morphMesh)).toBe(true)

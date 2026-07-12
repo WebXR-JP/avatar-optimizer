@@ -18,3 +18,7 @@ three-vrm-materials-mtoon/
 react-three-fiber/
 *.local.json
 .playwright-mcp/
+
+# ローカル検証用の個人VRM（コミットしない）
+packages/avatar-optimizer/tests/fixtures/*.local.vrm
+packages/avatar-optimizer/tests/browser/*.local.test.ts

@@ -37,7 +37,7 @@ describe('springbone-migration', () => {
     hairEndBone: Bone
     skeleton: Skeleton
     joint: VRMSpringBoneJoint
-  } {
+    } {
     // ボーン階層を作成（頭→髪の毛→髪の毛末端）
     const rootBone = new Bone()
     rootBone.name = 'root'

@@ -148,28 +148,52 @@ export function mergeGeometriesWithSlotAttribute(
 
   // 全てのSkinnedMeshからボーンを収集して統合リストを作成
   // 各SkinnedMeshは使用するボーンのみを持つため、全体を収集する必要がある
+  //
+  // 統合先の空間は「正準なモデル空間」に統一する:
+  // - 統合スケルトンのIBM = ボーンの現在のワールド行列の逆（バインドポーズ前提）
+  // - 統合メッシュのbindMatrix = identity
+  // - 各メッシュの頂点には「正準IBMと元IBMの差分」を補正行列として適用する
+  //
+  // VRM0.x（UniVRM出力）ではメッシュノードのtranslationがIBMに焼き込まれており、
+  // メッシュごとにIBMが異なる。以前は基準メッシュのIBM（＝焼き込みを含む空間）に
+  // 統一していたが、その場合「頂点＝モデル空間、IBM＝ボーンワールドの逆」を前提とする
+  // 後段のVRM0→VRM1マイグレーションと矛盾し、装飾メッシュが原点付近にずれていた
   const allBones: Bone[] = []
   const boneUuidToIndex = new Map<string, number>() // uuid -> 統合リスト内のインデックス
-  const boneInversesMap = new Map<string, Matrix4>() // uuid -> boneInverse行列
+  const boneInversesMap = new Map<string, Matrix4>() // uuid -> 正準IBM（ワールド行列の逆）
   let firstSkinnedMesh: SkinnedMesh | null = null
+
+  // メッシュごとのIBM補正行列
+  // compensation = boneWorld * thisIBM（最初のジョイントで検出）
+  // IBMにノードtranslationが焼き込まれている場合、この値がそのtranslationになる
+  const meshIBMCompensation = new Map<SkinnedMesh, Matrix4>()
+  const identity = new Matrix4()
 
   for (const { mesh } of validMeshes) {
     if (mesh instanceof SkinnedMesh && mesh.skeleton) {
-      if (!firstSkinnedMesh) {
-        firstSkinnedMesh = mesh
+      if (!firstSkinnedMesh) firstSkinnedMesh = mesh
+
+      // 正準IBMとのずれを最初のジョイントから検出
+      // （UniVRM出力ではメッシュ内の全ジョイントで同一のずれになる）
+      for (let idx = 0; idx < mesh.skeleton.bones.length; idx++) {
+        const bone = mesh.skeleton.bones[idx]
+        const thisIBM = mesh.skeleton.boneInverses[idx]
+        if (!thisIBM) continue
+        bone.updateMatrixWorld(true)
+        const compensation = bone.matrixWorld.clone().multiply(thisIBM)
+        if (!compensation.equals(identity)) {
+          meshIBMCompensation.set(mesh, compensation)
+        }
+        break
       }
-      // 各ボーンとそのboneInverseを収集
-      mesh.skeleton.bones.forEach((bone, idx) => {
+
+      // ボーンを正準IBM（現在のワールド行列の逆）で登録
+      mesh.skeleton.bones.forEach((bone) => {
         if (!boneUuidToIndex.has(bone.uuid)) {
           boneUuidToIndex.set(bone.uuid, allBones.length)
           allBones.push(bone)
-          // 元のスケルトンからboneInverseをコピー
-          if (mesh.skeleton.boneInverses[idx]) {
-            boneInversesMap.set(
-              bone.uuid,
-              mesh.skeleton.boneInverses[idx].clone(),
-            )
-          }
+          bone.updateMatrixWorld(true)
+          boneInversesMap.set(bone.uuid, bone.matrixWorld.clone().invert())
         }
       })
     }
@@ -185,9 +209,15 @@ export function mergeGeometriesWithSlotAttribute(
     const transformedGeometry = geometry.clone()
     const vertexCount = geometry.attributes.position?.count ?? 0
 
-    // SkinnedMeshの場合はbindMatrixを適用して、頂点を共通の空間（スケルトン空間）に変換
+    // SkinnedMeshの場合はbindMatrixとIBM補正を適用して、頂点を正準なモデル空間に変換
     if (mesh instanceof SkinnedMesh) {
       transformedGeometry.applyMatrix4(mesh.bindMatrix)
+      // IBM補正: IBMにノードtranslation等が焼き込まれているメッシュの頂点を
+      // モデル空間の正しい位置へ移動する
+      const ibmCompensation = meshIBMCompensation.get(mesh)
+      if (ibmCompensation) {
+        transformedGeometry.applyMatrix4(ibmCompensation)
+      }
 
       // skinIndexのリマッピング
       if (mesh.skeleton && transformedGeometry.attributes.skinIndex) {
@@ -223,16 +253,8 @@ export function mergeGeometriesWithSlotAttribute(
     // 通常のMeshの場合
     else {
       mesh.updateMatrixWorld(true)
-      // SkinnedMeshと混在する場合は、スケルトン空間に変換する必要がある
-      if (firstSkinnedMesh) {
-        // ワールド空間に変換してからスケルトン空間に変換
-        // スケルトン空間 = bindMatrixInverse * worldMatrix
-        transformedGeometry.applyMatrix4(mesh.matrixWorld)
-        transformedGeometry.applyMatrix4(firstSkinnedMesh.bindMatrixInverse)
-      } else {
-        // SkinnedMeshがない場合は通常のワールド変換
-        transformedGeometry.applyMatrix4(mesh.matrixWorld)
-      }
+      // 正準なモデル空間 = ワールド空間（統合メッシュのbindMatrixはidentity）
+      transformedGeometry.applyMatrix4(mesh.matrixWorld)
     }
 
     // TODO: 顔メッシュを判別して、顔メッシュの場合はモーフターゲットを残す
@@ -266,7 +288,7 @@ export function mergeGeometriesWithSlotAttribute(
 
   // 統合されたスケルトンとbindMatrixをuserDataに保存
   if (hasSkinnedMesh && firstSkinnedMesh) {
-    // 収集したboneInversesを使って統合スケルトンを作成
+    // 収集した正準IBM（ワールド行列の逆）で統合スケルトンを作成
     // new Skeleton(bones)はcalculateInverses()を呼び出すため、
     // 手動でboneInversesを設定する必要がある
     const boneInverses = allBones.map((bone) => {
@@ -281,8 +303,8 @@ export function mergeGeometriesWithSlotAttribute(
 
     const skeleton = new Skeleton(allBones, boneInverses)
     mergedGeometry.userData.skeleton = skeleton
-    // 結合メッシュのbind時に使用するbindMatrix（最初のSkinnedMeshのものを使用）
-    mergedGeometry.userData.bindMatrix = firstSkinnedMesh.bindMatrix.clone()
+    // 頂点を正準なモデル空間に統一しているため、bindMatrixはidentity
+    mergedGeometry.userData.bindMatrix = new Matrix4()
   }
 
   // スロット属性を追加

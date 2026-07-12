@@ -72,13 +72,13 @@ export function buildPatternMaterialMappings(
       const textureDescriptor: AtlasTextureDescriptor =
         mapTexture && hasSize(mapTexture.image)
           ? {
-              width: mapTexture.image.width,
-              height: mapTexture.image.height,
-            }
+            width: mapTexture.image.width,
+            height: mapTexture.image.height,
+          }
           : {
-              width: 0,
-              height: 0,
-            }
+            width: 0,
+            height: 0,
+          }
 
       mappings.push({
         pattern,

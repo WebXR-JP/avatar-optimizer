@@ -13,6 +13,12 @@ export class VRMExporterPlugin {
   private vrm: VRM | null = null
   // 動的に作成されたtailノードを追跡（エクスポート後にクリーンアップするため）
   private createdTailNodes: Bone[] = []
+  // エクスポート中に退避した実行時専用userData（afterParseで復元する）
+  private stashedRuntimeUserData: Array<{
+    obj: Object3D
+    key: string
+    value: unknown
+  }> = []
 
   constructor(writer: any) {
     this.writer = writer
@@ -39,6 +45,44 @@ export class VRMExporterPlugin {
     // VRM1.0仕様ではjointsの最後にtailノードが必要だが、
     // VRM0.xモデルや一部のVRM1.0モデルでは末端ボーンに子がない
     this.createVirtualTailNodes()
+
+    // 実行時専用のuserDataをエクスポートから除外する
+    // 例: SpringBoneのcenterノードに付与されるinverseCacheProxy。
+    // これがglTFのextrasへ直列化されると、再インポート時にthree-vrmが
+    // 「既にプロキシがある」と誤認して本物を設置せず、SpringBoneの初期化が
+    // クラッシュする（userData.inverseCacheProxy.inverseがundefined）
+    this.stashRuntimeUserData(root)
+  }
+
+  /**
+   * 直列化してはいけない実行時専用のuserDataキーを退避する
+   * メモリ上のVRM（SpringBone等）が参照し続けているため、
+   * 削除ではなく退避し、afterParseで復元する
+   */
+  private stashRuntimeUserData(root: Object3D): void {
+    const RUNTIME_USERDATA_KEYS = ['inverseCacheProxy']
+    root.traverse((obj) => {
+      for (const key of RUNTIME_USERDATA_KEYS) {
+        if (obj.userData && key in obj.userData) {
+          this.stashedRuntimeUserData.push({
+            obj,
+            key,
+            value: obj.userData[key],
+          })
+          delete obj.userData[key]
+        }
+      }
+    })
+  }
+
+  /**
+   * 退避した実行時専用userDataを復元する
+   */
+  private restoreRuntimeUserData(): void {
+    for (const { obj, key, value } of this.stashedRuntimeUserData) {
+      obj.userData[key] = value
+    }
+    this.stashedRuntimeUserData = []
   }
 
   /**
@@ -107,6 +151,9 @@ export class VRMExporterPlugin {
   }
 
   public afterParse(_input: any) {
+    // ノードの直列化は完了しているため、退避した実行時userDataを復元する
+    this.restoreRuntimeUserData()
+
     if (!this.vrm) {
       return
     }
@@ -362,27 +409,27 @@ export class VRMExporterPlugin {
       type: lookAt.applier?.type ?? 'bone', // 'bone' or 'expression'
       rangeMapHorizontalInner: lookAt.rangeMapHorizontalInner
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalInner.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalInner.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalInner.outputScale,
+        }
         : defaultRangeMap,
       rangeMapHorizontalOuter: lookAt.rangeMapHorizontalOuter
         ? {
-            inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
-            outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapHorizontalOuter.inputMaxValue,
+          outputScale: lookAt.rangeMapHorizontalOuter.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalDown: lookAt.rangeMapVerticalDown
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalDown.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalDown.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalDown.outputScale,
+        }
         : defaultRangeMap,
       rangeMapVerticalUp: lookAt.rangeMapVerticalUp
         ? {
-            inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
-            outputScale: lookAt.rangeMapVerticalUp.outputScale,
-          }
+          inputMaxValue: lookAt.rangeMapVerticalUp.inputMaxValue,
+          outputScale: lookAt.rangeMapVerticalUp.outputScale,
+        }
         : defaultRangeMap,
     }
   }
@@ -549,10 +596,10 @@ export class VRMExporterPlugin {
           gravityPower: j.settings.gravityPower,
           gravityDir: j.settings.gravityDir
             ? [
-                j.settings.gravityDir.x,
-                j.settings.gravityDir.y,
-                j.settings.gravityDir.z,
-              ]
+              j.settings.gravityDir.x,
+              j.settings.gravityDir.y,
+              j.settings.gravityDir.z,
+            ]
             : [0, -1, 0],
           dragForce: j.settings.dragForce,
         })

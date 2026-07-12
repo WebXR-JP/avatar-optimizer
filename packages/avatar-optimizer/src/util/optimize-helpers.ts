@@ -39,7 +39,7 @@ export function collectExpressionMeshes(
 
   for (const expression of expressionManager.expressions) {
     for (const bind of expression.binds) {
-      // biome-ignore lint/suspicious/noExplicitAny: VRM internal bind types are not exported
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- VRM internal bind types are not exported
       const bindAny = bind as any
 
       // MorphTargetBind
