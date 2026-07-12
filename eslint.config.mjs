@@ -56,7 +56,9 @@ export default [
       ],
 
       // コードスタイル
-      indent: [ 'error', 2, { SwitchCase: 1 } ],
+      // indentはPrettierに委譲（ESLintのindentルールは三項演算子等の継続行で
+      // Prettierと衝突し、lint:fixがフォーマットを壊す原因になっていた）
+      indent: 'off',
       quotes: [ 'error', 'single' ],
       semi: [ 'error', 'never' ],
       'comma-dangle': [ 'error', 'always-multiline' ],

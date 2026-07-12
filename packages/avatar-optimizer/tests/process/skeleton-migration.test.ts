@@ -27,7 +27,7 @@ function createSimpleSkinnedMesh(): {
   mesh: SkinnedMesh
   skeleton: Skeleton
   rootBone: Bone
-  } {
+} {
   // ジオメトリ作成（三角形1つ）
   const geometry = new BufferGeometry()
   const positions = new Float32Array([
@@ -820,7 +820,10 @@ describe('skeleton-migration', () => {
       // 頂点 (0.1, 0, 0.2) — メッシュローカル空間
       geometry.setAttribute(
         'position',
-        new BufferAttribute(new Float32Array([0.1, 0, 0.2, 0, 0, 0, 0, 0, 0]), 3),
+        new BufferAttribute(
+          new Float32Array([0.1, 0, 0.2, 0, 0, 0, 0, 0, 0]),
+          3,
+        ),
       )
       geometry.setAttribute(
         'skinWeight',
@@ -1182,7 +1185,7 @@ describe('skeleton-migration', () => {
       mesh: SkinnedMesh
       skeleton: Skeleton
       rootBone: Bone
-      } {
+    } {
       // ジオメトリ作成（三角形1つ）
       const geometry = new BufferGeometry()
       const positions = new Float32Array([

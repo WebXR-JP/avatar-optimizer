@@ -1,11 +1,5 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
-import {
-  Bone,
-  BoxGeometry,
-  Mesh,
-  Skeleton,
-  SkinnedMesh,
-} from 'three'
+import { Bone, BoxGeometry, Mesh, Skeleton, SkinnedMesh } from 'three'
 import { describe, expect, it } from 'vitest'
 import {
   collectExpressionMeshes,
@@ -75,9 +69,7 @@ describe('optimize-helpers', () => {
       const mockExpressionManager = {
         expressions: [
           {
-            binds: [
-              { primitives: [mesh1, mesh2] },
-            ],
+            binds: [{ primitives: [mesh1, mesh2] }],
           },
         ],
       }
@@ -103,10 +95,7 @@ describe('optimize-helpers', () => {
       const mockExpressionManager = {
         expressions: [
           {
-            binds: [
-              { primitives: [morphMesh] },
-              { material: mat },
-            ],
+            binds: [{ primitives: [morphMesh] }, { material: mat }],
           },
         ],
       }
@@ -129,10 +118,7 @@ describe('optimize-helpers', () => {
       const mockExpressionManager = {
         expressions: [
           {
-            binds: [
-              { primitives: [morphMesh] },
-              { material: mat },
-            ],
+            binds: [{ primitives: [morphMesh] }, { material: mat }],
           },
         ],
       }

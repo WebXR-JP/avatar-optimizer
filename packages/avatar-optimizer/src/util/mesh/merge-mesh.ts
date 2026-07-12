@@ -167,24 +167,49 @@ export function mergeGeometriesWithSlotAttribute(
   // compensation = boneWorld * thisIBM（最初のジョイントで検出）
   // IBMにノードtranslationが焼き込まれている場合、この値がそのtranslationになる
   const meshIBMCompensation = new Map<SkinnedMesh, Matrix4>()
+  const EPSILON = 1e-6
+
+  /** 2つの行列がepsilon許容で等しいか */
+  const matrixNearlyEquals = (a: Matrix4, b: Matrix4): boolean => {
+    for (let i = 0; i < 16; i++) {
+      if (Math.abs(a.elements[i] - b.elements[i]) > EPSILON) return false
+    }
+    return true
+  }
   const identity = new Matrix4()
 
   for (const { mesh } of validMeshes) {
     if (mesh instanceof SkinnedMesh && mesh.skeleton) {
       if (!firstSkinnedMesh) firstSkinnedMesh = mesh
 
-      // 正準IBMとのずれを最初のジョイントから検出
-      // （UniVRM出力ではメッシュ内の全ジョイントで同一のずれになる）
+      // 正準IBMとのずれを各ジョイントから計算する
+      // UniVRM出力ではメッシュ内の全ジョイントで同一のずれになるため、
+      // 最初のジョイントの補正を採用し、2つ目で同一性を検証する
+      let compensation: Matrix4 | null = null
       for (let idx = 0; idx < mesh.skeleton.bones.length; idx++) {
         const bone = mesh.skeleton.bones[idx]
         const thisIBM = mesh.skeleton.boneInverses[idx]
         if (!thisIBM) continue
-        bone.updateMatrixWorld(true)
-        const compensation = bone.matrixWorld.clone().multiply(thisIBM)
-        if (!compensation.equals(identity)) {
-          meshIBMCompensation.set(mesh, compensation)
+        // 祖先を含めてワールド行列を最新化する
+        // （updateMatrixWorld(true)は子方向のみで祖先を再計算しない）
+        bone.updateWorldMatrix(true, false)
+        const thisCompensation = bone.matrixWorld.clone().multiply(thisIBM)
+        if (!compensation) {
+          compensation = thisCompensation
+          continue
+        }
+        // 2つ目のジョイントで補正の同一性を検証
+        if (!matrixNearlyEquals(compensation, thisCompensation)) {
+          console.warn(
+            `mergeGeometriesWithSlotAttribute: メッシュ "${mesh.name}" のIBM補正が` +
+              'ジョイント間で一致しません。バインドポーズでない状態で呼ばれたか、' +
+              '非一様なIBMを持つモデルです。最初のジョイントの補正を使用します。',
+          )
         }
         break
+      }
+      if (compensation && !matrixNearlyEquals(compensation, identity)) {
+        meshIBMCompensation.set(mesh, compensation)
       }
 
       // ボーンを正準IBM（現在のワールド行列の逆）で登録
@@ -192,7 +217,7 @@ export function mergeGeometriesWithSlotAttribute(
         if (!boneUuidToIndex.has(bone.uuid)) {
           boneUuidToIndex.set(bone.uuid, allBones.length)
           allBones.push(bone)
-          bone.updateMatrixWorld(true)
+          bone.updateWorldMatrix(true, false)
           boneInversesMap.set(bone.uuid, bone.matrixWorld.clone().invert())
         }
       })
@@ -252,7 +277,7 @@ export function mergeGeometriesWithSlotAttribute(
     }
     // 通常のMeshの場合
     else {
-      mesh.updateMatrixWorld(true)
+      mesh.updateWorldMatrix(true, false)
       // 正準なモデル空間 = ワールド空間（統合メッシュのbindMatrixはidentity）
       transformedGeometry.applyMatrix4(mesh.matrixWorld)
     }
@@ -297,7 +322,7 @@ export function mergeGeometriesWithSlotAttribute(
         return inverse
       }
       // boneInverseが見つからない場合は現在のmatrixWorldから計算
-      bone.updateMatrixWorld(true)
+      bone.updateWorldMatrix(true, false)
       return bone.matrixWorld.clone().invert()
     })
 

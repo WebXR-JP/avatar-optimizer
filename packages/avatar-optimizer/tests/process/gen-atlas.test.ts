@@ -126,12 +126,7 @@ describe('gen-atlas', () => {
         createPlacement(0.5, 0, 0.5, 0.5),
       ]
 
-      const layers = buildLayersForSlot(
-        materials,
-        mappings,
-        placements,
-        'map',
-      )
+      const layers = buildLayersForSlot(materials, mappings, placements, 'map')
 
       expect(layers).toHaveLength(2)
       // 最初のレイヤーはオリジナルテクスチャ
@@ -154,12 +149,7 @@ describe('gen-atlas', () => {
       const mappings = [createMapping([0, 1])]
       const placements = [createPlacement(0, 0, 1, 1)]
 
-      const layers = buildLayersForSlot(
-        materials,
-        mappings,
-        placements,
-        'map',
-      )
+      const layers = buildLayersForSlot(materials, mappings, placements, 'map')
 
       expect(layers).toHaveLength(1)
       expect(layers[0].image).toBe(tex)
@@ -189,7 +179,9 @@ describe('gen-atlas', () => {
     it('乗算スロットは白、加算スロットは黒がデフォルト', () => {
       // 乗算スロット（白=無影響）
       expect(SLOT_DEFAULT_FILL.map).toEqual([255, 255, 255, 255])
-      expect(SLOT_DEFAULT_FILL.shadeMultiplyTexture).toEqual([255, 255, 255, 255])
+      expect(SLOT_DEFAULT_FILL.shadeMultiplyTexture).toEqual([
+        255, 255, 255, 255,
+      ])
       expect(SLOT_DEFAULT_FILL.rimMultiplyTexture).toEqual([255, 255, 255, 255])
 
       // 加算スロット（黒=無影響）

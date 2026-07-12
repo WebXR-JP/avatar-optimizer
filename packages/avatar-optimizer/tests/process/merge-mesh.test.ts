@@ -290,7 +290,9 @@ describe('merge-mesh', () => {
       const skinWeights1 = new Float32Array([
         1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
       ])
-      const skinIndices1 = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      const skinIndices1 = new Float32Array([
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ])
       geometry1.setAttribute('skinWeight', new BufferAttribute(skinWeights1, 4))
       geometry1.setAttribute('skinIndex', new BufferAttribute(skinIndices1, 4))
 
@@ -307,7 +309,9 @@ describe('merge-mesh', () => {
       const skinWeights2 = new Float32Array([
         1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
       ])
-      const skinIndices2 = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      const skinIndices2 = new Float32Array([
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ])
       geometry2.setAttribute('skinWeight', new BufferAttribute(skinWeights2, 4))
       geometry2.setAttribute('skinIndex', new BufferAttribute(skinIndices2, 4))
 
@@ -523,8 +527,20 @@ describe('merge-mesh', () => {
       const geometry1 = new BufferGeometry()
       const positions1 = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
       geometry1.setAttribute('position', new BufferAttribute(positions1, 3))
-      geometry1.setAttribute('skinWeight', new BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4))
-      geometry1.setAttribute('skinIndex', new BufferAttribute(new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), 4))
+      geometry1.setAttribute(
+        'skinWeight',
+        new BufferAttribute(
+          new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+          4,
+        ),
+      )
+      geometry1.setAttribute(
+        'skinIndex',
+        new BufferAttribute(
+          new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+          4,
+        ),
+      )
 
       const mesh1 = new SkinnedMesh(geometry1, new MToonMaterial())
       rootNode.add(mesh1)
@@ -534,8 +550,20 @@ describe('merge-mesh', () => {
       const geometry2 = new BufferGeometry()
       const positions2 = new Float32Array([2, 0, 0, 3, 0, 0, 2, 1, 0])
       geometry2.setAttribute('position', new BufferAttribute(positions2, 3))
-      geometry2.setAttribute('skinWeight', new BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4))
-      geometry2.setAttribute('skinIndex', new BufferAttribute(new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), 4))
+      geometry2.setAttribute(
+        'skinWeight',
+        new BufferAttribute(
+          new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+          4,
+        ),
+      )
+      geometry2.setAttribute(
+        'skinIndex',
+        new BufferAttribute(
+          new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+          4,
+        ),
+      )
 
       const mesh2 = new SkinnedMesh(geometry2, new MToonMaterial())
       rootNode.add(mesh2)

@@ -29,7 +29,10 @@ const DEFAULT_ATLAS_RESOLUTION = 2048
  * テクスチャを持たないマテリアルがアトラス内で黒(0,0,0,0)にならないよう、
  * 各スロットの「無影響」な中立色でダミーテクスチャを生成する
  */
-export const SLOT_DEFAULT_FILL: Record<MToonTextureSlot, readonly [number, number, number, number]> = {
+export const SLOT_DEFAULT_FILL: Record<
+  MToonTextureSlot,
+  readonly [number, number, number, number]
+> = {
   map: [255, 255, 255, 255], // 乗算なので白=無影響
   shadeMultiplyTexture: [255, 255, 255, 255],
   emissiveMap: [0, 0, 0, 255], // 加算なので黒=発光なし

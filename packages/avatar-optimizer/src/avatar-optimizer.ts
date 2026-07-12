@@ -97,6 +97,9 @@ export function optimizeModel(
       }
 
       // 非SkinnedMeshはメッシュ統合から除外（ボーンペアレントを保持するため）
+      // 注: excludedMeshesは簡略化の除外リストにも渡るため、リジッドな
+      // 装飾メッシュはドローコール削減・ポリゴン削減の対象外になる。
+      // 位置の正しさを優先した意図的なトレードオフ
       for (const mesh of collectNonSkinnedMeshes(materialMeshMap)) {
         excludedMeshes.add(mesh)
       }
@@ -194,7 +197,15 @@ export function optimizeModel(
         combineResult.statistics.simplify = simplifyStats
       }
     } else {
-      // MToonMaterialがない場合: アトラス化・マテリアル統合をスキップ
+      // 「MToonMaterialがない」以外のエラーは握り潰さず伝播する
+      // （現状getMToonMaterialInfoFromObject3DはASSET_ERRORしか返さないが、
+      // 将来内部エラーが追加された場合に静かにスキップされるのを防ぐ）
+      if (materialInfoResult.error.type !== 'ASSET_ERROR') {
+        yield* materialInfoResult
+      }
+
+      // MToonMaterialがない場合: アトラス化・マテリアル統合をスキップして
+      // 簡略化とマイグレーションのみ実行する（エラーにはしない）
       for (const mesh of collectExpressionMeshes(
         vrm.expressionManager ?? null,
       )) {
