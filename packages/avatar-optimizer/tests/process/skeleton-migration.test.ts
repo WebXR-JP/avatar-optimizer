@@ -2,6 +2,8 @@ import {
   Bone,
   BufferAttribute,
   BufferGeometry,
+  Matrix4,
+  Mesh,
   Object3D,
   Skeleton,
   SkinnedMesh,
@@ -9,6 +11,8 @@ import {
 } from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  collectNonBoneChildWorldMatrices,
+  compensateNonBoneChildren,
   findRootBone,
   migrateSkeletonVRM0ToVRM1,
   rebuildBoneTransforms,
@@ -716,6 +720,460 @@ describe('skeleton-migration', () => {
         hairBone.quaternion.y ** 2 +
         hairBone.quaternion.z ** 2
       expect(hairQuatLengthSq).toBeGreaterThan(1e-6)
+    })
+  })
+
+  describe('SkinnedMesh position rotation', () => {
+    it('should rotate SkinnedMesh position by Y-180 degrees', () => {
+      // UniVRM等で書き出されたVRM0では、剣や装飾品が非ゼロpositionのSkinnedMeshとして
+      // エクスポートされる。position も Y軸180度回転される必要がある。
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      rootBone.add(headBone)
+
+      const bones = [rootBone, headBone]
+      const skeleton = new Skeleton(bones)
+
+      // Body（position = 0,0,0）
+      const bodyGeometry = new BufferGeometry()
+      bodyGeometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      bodyGeometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      bodyGeometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      const bodyMesh = new SkinnedMesh(bodyGeometry)
+      bodyMesh.add(rootBone)
+      bodyMesh.bind(skeleton)
+
+      // Blade（position = [-0.065, 1.216, 0.132]）— orangeアバターと同等
+      const bladeGeometry = new BufferGeometry()
+      bladeGeometry.setAttribute(
+        'position',
+        new BufferAttribute(
+          new Float32Array([0.1, 0, 0, -0.1, 0, 0, 0, 0.5, 0]),
+          3,
+        ),
+      )
+      bladeGeometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      bladeGeometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      const bladeMesh = new SkinnedMesh(bladeGeometry)
+      bladeMesh.name = 'Blade'
+      bladeMesh.position.set(-0.065, 1.216, 0.132)
+      bladeMesh.updateMatrix()
+      bladeMesh.updateMatrixWorld(true)
+      bladeMesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(bodyMesh)
+      rootNode.add(bladeMesh)
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // Blade の position が Y軸180度回転されている
+      expect(bladeMesh.position.x).toBeCloseTo(0.065, 4)
+      expect(bladeMesh.position.y).toBeCloseTo(1.216, 4)
+      expect(bladeMesh.position.z).toBeCloseTo(-0.132, 4)
+
+      // Body の position は 0 のまま
+      expect(bodyMesh.position.x).toBeCloseTo(0)
+      expect(bodyMesh.position.y).toBeCloseTo(0)
+      expect(bodyMesh.position.z).toBeCloseTo(0)
+
+      // bindMatrix が更新されている
+      const bladeBindPos = new Vector3()
+      bladeBindPos.setFromMatrixPosition(bladeMesh.bindMatrix)
+      expect(bladeBindPos.x).toBeCloseTo(0.065, 4)
+      expect(bladeBindPos.y).toBeCloseTo(1.216, 4)
+      expect(bladeBindPos.z).toBeCloseTo(-0.132, 4)
+    })
+
+    it('should correctly position SkinnedMesh vertices after migration with non-zero position', () => {
+      // SkinnedMesh の最終的な頂点ワールド位置が正しいことを確認
+      // final_world = mesh.position + rotated_vertex
+      const rootBone = new Bone()
+      rootBone.name = 'root'
+      rootBone.position.set(0, 0, 0)
+
+      const skeleton = new Skeleton([rootBone])
+
+      const geometry = new BufferGeometry()
+      // 頂点 (0.1, 0, 0.2) — メッシュローカル空間
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(
+          new Float32Array([0.1, 0, 0.2, 0, 0, 0, 0, 0, 0]),
+          3,
+        ),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.name = 'Antenna'
+      mesh.position.set(0.1, 1.7, 0.13)
+      mesh.add(rootBone)
+      mesh.updateMatrix()
+      mesh.updateMatrixWorld(true)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド位置: mesh.position + vertex = (0.2, 1.7, 0.33)
+      const beforeWorldX = mesh.position.x + 0.1
+      const beforeWorldY = mesh.position.y + 0
+      const beforeWorldZ = mesh.position.z + 0.2
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後: mesh.position + rotated_vertex
+      const posAttr = mesh.geometry.getAttribute('position')
+      const afterWorldX = mesh.position.x + posAttr.getX(0)
+      const afterWorldY = mesh.position.y + posAttr.getY(0)
+      const afterWorldZ = mesh.position.z + posAttr.getZ(0)
+
+      // Y軸180度回転の期待値: (-0.2, 1.7, -0.33)
+      expect(afterWorldX).toBeCloseTo(-beforeWorldX, 4)
+      expect(afterWorldY).toBeCloseTo(beforeWorldY, 4)
+      expect(afterWorldZ).toBeCloseTo(-beforeWorldZ, 4)
+    })
+  })
+
+  describe('non-bone children compensation', () => {
+    it('should collect non-bone children world matrices', () => {
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      rootBone.add(headBone)
+
+      // 剣（非Boneメッシュ）をheadBoneの子に追加
+      const swordMesh = new Mesh()
+      swordMesh.name = 'sword'
+      swordMesh.position.set(0.5, 0, 0.3)
+      headBone.add(swordMesh)
+
+      rootBone.updateMatrixWorld(true)
+
+      const matrices = collectNonBoneChildWorldMatrices(rootBone)
+
+      expect(matrices.size).toBe(1)
+      expect(matrices.has(swordMesh)).toBe(true)
+    })
+
+    it('should not collect bone children', () => {
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+
+      const childBone = new Bone()
+      childBone.name = 'spine'
+      rootBone.add(childBone)
+
+      rootBone.updateMatrixWorld(true)
+
+      const matrices = collectNonBoneChildWorldMatrices(rootBone)
+
+      expect(matrices.size).toBe(0)
+    })
+
+    it('should compensate non-bone children after bone transform changes', () => {
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      rootBone.add(headBone)
+
+      // 装飾品メッシュ
+      const ornament = new Mesh()
+      ornament.name = 'ornament'
+      ornament.position.set(0.3, 0.1, 0.2)
+      headBone.add(ornament)
+
+      rootBone.updateMatrixWorld(true)
+
+      // 補正前のワールド位置を記録
+      const beforeWorldPos = new Vector3()
+      ornament.getWorldPosition(beforeWorldPos)
+
+      // ワールド行列を記録
+      const recorded = collectNonBoneChildWorldMatrices(rootBone)
+
+      // ボーン変換を変更（本来は rebuildBoneTransforms が行う）
+      // ここではシンプルにheadBoneの位置を変えてシミュレート
+      headBone.position.set(0, 0.5, 0)
+      headBone.quaternion.set(0, 0, 0, 1)
+      headBone.updateMatrix()
+      headBone.updateMatrixWorld(true)
+
+      // Y軸180°回転で補正
+      const yRotation = new Matrix4().makeRotationY(Math.PI)
+      compensateNonBoneChildren(recorded, yRotation)
+
+      // 補正後のワールド位置
+      const afterWorldPos = new Vector3()
+      ornament.getWorldPosition(afterWorldPos)
+
+      // Y軸180°回転が適用されている: X -> -X, Z -> -Z, Y -> Y
+      expect(afterWorldPos.x).toBeCloseTo(-beforeWorldPos.x, 4)
+      expect(afterWorldPos.y).toBeCloseTo(beforeWorldPos.y, 4)
+      expect(afterWorldPos.z).toBeCloseTo(-beforeWorldPos.z, 4)
+    })
+
+    it('should preserve non-bone child world position through full migration', () => {
+      // フルのmigrateSkeletonVRM0ToVRM1を通して非Bone子要素の位置が保持されることを確認
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      rootBone.add(headBone)
+
+      // 剣メッシュ（headBoneの子）
+      const swordMesh = new Mesh(new BufferGeometry())
+      swordMesh.name = 'sword'
+      swordMesh.position.set(0.5, 0, 0.3)
+      headBone.add(swordMesh)
+
+      // 頭の装飾品（headBoneの子）
+      const ornament = new Mesh(new BufferGeometry())
+      ornament.name = 'ornament'
+      ornament.position.set(0, 0.2, -0.1)
+      headBone.add(ornament)
+
+      const bones = [rootBone, headBone]
+      const skeleton = new Skeleton(bones)
+
+      // ジオメトリ作成
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(rootBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      rootBone.updateMatrixWorld(true)
+      const swordBeforePos = new Vector3()
+      swordMesh.getWorldPosition(swordBeforePos)
+      const ornamentBeforePos = new Vector3()
+      ornament.getWorldPosition(ornamentBeforePos)
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // マイグレーション後のワールド座標
+      rootBone.updateMatrixWorld(true)
+      const swordAfterPos = new Vector3()
+      swordMesh.getWorldPosition(swordAfterPos)
+      const ornamentAfterPos = new Vector3()
+      ornament.getWorldPosition(ornamentAfterPos)
+
+      // Y軸180°回転: X -> -X, Z -> -Z, Y -> Y
+      expect(swordAfterPos.x).toBeCloseTo(-swordBeforePos.x, 4)
+      expect(swordAfterPos.y).toBeCloseTo(swordBeforePos.y, 4)
+      expect(swordAfterPos.z).toBeCloseTo(-swordBeforePos.z, 4)
+
+      expect(ornamentAfterPos.x).toBeCloseTo(-ornamentBeforePos.x, 4)
+      expect(ornamentAfterPos.y).toBeCloseTo(ornamentBeforePos.y, 4)
+      expect(ornamentAfterPos.z).toBeCloseTo(-ornamentBeforePos.z, 4)
+    })
+
+    it('should handle mixed bone and non-bone children', () => {
+      // BoneとMeshが混在する場合、両方正しく処理されること
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const spineBone = new Bone()
+      spineBone.name = 'spine'
+      spineBone.position.set(0, 0.3, 0)
+      rootBone.add(spineBone)
+
+      const headBone = new Bone()
+      headBone.name = 'head'
+      headBone.position.set(0, 0.5, 0)
+      spineBone.add(headBone)
+
+      // headBoneの子にBoneとMeshを混在
+      const hairBone = new Bone()
+      hairBone.name = 'hair'
+      hairBone.position.set(0, 0.1, -0.1)
+      headBone.add(hairBone)
+
+      const swordMesh = new Mesh(new BufferGeometry())
+      swordMesh.name = 'sword'
+      swordMesh.position.set(0.5, 0, 0.3)
+      headBone.add(swordMesh)
+
+      const bones = [rootBone, spineBone, headBone, hairBone]
+      const skeleton = new Skeleton(bones)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(rootBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      rootBone.updateMatrixWorld(true)
+      const boneBeforePositions = new Map<string, Vector3>()
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        boneBeforePositions.set(bone.name, worldPos.clone())
+      }
+      const swordBeforePos = new Vector3()
+      swordMesh.getWorldPosition(swordBeforePos)
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // ボーンのワールド座標確認（Y軸180°回転）
+      rootBone.updateMatrixWorld(true)
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const beforePos = boneBeforePositions.get(bone.name)!
+
+        expect(worldPos.x).toBeCloseTo(-beforePos.x, 4, `${bone.name} X`)
+        expect(worldPos.y).toBeCloseTo(beforePos.y, 4, `${bone.name} Y`)
+        expect(worldPos.z).toBeCloseTo(-beforePos.z, 4, `${bone.name} Z`)
+      }
+
+      // 非Bone子要素のワールド座標確認
+      const swordAfterPos = new Vector3()
+      swordMesh.getWorldPosition(swordAfterPos)
+      expect(swordAfterPos.x).toBeCloseTo(-swordBeforePos.x, 4)
+      expect(swordAfterPos.y).toBeCloseTo(swordBeforePos.y, 4)
+      expect(swordAfterPos.z).toBeCloseTo(-swordBeforePos.z, 4)
+    })
+
+    it('should not affect migration when no non-bone children exist', () => {
+      // 非Bone子要素がない場合、既存の動作に影響しないことを確認
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      rootBone.position.set(0, 1, 0)
+
+      const spineBone = new Bone()
+      spineBone.name = 'spine'
+      spineBone.position.set(0, 0.3, 0)
+      rootBone.add(spineBone)
+
+      const bones = [rootBone, spineBone]
+      const skeleton = new Skeleton(bones)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(rootBone)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      // マイグレーション前のワールド座標を記録
+      rootBone.updateMatrixWorld(true)
+      const beforePositions = new Map<string, Vector3>()
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        beforePositions.set(bone.name, worldPos.clone())
+      }
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // ボーンのワールド座標確認（従来通りの動作）
+      rootBone.updateMatrixWorld(true)
+      for (const bone of bones) {
+        const worldPos = new Vector3()
+        bone.getWorldPosition(worldPos)
+        const beforePos = beforePositions.get(bone.name)!
+
+        expect(worldPos.x).toBeCloseTo(-beforePos.x, 5)
+        expect(worldPos.y).toBeCloseTo(beforePos.y, 5)
+        expect(worldPos.z).toBeCloseTo(-beforePos.z, 5)
+      }
     })
   })
 

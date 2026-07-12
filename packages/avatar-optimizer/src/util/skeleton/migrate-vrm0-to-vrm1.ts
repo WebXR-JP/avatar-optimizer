@@ -4,6 +4,7 @@ import {
   BufferAttribute,
   InterleavedBufferAttribute,
   Matrix4,
+  Mesh,
   Object3D,
   Quaternion,
   Skeleton,
@@ -68,6 +69,21 @@ export function migrateSkeletonVRM0ToVRM1(
     // これにより、BufferAttributeの関係を気にせず、各ArrayBufferを確実に1回だけ処理できる
     if (!options.skipVertexRotation) {
       rotateAllVertexBuffers(skinnedMeshes)
+
+      // 2b. SkinnedMeshのpositionもY軸180度回転
+      // UniVRM等で書き出されたVRM0では、剣や装飾品が非ゼロpositionのSkinnedMeshとして
+      // エクスポートされることがある。頂点だけ回転してpositionを回転しないと位置がずれる。
+      for (const mesh of skinnedMeshes) {
+        if (mesh.position.x !== 0 || mesh.position.z !== 0) {
+          mesh.position.x = -mesh.position.x
+          mesh.position.z = -mesh.position.z
+          mesh.updateMatrix()
+          mesh.updateMatrixWorld(true)
+          // bindMatrixを新しいmesh位置に合わせて更新
+          mesh.bindMatrix.copy(mesh.matrixWorld)
+          mesh.bindMatrixInverse.copy(mesh.matrixWorld).invert()
+        }
+      }
     }
 
     // 3. 全ボーンのワールド座標を記録（重複排除）
@@ -114,18 +130,33 @@ export function migrateSkeletonVRM0ToVRM1(
         })
       }
 
-      // 7. 各ルートボーンからボーン変換を再構築
+      // 7. 非Bone子要素のワールド行列を記録（ボーン変換変更前）
+      const nonBoneWorldMatrices = new Map<Object3D, Matrix4>()
+      for (const rootBone of allRootBones) {
+        const matrices = collectNonBoneChildWorldMatrices(rootBone)
+        for (const [obj, mat] of matrices) {
+          nonBoneWorldMatrices.set(obj, mat)
+        }
+      }
+
+      // 8. 各ルートボーンからボーン変換を再構築
       for (const rootBone of allRootBones) {
         rebuildBoneTransforms(rootBone, rotatedPositions, options.humanoidBones)
       }
 
-      // 8. すべてのスケルトンのInverseBoneMatrixを再計算
+      // 9. 非Bone子要素のローカル変換を補正（Y軸180°回転を適用）
+      if (nonBoneWorldMatrices.size > 0) {
+        const yRotation = new Matrix4().makeRotationY(Math.PI)
+        compensateNonBoneChildren(nonBoneWorldMatrices, yRotation)
+      }
+
+      // 10. すべてのスケルトンのInverseBoneMatrixを再計算
       processedSkeletons.forEach((skeleton) => {
         recalculateBoneInverses(skeleton)
       })
     }
 
-    // 9. bindMatrixの更新
+    // 11. bindMatrixの更新
     if (!options.skipBindMatrix) {
       for (const mesh of skinnedMeshes) {
         mesh.skeleton.calculateInverses()
@@ -382,6 +413,57 @@ export function rebuildBoneTransforms(
   }
 
   processBone(rootBone, parentWorldMatrix)
+}
+
+/**
+ * ボーンツリーを走査し、非Bone子要素（Mesh等）のワールド行列を記録する
+ * rebuildBoneTransforms の前に呼び出すことで、ボーン変換変更前の位置を保存する
+ *
+ * @param rootBone - ルートボーン
+ * @returns 非Bone子要素とそのワールド行列のMap
+ */
+export function collectNonBoneChildWorldMatrices(
+  rootBone: Bone,
+): Map<Object3D, Matrix4> {
+  const result = new Map<Object3D, Matrix4>()
+  rootBone.traverse((obj) => {
+    // Meshオブジェクトのみ補正対象（VRMSpringBoneCollider等はcollider offset回転で別途処理される）
+    // SkinnedMeshはstep 2bのposition回転で処理済みのため除外
+    if (
+      obj.parent instanceof Bone &&
+      obj instanceof Mesh &&
+      !(obj instanceof SkinnedMesh)
+    ) {
+      result.set(obj, obj.matrixWorld.clone())
+    }
+  })
+  return result
+}
+
+/**
+ * 記録した非Bone子要素のワールド行列をY軸180°回転し、新しいローカル変換を計算して適用する
+ * rebuildBoneTransforms の後に呼び出す
+ *
+ * @param recorded - collectNonBoneChildWorldMatrices で記録したMap
+ * @param yRotation - Y軸180°回転行列
+ */
+export function compensateNonBoneChildren(
+  recorded: Map<Object3D, Matrix4>,
+  yRotation: Matrix4,
+): void {
+  for (const [child, oldWorldMatrix] of recorded) {
+    if (!child.parent) continue
+
+    // ターゲットワールド行列 = Ry180 * 元のワールド行列
+    const targetWorld = yRotation.clone().multiply(oldWorldMatrix)
+    // 新しいローカル行列 = 親の逆ワールド行列 * ターゲットワールド行列
+    const parentInverse = child.parent.matrixWorld.clone().invert()
+    const newLocal = parentInverse.multiply(targetWorld)
+    // position, quaternion, scale に分解して適用
+    newLocal.decompose(child.position, child.quaternion, child.scale)
+    child.updateMatrix()
+    child.updateMatrixWorld(true)
+  }
 }
 
 /**

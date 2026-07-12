@@ -68,9 +68,11 @@ export function exportVRM(
           return plugin
         })
 
+        let vrmPlugin: VRMExporterPlugin | null = null
         exporter.register((writer) => {
           const plugin = new VRMExporterPlugin(writer)
           plugin.setVRM(vrm)
+          vrmPlugin = plugin
           return plugin
         })
 
@@ -106,6 +108,9 @@ export function exportVRM(
           (error) => {
             // エラー時も子要素を元に戻す
             children.forEach((child) => vrm.scene.add(child))
+            // エラー時はafterParseが呼ばれず、beforeParseで退避した
+            // 実行時userDataが復元されないため明示的に復元する
+            vrmPlugin?.restoreRuntimeUserData()
             reject(error)
           },
           {
