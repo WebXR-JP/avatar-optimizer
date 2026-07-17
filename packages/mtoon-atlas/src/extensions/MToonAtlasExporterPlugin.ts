@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, Texture } from 'three'
+import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Object3D, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
@@ -606,11 +606,15 @@ export class MToonAtlasExporterPlugin
     // extractRgbaDataで取得したデータはそのまま使用する
 
     // 圧縮オプションを構築
+    // srgb: カラーテクスチャ（map/shadeMultiply/emissive等、colorSpace=SRGB）は
+    // KTX2のDFD transferFunctionをsRGBにする。指定しないとリニア扱いになり、
+    // 実GPUのBC7/ASTC等トランスコード経路でsRGB変換が二重適用され白く浮く
     const compressionOptions: Ktx2CompressionOptions = {
       quality: this.textureCompressionOptions?.quality,
       compressionLevel: this.textureCompressionOptions?.compressionLevel,
       generateMipmaps: this.textureCompressionOptions?.generateMipmaps,
       supercompression: this.textureCompressionOptions?.supercompression,
+      srgb: texture.colorSpace === SRGBColorSpace,
     }
 
     // KTX2 圧縮を実行
