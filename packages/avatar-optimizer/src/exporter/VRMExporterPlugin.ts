@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { VRM } from '@pixiv/three-vrm'
-import {
+import type {
   VRMAimConstraint,
   VRMRollConstraint,
-  VRMRotationConstraint,
 } from '@pixiv/three-vrm-node-constraint'
 import { Bone, Object3D, Vector3 } from 'three'
 
@@ -755,35 +754,40 @@ export class VRMExporterPlugin {
       node.extensions = node.extensions || {}
 
       // 制約タイプに応じてJSON構造を作成
+      // 注意: instanceof での型判定は使えない。@pixiv/three-vrm（傘パッケージ）は
+      // サブパッケージのクラスを自前にバンドルしているため、傘のローダが生成した
+      // constraint と @pixiv/three-vrm-node-constraint のクラスは別実体になり、
+      // instanceof が常に false → 全制約がサイレントに欠落する。
+      // プロパティの有無（rollAxis / aimAxis）で判定する
       const constraintData: any = {}
 
-      if (constraint instanceof VRMRollConstraint) {
+      if ('rollAxis' in constraint) {
+        const roll = constraint as VRMRollConstraint
         constraintData.roll = {
           source: sourceIndex,
-          rollAxis: constraint.rollAxis,
+          rollAxis: roll.rollAxis,
         }
         // weight が 1.0 以外の場合のみ出力
-        if (constraint.weight !== 1.0) {
-          constraintData.roll.weight = constraint.weight
+        if (roll.weight !== 1.0) {
+          constraintData.roll.weight = roll.weight
         }
-      } else if (constraint instanceof VRMAimConstraint) {
+      } else if ('aimAxis' in constraint) {
+        const aim = constraint as VRMAimConstraint
         constraintData.aim = {
           source: sourceIndex,
-          aimAxis: constraint.aimAxis,
+          aimAxis: aim.aimAxis,
         }
-        if (constraint.weight !== 1.0) {
-          constraintData.aim.weight = constraint.weight
+        if (aim.weight !== 1.0) {
+          constraintData.aim.weight = aim.weight
         }
-      } else if (constraint instanceof VRMRotationConstraint) {
+      } else {
+        // roll / aim 以外の VRMNodeConstraint は rotation 制約
         constraintData.rotation = {
           source: sourceIndex,
         }
         if (constraint.weight !== 1.0) {
           constraintData.rotation.weight = constraint.weight
         }
-      } else {
-        // 不明な制約タイプはスキップ
-        continue
       }
 
       node.extensions.VRMC_node_constraint = {
