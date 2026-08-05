@@ -1,5 +1,14 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.1.6
+
+### Patch Changes
+
+- 407f83a: NodeConstraint拡張がエクスポートで全件欠落する問題を修正（instanceof によるクラス判定が @pixiv/three-vrm バンドル内のクラス別実体と不成立になるため、プロパティ有無での判定に変更）
+- Updated dependencies [8e72ddd]
+  - @webxr-jp/texture-compression@0.1.1
+  - @webxr-jp/mtoon-atlas@0.1.5
+
 ## 0.1.5
 
 ### Patch Changes

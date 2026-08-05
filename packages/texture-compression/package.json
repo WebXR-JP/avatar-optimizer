@@ -1,6 +1,6 @@
 {
   "name": "@webxr-jp/texture-compression",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Texture compression utilities for avatar-optimizer using WebAssembly",
   "type": "module",
   "main": "./dist/index.js",
