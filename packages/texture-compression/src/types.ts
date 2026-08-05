@@ -26,6 +26,16 @@ export interface Ktx2CompressionOptions {
   generateMipmaps?: boolean
   /** Zstandard超圧縮を使用 (デフォルト: true) */
   supercompression?: boolean
+  /**
+   * 入力がsRGBカラーデータかどうか (デフォルト: false)
+   *
+   * trueの場合、KTX2のDFD transferFunctionをsRGBとして書き出し、
+   * 知覚品質メトリクスとsRGB対応ミップマップ生成を有効化する。
+   * ベースカラー等のカラーテクスチャではtrue必須。falseのままだと
+   * KTX2がリニア扱いになり、GPU圧縮形式（BC7/ASTC等）へのトランス
+   * コード後にsRGB変換が二重適用されて色が白く浮く
+   */
+  srgb?: boolean
 }
 
 /** KTX2圧縮結果 */
@@ -87,6 +97,12 @@ export interface BasisEncoder {
   setCompressionLevel(level: number): void
   /** ミップマップ生成を設定 */
   setMipGen(generate: boolean): void
+  /** 知覚品質メトリクス（sRGB空間での誤差評価）を設定 */
+  setPerceptual(perceptual: boolean): void
+  /** KTX2のDFD transferFunctionをsRGBにするかを設定 */
+  setKTX2SRGBTransferFunc(srgb: boolean): void
+  /** sRGB対応ミップマップ生成（リニア空間でのフィルタリング）を設定 */
+  setMipSRGB(srgb: boolean): void
   /** エンコードを実行 */
   encode(outputBuffer: Uint8Array): number
   /** リソースを解放 */

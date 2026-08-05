@@ -176,6 +176,46 @@ describe('texture-compression', () => {
       }
     })
 
+    it('srgb:trueでKTX2のDFD transferFunctionがsRGBになる', async () => {
+      const width = 4
+      const height = 4
+      const imageData = new Uint8Array(width * height * 4).fill(200)
+
+      const KHR_DF_TRANSFER_LINEAR = 1
+      const KHR_DF_TRANSFER_SRGB = 2
+
+      /** KTX2ヘッダのdfdByteOffsetからtransferFunctionバイトを読む */
+      const readTransferFunction = (ktx2: Uint8Array): number => {
+        const dv = new DataView(ktx2.buffer, ktx2.byteOffset, ktx2.byteLength)
+        const dfdByteOffset = dv.getUint32(48, true)
+        // DFD: totalSize(4) + vendorId/descriptorType(4) + version/blockSize(4)
+        //      + colorModel(1) + colorPrimaries(1) + transferFunction(1)
+        return ktx2[dfdByteOffset + 14]
+      }
+
+      const srgbResult = await compressToKtx2(imageData, width, height, {
+        quality: UastcQuality.Fastest,
+        srgb: true,
+      })
+      const linearResult = await compressToKtx2(imageData, width, height, {
+        quality: UastcQuality.Fastest,
+        srgb: false,
+      })
+
+      expect(srgbResult.isOk()).toBe(true)
+      expect(linearResult.isOk()).toBe(true)
+      if (srgbResult.isOk() && linearResult.isOk()) {
+        // sRGB指定＝カラーテクスチャ。リニア扱いだとトランスコード後に
+        // sRGB変換が二重適用されて表示が白く浮く（回帰確認）
+        expect(readTransferFunction(srgbResult.value.data)).toBe(
+          KHR_DF_TRANSFER_SRGB,
+        )
+        expect(readTransferFunction(linearResult.value.data)).toBe(
+          KHR_DF_TRANSFER_LINEAR,
+        )
+      }
+    })
+
     it('supercompressionを有効にすると圧縮率が上がる', async () => {
       const width = 64
       const height = 64

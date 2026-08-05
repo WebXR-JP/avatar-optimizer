@@ -18,6 +18,7 @@ const DEFAULT_OPTIONS: Required<Ktx2CompressionOptions> = {
   compressionLevel: 3,
   generateMipmaps: true,
   supercompression: true,
+  srgb: false,
 }
 
 /** 出力バッファの最大サイズ（24MB） */
@@ -126,8 +127,15 @@ async function encodeWithBasis(
     // 圧縮レベル
     encoder.setCompressionLevel(options.compressionLevel)
 
-    // ミップマップ生成
+    // sRGB設定: カラーテクスチャではKTX2のDFD transferFunctionをsRGBにする。
+    // これが無いとKTX2がリニア扱いになり、BC7/ASTC等へのトランスコード後に
+    // sRGB変換が二重適用されて表示が白く浮く
+    encoder.setPerceptual(options.srgb)
+    encoder.setKTX2SRGBTransferFunc(options.srgb)
+
+    // ミップマップ生成（sRGB入力ではリニア空間でフィルタリング）
     encoder.setMipGen(options.generateMipmaps)
+    encoder.setMipSRGB(options.srgb)
 
     // ソース画像を設定（RGBA32生データ）
     const success = encoder.setSliceSourceImage(
