@@ -4,3 +4,15 @@ packages:
   - 'packages/texture-compression'
   - 'packages/debug-viewer'
   - 'packages/mtoon-atlas'
+# 依存パッケージの build scripts を実行するかの明示的な許可リスト。
+# 未指定のまま放置すると pnpm install が ERR_PNPM_IGNORED_BUILDS (exit 1) になり、
+# npm publish の prepublishOnly → pnpm run 内の依存チェックが失敗して
+# release ワークフローの publish が落ちる。
+# 全パッケージとも build scripts なしで動作実績があるため false（従来挙動の明文化）。
+allowBuilds:
+  '@swc/core': false
+  canvas: false
+  edgedriver: false
+  esbuild: false
+  geckodriver: false
+  msw: false
