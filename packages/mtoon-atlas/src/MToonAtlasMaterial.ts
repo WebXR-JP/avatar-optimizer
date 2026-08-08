@@ -142,6 +142,10 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
       clipping: true,
       defines: {
         THREE_VRM_THREE_REVISION: parseInt(THREE.REVISION).toString(),
+        // 上流three-vrmのMToonMaterialはignoreVertexColor=trueが既定。
+        // このdefineが無いとCOLOR_0(VEC4)を持つモデルでUSE_COLOR_ALPHAが立ち、
+        // `diffuseColor.rgb *= vColor`(vec3 *= vec4)がコンパイル不能になる
+        IGNORE_VERTEX_COLOR: '',
       },
     })
 
