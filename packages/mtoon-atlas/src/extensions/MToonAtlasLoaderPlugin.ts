@@ -2,6 +2,7 @@ import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide,
 import { decode as decodePng } from 'fast-png'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
+import { rememberKtx2Source } from './ktx2-source-cache'
 import
 {
   GLTFParser,
@@ -278,6 +279,11 @@ export class MToonAtlasLoaderPlugin
         return null
       }
 
+      // 再エクスポート用に元の KTX2 バイナリを複製しておく（issue #39）
+      // KTX2Loader.parse は ArrayBuffer をワーカーへ transfer するため、
+      // parse 後の ktx2Data は detach されて読み出せなくなる。必ず parse 前に複製する
+      const ktx2SourceCopy = new Uint8Array(ktx2Data.slice(0))
+
       // KTX2Loaderのparseメソッドを使用してArrayBufferから直接読み込む
       return new Promise<CompressedTexture>((resolve, reject) =>
       {
@@ -292,6 +298,12 @@ export class MToonAtlasLoaderPlugin
             texture.wrapS = RepeatWrapping
             texture.wrapT = RepeatWrapping
             texture.needsUpdate = true
+
+            // 元の KTX2 バイナリを記録しておく
+            // CompressedTexture は CPU から RGBA を読めないため、
+            // 再エクスポート時はこのバイナリをパススルーする（issue #39）
+            rememberKtx2Source(texture, ktx2SourceCopy)
+
             resolve(texture)
           },
           (error: unknown) =>

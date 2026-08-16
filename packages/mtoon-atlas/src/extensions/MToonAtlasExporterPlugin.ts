@@ -3,6 +3,7 @@ import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
+import { getKtx2Source, isCompressedTexture } from './ktx2-source-cache'
 import
 {
   GLTFWriter,
@@ -62,9 +63,10 @@ export class MToonAtlasExporterPlugin
   // beforeParseで処理中のテクスチャインデックス（Promise）
   private pendingTextureIndices: Map<MToonAtlasMaterial, PendingTextureIndexInfo> = new Map()
 
-  // テクスチャUUIDからインデックスへのキャッシュ（重複登録防止）
+  // 画像ソースのUUIDからインデックスへのキャッシュ（重複登録防止）
   // Three.jsのShaderMaterial.copyがuniformsをディープクローンするため、
-  // オブジェクト参照ではなくUUIDでキャッシュする必要がある
+  // オブジェクト参照ではキャッシュできない。
+  // キーの選び方は processTextureWithCache のコメントを参照
   private textureCache: Map<string, Promise<number>> = new Map()
 
   // テクスチャ圧縮オプション（設定されている場合、アトラステクスチャをKTX2で圧縮）
@@ -346,19 +348,28 @@ export class MToonAtlasExporterPlugin
 
   /**
    * 通常テクスチャをキャッシュ付きで処理
-   * 同じUUIDのテクスチャは1回だけ処理される
+   * 同じ画像ソースを指すテクスチャは1回だけ処理される
+   *
+   * キャッシュキーに texture.uuid ではなく texture.source.uuid を使う理由:
+   * MToonAtlasLoaderPlugin は GLTFLoader のキャッシュを汚さないようマテリアルごとに
+   * clone() するため、同じアトラス画像でもマテリアル数だけ別 UUID のテクスチャになる。
+   * uuid でキャッシュすると同一画像がマテリアル数ぶん重複して書き込まれ、
+   * 再エクスポートのたびにファイルサイズが膨らむ。
+   * clone 間で共有される Source を見ることで、画像単位で1回に揃う。
+   * （このプラグインが出力する sampler は常に LINEAR/REPEAT 固定のため、
+   *   同一ソースなら glTF 上の texture 定義も必ず一致する）
    */
   private processTextureWithCache(texture: Texture): Promise<number>
   {
-    const uuid = texture.uuid
-    const cached = this.textureCache.get(uuid)
+    const cacheKey = texture.source?.uuid ?? texture.uuid
+    const cached = this.textureCache.get(cacheKey)
     if (cached)
     {
       return cached
     }
 
     const promise = this.processTextureWithFallback(texture)
-    this.textureCache.set(uuid, promise)
+    this.textureCache.set(cacheKey, promise)
     return promise
   }
 
@@ -486,6 +497,26 @@ export class MToonAtlasExporterPlugin
    */
   private processTextureWithFallback(texture: Texture): Promise<number>
   {
+    // KTX2 から読み込まれたテクスチャは元バイナリをそのまま書き出す（パススルー）
+    // CompressedTexture は CPU から RGBA を読めないため再エンコードできず、
+    // またパススルーなら再エンコードによる画質劣化も発生しない。
+    // 圧縮オプションの有無に関わらず KTX2 のまま出力される点に注意（issue #39）
+    const ktx2Source = getKtx2Source(texture)
+    if (ktx2Source)
+    {
+      return this.processTextureAsKtx2Passthrough(texture, ktx2Source)
+    }
+
+    // 元バイナリが分からない圧縮テクスチャは、どちらの経路でも扱えない
+    // （PNG 経路では 1x1 プレースホルダに差し替わって無言で壊れるため、明示的に失敗させる）
+    if (isCompressedTexture(texture))
+    {
+      return Promise.reject(new Error(
+        `圧縮テクスチャ "${texture.name || 'unnamed'}" は元の KTX2 バイナリが不明なためエクスポートできません。` +
+        'MToonAtlasLoaderPlugin 経由で読み込まれたテクスチャのみ再エクスポートに対応しています。'
+      ))
+    }
+
     // テクスチャ圧縮オプションが設定されている場合は KTX2 形式で処理
     if (this.textureCompressionOptions)
     {
@@ -497,10 +528,46 @@ export class MToonAtlasExporterPlugin
   }
 
   /**
-   * テクスチャを KTX2 形式で処理してBINチャンクに書き込む
+   * KTX2 由来のテクスチャを再エンコードせずそのまま書き出す
+   *
    * @param texture - 処理するテクスチャ
+   * @param ktx2Data - ロード時に記録した元の KTX2 バイナリ
+   * @returns 登録されたテクスチャインデックス
    */
-  private processTextureAsKtx2(texture: Texture): Promise<number>
+  private processTextureAsKtx2Passthrough(
+    texture: Texture,
+    ktx2Data: Uint8Array
+  ): Promise<number>
+  {
+    const { textureIndex, imageDef } = this.registerKtx2TextureDef(texture)
+
+    // Uint8Array を新しい ArrayBuffer にコピーして Blob を作成
+    // SharedArrayBuffer の可能性を排除
+    const arrayCopy = new Uint8Array(ktx2Data).buffer as ArrayBuffer
+    const blob = new Blob([arrayCopy], { type: 'image/ktx2' })
+
+    const bufferViewPromise = this.writer.processBufferViewImage(blob)
+      .then((bufferViewIndex: number) =>
+      {
+        imageDef.bufferView = bufferViewIndex
+        return textureIndex
+      })
+
+    // pendingに追加して完了を待つ
+    this.writer.pending.push(bufferViewPromise.then(() => { }))
+    return bufferViewPromise
+  }
+
+  /**
+   * KTX2 テクスチャの glTF 定義（image / texture / sampler / extensionsUsed）を登録する
+   *
+   * バイナリの書き込みは呼び出し側が非同期に行い、確定した bufferView を
+   * 返却された imageDef に差し込む。
+   *
+   * @param texture - 処理するテクスチャ
+   * @returns 確定したテクスチャインデックスと、bufferView 差し込み先の画像定義
+   */
+  private registerKtx2TextureDef(texture: Texture): { textureIndex: number, imageDef: any }
   {
     const json = this.writer.json
     json.textures = json.textures || []
@@ -549,6 +616,17 @@ export class MToonAtlasExporterPlugin
     {
       json.extensionsUsed.push('KHR_texture_basisu')
     }
+
+    return { textureIndex, imageDef }
+  }
+
+  /**
+   * テクスチャを KTX2 形式で処理してBINチャンクに書き込む
+   * @param texture - 処理するテクスチャ
+   */
+  private processTextureAsKtx2(texture: Texture): Promise<number>
+  {
+    const { textureIndex, imageDef } = this.registerKtx2TextureDef(texture)
 
     // テクスチャを KTX2 形式で圧縮
     const bufferViewPromise = this.compressTextureToKtx2(texture)
@@ -809,7 +887,9 @@ export class MToonAtlasExporterPlugin
     }
 
     // ImageBitmap/HTMLImageElementからBlob
-    if (image instanceof ImageBitmap || image instanceof HTMLImageElement)
+    // ImageBitmapはブラウザ環境のみで利用可能なため、typeofでチェック
+    if ((typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) ||
+      image instanceof HTMLImageElement)
     {
       const canvas = document.createElement('canvas')
       canvas.width = image.width
