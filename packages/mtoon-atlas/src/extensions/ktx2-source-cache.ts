@@ -14,6 +14,10 @@
  * - `Texture.clone()` は userData を JSON でディープコピーするため、
  *   ArrayBuffer を userData に載せると空オブジェクトに潰れる
  * - `Source` はクローン間で共有されるため、clone 後も元バイナリを引ける
+ *
+ * メモリについて: テクスチャが生きている間、元 KTX2 バイナリを保持し続けます
+ * （2048^2 の UASTC アトラス 1 枚でおよそ 1.7MB）。ロスレスな再エクスポートと
+ * 引き換えのコストです。テクスチャが GC されれば WeakMap のエントリも解放されます。
  */
 import type { Source, Texture } from 'three'
 

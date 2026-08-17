@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CompressedTexture, DataTexture, RGBAFormat, UnsignedByteType } from 'three'
 import { MToonAtlasExporterPlugin } from '../src/extensions/MToonAtlasExporterPlugin'
+import { MToonAtlasLoaderPlugin } from '../src/extensions/MToonAtlasLoaderPlugin'
 import { getKtx2Source, rememberKtx2Source } from '../src/extensions/ktx2-source-cache'
 
 function createMockWriter()
@@ -101,6 +102,53 @@ describe('KTX2 パススルー (Issue #39)', () =>
     it('記録のないテクスチャでは undefined を返す', () =>
     {
       expect(getKtx2Source(createCompressedTexture('unknown'))).toBeUndefined()
+    })
+  })
+
+  describe('getOrCreateKtx2SourceCopy', () =>
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function createLoaderPlugin(): any
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return new MToonAtlasLoaderPlugin({ json: {} } as any)
+    }
+
+    it('同じ画像インデックスでは複製を1回しか作らない', () =>
+    {
+      const loader = createLoaderPlugin()
+      const buffer = createDummyKtx2Binary().buffer
+
+      const first = loader.getOrCreateKtx2SourceCopy(4, buffer)
+      const second = loader.getOrCreateKtx2SourceCopy(4, buffer)
+
+      // 同じアトラス画像が複数マテリアルから参照されても複製は使い回される
+      expect(second).toBe(first)
+    })
+
+    it('detach 済みの ArrayBuffer でも例外を投げずメモ化済みの複製を返す', () =>
+    {
+      // GLTFParser は bufferView を同一 ArrayBuffer でキャッシュし、
+      // KTX2Loader.parse はそれをワーカーへ transfer して detach する。
+      // detach 後に到達しても、テクスチャを丸ごと失わないこと
+      const loader = createLoaderPlugin()
+      const buffer = createDummyKtx2Binary().buffer
+      const copy = loader.getOrCreateKtx2SourceCopy(4, buffer)
+
+      const detached = structuredClone(buffer, { transfer: [buffer] })
+      expect(buffer.byteLength).toBe(0)
+      expect(detached.byteLength).toBeGreaterThan(0)
+
+      expect(loader.getOrCreateKtx2SourceCopy(4, buffer)).toBe(copy)
+    })
+
+    it('未メモ化かつ detach 済みなら undefined を返す（例外にしない）', () =>
+    {
+      const loader = createLoaderPlugin()
+      const buffer = createDummyKtx2Binary().buffer
+      structuredClone(buffer, { transfer: [buffer] })
+
+      expect(loader.getOrCreateKtx2SourceCopy(9, buffer)).toBeUndefined()
     })
   })
 
