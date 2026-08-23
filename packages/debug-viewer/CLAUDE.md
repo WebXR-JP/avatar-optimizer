@@ -19,7 +19,9 @@ window.__spector.captureNextFrame(document.querySelector('canvas'))
 
 ### 利用可能なボタン
 
-デバッグパネル（右下）に以下のボタンがあります：
+左サイドバーの **「WebGL ツール」セクション** に以下のボタンがあります。
+このセクションは既定で折りたたまれているため、**先に見出しをクリックして開く**必要があります
+（折りたたみ中は DOM 上に存在しないので、クリック前にセレクタで見つかりません）。
 
 | ボタン | 機能 | 出力形式 |
 |--------|------|----------|
@@ -57,10 +59,13 @@ browser_console_messages({ level: "debug" })
 #### テクスチャ一覧取得
 
 ```typescript
-// 1. ボタンクリック
-browser_click({ element: "List Tex button", ref: "e61" })
+// 1. 「WebGL ツール」セクションを開く（既定で折りたたみ）
+browser_click({ element: "WebGL ツール section header", ref: 'button:has-text("WebGL")' })
 
-// 2. コンソールからデータ取得
+// 2. ボタンクリック
+browser_click({ element: "List Tex button", ref: 'button:has-text("List Tex")' })
+
+// 3. コンソールからデータ取得
 browser_console_messages({ level: "debug" })
 // → [WebGLDebug:TextureList] のログにJSON形式でテクスチャ情報
 ```
@@ -68,10 +73,13 @@ browser_console_messages({ level: "debug" })
 #### フレームバッファ取得
 
 ```typescript
-// 1. ボタンクリック
-browser_click({ element: "Dump FB button", ref: "e63" })
+// 1. 「WebGL ツール」セクションを開く（既定で折りたたみ）
+browser_click({ element: "WebGL ツール section header", ref: 'button:has-text("WebGL")' })
 
-// 2. コンソールからデータ取得
+// 2. ボタンクリック
+browser_click({ element: "Dump FB button", ref: 'button:has-text("Dump FB")' })
+
+// 3. コンソールからデータ取得
 browser_console_messages({ level: "debug" })
 // → [WebGLDebug:Base64] のログにdata:image/png;base64,...形式で画像データ
 ```

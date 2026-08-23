@@ -12,8 +12,12 @@ import { useWebGLDebug } from '../hooks/useWebGLDebug'
 import './VRMCanvas.css'
 
 
-/** Debug Mode ごとの説明文 */
-const DEBUG_MODE_HINTS: Record<string, string> = {
+/**
+ * Debug Mode ごとの説明文
+ * Record<DebugMode, string> にしているのは、DebugMode が増えたときに
+ * 説明文の追加漏れをコンパイルエラーで検出するため
+ */
+const DEBUG_MODE_HINTS: Record<DebugMode, string> = {
   none: '通常描画',
   uv: 'UV座標を可視化 (RG=UV)',
   normal: 'ワールド法線を可視化',
@@ -26,6 +30,7 @@ const DEBUG_MODE_HINTS: Record<string, string> = {
   shadingParams: 'shadingShift(R)/shadingToony(G)/raw(B)',
   paramRaw: 'R=shadingShift, G=shadingToony, B=slot',
   litShadeRate: '明暗グラデーション',
+  alpha: 'アルファ値 (R=最終, G=opacity, B=テクスチャ)',
 }
 
 /** アトラス解像度を設定できるスロット */
@@ -296,7 +301,6 @@ function VRMCanvas({
   onSelectModel,
 }: VRMCanvasProps)
 {
-  const canvasContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null)
   const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
@@ -344,270 +348,269 @@ function VRMCanvas({
   }, [])
 
   return (
-    <div className="vrm-canvas" ref={canvasContainerRef}>
-      {/* 3D Viewport タブのときのみサイドバーを表示 */}
-      {currentTab === 0 && (
-        <aside className="vrm-sidebar">
-          <h1 className="vrm-sidebar__title">VRM Debug Viewer</h1>
+    <div className="vrm-canvas">
+      {/* 3D Viewport タブ以外では隠すだけにする。
+          unmount するとセクションの開閉状態とスクロール位置が毎回リセットされる */}
+      <aside className="vrm-sidebar" hidden={currentTab !== 0}>
+        <h1 className="vrm-sidebar__title">VRM Debug Viewer</h1>
 
-          <Section title="モデル" defaultOpen>
+        <Section title="モデル" defaultOpen>
+          <select
+            className="vrm-field__select"
+            value={selectedModel}
+            onChange={(e) => onSelectModel(e.target.value)}
+            disabled={isLoading}
+          >
+            {defaultModels.map((model) => (
+              <option key={model.path} value={model.path}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="vrm-btn"
+            onClick={handleButtonClick}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading...' : 'Upload VRM'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".vrm"
+            onChange={onFileChange}
+            style={{ display: 'none' }}
+          />
+        </Section>
+
+        <Section title="最適化" defaultOpen>
+          <button
+            className="vrm-btn vrm-btn--primary"
+            onClick={onOptimize}
+            disabled={!vrm || isOptimizing}
+          >
+            {isOptimizing ? 'Optimizing...' : 'Optimize + Migrate'}
+          </button>
+          <div className="vrm-btn-row">
+            <button
+              className="vrm-btn vrm-btn--optimize"
+              onClick={onOptimizeOnly}
+              disabled={!vrm || isOptimizing}
+            >
+              Optimize
+            </button>
+            <button
+              className="vrm-btn vrm-btn--migrate"
+              onClick={onMigrateOnly}
+              disabled={!vrm}
+            >
+              Migrate
+            </button>
+          </div>
+          <button
+            className="vrm-btn vrm-btn--simplify"
+            onClick={onSimplifyOnly}
+            disabled={!vrm || isSimplifying}
+          >
+            {isSimplifying ? 'Simplifying...' : 'Simplify Only'}
+          </button>
+          {lastSimplifyStats && (
+            <dl className="vrm-stats">
+              <dt>メッシュ</dt>
+              <dd>
+                {lastSimplifyStats.processedMeshCount} 処理
+                <span className="vrm-stats__sub">
+                  / {lastSimplifyStats.skippedMeshCount} スキップ
+                </span>
+              </dd>
+              <dt>頂点</dt>
+              <dd>
+                {lastSimplifyStats.originalVertexCount.toLocaleString()} →{' '}
+                {lastSimplifyStats.simplifiedVertexCount.toLocaleString()}
+                <span className="vrm-stats__sub">
+                  {' '}({(lastSimplifyStats.vertexReductionRatio * 100).toFixed(1)}% 削減)
+                </span>
+              </dd>
+              <dt>インデックス</dt>
+              <dd>
+                {lastSimplifyStats.originalIndexCount.toLocaleString()} →{' '}
+                {lastSimplifyStats.simplifiedIndexCount.toLocaleString()}
+                <span className="vrm-stats__sub">
+                  {' '}({(lastSimplifyStats.indexReductionRatio * 100).toFixed(1)}% 削減)
+                </span>
+              </dd>
+            </dl>
+          )}
+        </Section>
+
+        <Section title="エクスポート" defaultOpen>
+          <button
+            className="vrm-btn vrm-btn--export"
+            onClick={onExportGLTF}
+            disabled={!vrm}
+          >
+            Export VRM
+          </button>
+          <button
+            className="vrm-btn"
+            onClick={onReloadExport}
+            disabled={!vrm || isReloading}
+            title="エクスポート結果をファイルに出さずそのまま読み直す"
+          >
+            {isReloading ? 'Reloading...' : 'Reload Export'}
+          </button>
+          <button
+            className="vrm-btn"
+            onClick={onExportScene}
+            disabled={!vrm}
+          >
+            Export Scene
+          </button>
+          {lastExportSize !== null && (
+            <p className="vrm-note">
+              Last export: <strong>{(lastExportSize / 1024 / 1024).toFixed(2)} MB</strong>
+            </p>
+          )}
+        </Section>
+
+        <Section title="表示設定">
+          <label className="vrm-field vrm-field--stack">
+            <span className="vrm-field__label">Debug Mode</span>
             <select
               className="vrm-field__select"
-              value={selectedModel}
-              onChange={(e) => onSelectModel(e.target.value)}
-              disabled={isLoading}
+              value={debugMode}
+              onChange={(e) => onDebugModeChange(e.target.value as DebugMode)}
             >
-              {defaultModels.map((model) => (
-                <option key={model.path} value={model.path}>
-                  {model.name}
+              {MToonAtlasMaterial.getAvailableDebugModes().map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode === 'none' ? 'None (Normal)' : mode}
                 </option>
               ))}
             </select>
-            <button
-              className="vrm-btn"
-              onClick={handleButtonClick}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Loading...' : 'Upload VRM'}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".vrm"
-              onChange={onFileChange}
-              style={{ display: 'none' }}
-            />
-          </Section>
+          </label>
+          {DEBUG_MODE_HINTS[debugMode] && (
+            <p className="vrm-note">{DEBUG_MODE_HINTS[debugMode]}</p>
+          )}
+          <div className="vrm-checks">
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={springBoneEnabled}
+                onChange={(e) => onSpringBoneEnabledChange(e.target.checked)}
+              />
+              SpringBone
+            </label>
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={showBones}
+                onChange={(e) => onShowBonesChange(e.target.checked)}
+              />
+              Show Bones
+            </label>
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={showColliders}
+                onChange={(e) => onShowCollidersChange(e.target.checked)}
+              />
+              Show Colliders
+            </label>
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={showPointLights}
+                onChange={(e) => onShowPointLightsChange(e.target.checked)}
+              />
+              Point Lights
+            </label>
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={logShaderInfo}
+                onChange={(e) => onLogShaderInfoChange(e.target.checked)}
+              />
+              Log Shader
+            </label>
+          </div>
+        </Section>
 
-          <Section title="最適化" defaultOpen>
-            <button
-              className="vrm-btn vrm-btn--primary"
-              onClick={onOptimize}
-              disabled={!vrm || isOptimizing}
-            >
-              {isOptimizing ? 'Optimizing...' : 'Optimize + Migrate'}
-            </button>
-            <div className="vrm-btn-row">
-              <button
-                className="vrm-btn vrm-btn--optimize"
-                onClick={onOptimizeOnly}
-                disabled={!vrm || isOptimizing}
-              >
-                Optimize
-              </button>
-              <button
-                className="vrm-btn vrm-btn--migrate"
-                onClick={onMigrateOnly}
-                disabled={!vrm}
-              >
-                Migrate
-              </button>
-            </div>
-            <button
-              className="vrm-btn vrm-btn--simplify"
-              onClick={onSimplifyOnly}
-              disabled={!vrm || isSimplifying}
-            >
-              {isSimplifying ? 'Simplifying...' : 'Simplify Only'}
-            </button>
-            {lastSimplifyStats && (
-              <dl className="vrm-stats">
-                <dt>メッシュ</dt>
-                <dd>
-                  {lastSimplifyStats.processedMeshCount} 処理
-                  <span className="vrm-stats__sub">
-                    / {lastSimplifyStats.skippedMeshCount} スキップ
-                  </span>
-                </dd>
-                <dt>頂点</dt>
-                <dd>
-                  {lastSimplifyStats.originalVertexCount.toLocaleString()} →{' '}
-                  {lastSimplifyStats.simplifiedVertexCount.toLocaleString()}
-                  <span className="vrm-stats__sub">
-                    {' '}({(lastSimplifyStats.vertexReductionRatio * 100).toFixed(1)}% 削減)
-                  </span>
-                </dd>
-                <dt>インデックス</dt>
-                <dd>
-                  {lastSimplifyStats.originalIndexCount.toLocaleString()} →{' '}
-                  {lastSimplifyStats.simplifiedIndexCount.toLocaleString()}
-                  <span className="vrm-stats__sub">
-                    {' '}({(lastSimplifyStats.indexReductionRatio * 100).toFixed(1)}% 削減)
-                  </span>
-                </dd>
-              </dl>
-            )}
-          </Section>
-
-          <Section title="エクスポート" defaultOpen>
-            <button
-              className="vrm-btn vrm-btn--export"
-              onClick={onExportGLTF}
-              disabled={!vrm}
-            >
-              Export VRM
-            </button>
-            <button
-              className="vrm-btn"
-              onClick={onReloadExport}
-              disabled={!vrm || isReloading}
-              title="エクスポート結果をファイルに出さずそのまま読み直す"
-            >
-              {isReloading ? 'Reloading...' : 'Reload Export'}
-            </button>
-            <button
-              className="vrm-btn"
-              onClick={onExportScene}
-              disabled={!vrm}
-            >
-              Export Scene
-            </button>
-            {lastExportSize !== null && (
-              <p className="vrm-note">
-                Last export: <strong>{(lastExportSize / 1024 / 1024).toFixed(2)} MB</strong>
-              </p>
-            )}
-          </Section>
-
-          <Section title="表示設定">
-            <label className="vrm-field vrm-field--stack">
-              <span className="vrm-field__label">Debug Mode</span>
+        <Section title="アトラス解像度">
+          {ATLAS_SLOTS.map(({ key, label }) => (
+            <label className="vrm-field" key={key}>
+              <span className="vrm-field__label">{label}</span>
               <select
                 className="vrm-field__select"
-                value={debugMode}
-                onChange={(e) => onDebugModeChange(e.target.value as DebugMode)}
+                value={
+                  key === 'default'
+                    ? atlasOptions.defaultResolution ?? 2048
+                    : atlasOptions.slotResolutions?.[key] ?? ''
+                }
+                onChange={(e) => onAtlasOptionsChange(
+                  updateAtlasOption(atlasOptions, key, e.target.value)
+                )}
               >
-                {MToonAtlasMaterial.getAvailableDebugModes().map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode === 'none' ? 'None (Normal)' : mode}
-                  </option>
+                {key !== 'default' && <option value="">default</option>}
+                {ATLAS_RESOLUTIONS.map((res) => (
+                  <option key={res} value={res}>{res}</option>
                 ))}
               </select>
             </label>
-            {DEBUG_MODE_HINTS[debugMode] && (
-              <p className="vrm-note">{DEBUG_MODE_HINTS[debugMode]}</p>
+          ))}
+        </Section>
+
+        {vrm?.expressionManager && (
+          <ExpressionSection key={vrm.scene.uuid} vrm={vrm} />
+        )}
+
+        <Section title="その他">
+          <button
+            className="vrm-btn"
+            onClick={onReplaceTextures}
+            disabled={!vrm || isReplacingTextures}
+          >
+            {isReplacingTextures ? 'Replacing...' : 'Replace Textures with UV'}
+          </button>
+          <button
+            className="vrm-btn"
+            onClick={onPlayAnimation}
+            disabled={!vrm || !!vrmAnimation}
+          >
+            {vrmAnimation ? 'Playing Animation' : 'Play Animation'}
+          </button>
+        </Section>
+
+        {(isSpectorReady || glRenderer) && (
+          <Section title="WebGL ツール">
+            {isSpectorReady && (
+              <div className="vrm-btn-row">
+                <button className="vrm-btn vrm-btn--tool" onClick={captureFrame} title="Spector.jsでフレームをキャプチャ">
+                  Capture Frame
+                </button>
+                <button className="vrm-btn vrm-btn--tool" onClick={displaySpectorUI} title="Spector.js UIを表示">
+                  Spector UI
+                </button>
+              </div>
             )}
-            <div className="vrm-checks">
-              <label className="vrm-check">
-                <input
-                  type="checkbox"
-                  checked={springBoneEnabled}
-                  onChange={(e) => onSpringBoneEnabledChange(e.target.checked)}
-                />
-                SpringBone
-              </label>
-              <label className="vrm-check">
-                <input
-                  type="checkbox"
-                  checked={showBones}
-                  onChange={(e) => onShowBonesChange(e.target.checked)}
-                />
-                Show Bones
-              </label>
-              <label className="vrm-check">
-                <input
-                  type="checkbox"
-                  checked={showColliders}
-                  onChange={(e) => onShowCollidersChange(e.target.checked)}
-                />
-                Show Colliders
-              </label>
-              <label className="vrm-check">
-                <input
-                  type="checkbox"
-                  checked={showPointLights}
-                  onChange={(e) => onShowPointLightsChange(e.target.checked)}
-                />
-                Point Lights
-              </label>
-              <label className="vrm-check">
-                <input
-                  type="checkbox"
-                  checked={logShaderInfo}
-                  onChange={(e) => onLogShaderInfoChange(e.target.checked)}
-                />
-                Log Shader
-              </label>
-            </div>
+            {glRenderer && (
+              <div className="vrm-btn-grid">
+                <button className="vrm-btn vrm-btn--tool" onClick={handleListTextures} title="テクスチャ一覧をコンソール出力">
+                  List Tex
+                </button>
+                <button className="vrm-btn vrm-btn--tool" onClick={handleDumpFirstTexture} title="最初のテクスチャをBase64でコンソール出力">
+                  Dump Tex
+                </button>
+                <button className="vrm-btn vrm-btn--tool" onClick={handleDumpFramebuffer} title="フレームバッファをBase64でコンソール出力">
+                  Dump FB
+                </button>
+                <button className="vrm-btn vrm-btn--tool" onClick={handleDumpWebGLInfo} title="WebGL情報をコンソール出力">
+                  GL Info
+                </button>
+              </div>
+            )}
           </Section>
-
-          <Section title="アトラス解像度">
-            {ATLAS_SLOTS.map(({ key, label }) => (
-              <label className="vrm-field" key={key}>
-                <span className="vrm-field__label">{label}</span>
-                <select
-                  className="vrm-field__select"
-                  value={
-                    key === 'default'
-                      ? atlasOptions.defaultResolution ?? 2048
-                      : atlasOptions.slotResolutions?.[key] ?? ''
-                  }
-                  onChange={(e) => onAtlasOptionsChange(
-                    updateAtlasOption(atlasOptions, key, e.target.value)
-                  )}
-                >
-                  {key !== 'default' && <option value="">default</option>}
-                  {ATLAS_RESOLUTIONS.map((res) => (
-                    <option key={res} value={res}>{res}</option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </Section>
-
-          {vrm?.expressionManager && (
-            <ExpressionSection key={vrm.scene.uuid} vrm={vrm} />
-          )}
-
-          <Section title="その他">
-            <button
-              className="vrm-btn"
-              onClick={onReplaceTextures}
-              disabled={!vrm || isReplacingTextures}
-            >
-              {isReplacingTextures ? 'Replacing...' : 'Replace Textures with UV'}
-            </button>
-            <button
-              className="vrm-btn"
-              onClick={onPlayAnimation}
-              disabled={!vrm || !!vrmAnimation}
-            >
-              {vrmAnimation ? 'Playing Animation' : 'Play Animation'}
-            </button>
-          </Section>
-
-          {(isSpectorReady || glRenderer) && (
-            <Section title="WebGL ツール">
-              {isSpectorReady && (
-                <div className="vrm-btn-row">
-                  <button className="vrm-btn vrm-btn--tool" onClick={captureFrame} title="Spector.jsでフレームをキャプチャ">
-                    Capture Frame
-                  </button>
-                  <button className="vrm-btn vrm-btn--tool" onClick={displaySpectorUI} title="Spector.js UIを表示">
-                    Spector UI
-                  </button>
-                </div>
-              )}
-              {glRenderer && (
-                <div className="vrm-btn-grid">
-                  <button className="vrm-btn vrm-btn--tool" onClick={handleListTextures} title="テクスチャ一覧をコンソール出力">
-                    List Tex
-                  </button>
-                  <button className="vrm-btn vrm-btn--tool" onClick={handleDumpFirstTexture} title="最初のテクスチャをBase64でコンソール出力">
-                    Dump Tex
-                  </button>
-                  <button className="vrm-btn vrm-btn--tool" onClick={handleDumpFramebuffer} title="フレームバッファをBase64でコンソール出力">
-                    Dump FB
-                  </button>
-                  <button className="vrm-btn vrm-btn--tool" onClick={handleDumpWebGLInfo} title="WebGL情報をコンソール出力">
-                    GL Info
-                  </button>
-                </div>
-              )}
-            </Section>
-          )}
-        </aside>
-      )}
+        )}
+      </aside>
 
       <div className="vrm-canvas__viewport">
         <Canvas
