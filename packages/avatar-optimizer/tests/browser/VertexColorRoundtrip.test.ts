@@ -1,9 +1,5 @@
-import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
-import {
-  MToonAtlasExporterPlugin,
-  MToonAtlasLoaderPlugin,
-  MToonAtlasMaterial,
-} from '@webxr-jp/mtoon-atlas'
+import { VRM } from '@pixiv/three-vrm'
+import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
 import {
   AmbientLight,
   BufferAttribute,
@@ -15,11 +11,12 @@ import {
   WebGLRenderer,
   WebGLRenderTarget,
 } from 'three'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
-import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
+import {
+  exportVRMToBuffer,
+  loadVRMFromBuffer,
+} from './helpers/vrm-roundtrip'
 
 /**
  * COLOR_0頂点カラーを持つVRMのラウンドトリップ回帰テスト
@@ -42,56 +39,9 @@ describe('VertexColor Roundtrip', () => {
   const RENDER_SIZE = 256
 
   let reloadedVRM: VRM
-
-  async function loadVRM(
-    buffer: ArrayBuffer,
-  ): Promise<{ gltf: GLTF; vrm: VRM }> {
-    const loader = new GLTFLoader()
-    loader.register((parser) => new VRMLoaderPlugin(parser))
-    loader.register((parser) => new MToonAtlasLoaderPlugin(parser))
-
-    const gltf = await loader.parseAsync(buffer, '')
-    const vrm = gltf.userData.vrm as VRM
-
-    return { gltf, vrm }
-  }
-
-  async function exportVRM(vrm: VRM): Promise<ArrayBuffer> {
-    const exporter = new GLTFExporter()
-    exporter.register((writer) => {
-      const plugin = new VRMExporterPlugin(writer)
-      plugin.setVRM(vrm)
-      return plugin
-    })
-    exporter.register((writer) => new MToonAtlasExporterPlugin(writer))
-
-    return new Promise<ArrayBuffer>((resolve, reject) => {
-      const exportScene = new Scene()
-      const children = [...vrm.scene.children].filter(
-        (child) =>
-          child.name !== 'VRMHumanoidRig' &&
-          !child.name.startsWith('VRMExpression'),
-      )
-      children.forEach((child) => exportScene.add(child))
-
-      exporter.parse(
-        exportScene,
-        (result) => {
-          children.forEach((child) => vrm.scene.add(child))
-          if (result instanceof ArrayBuffer) {
-            resolve(result)
-          } else {
-            reject(new Error('Expected ArrayBuffer output'))
-          }
-        },
-        (error) => {
-          children.forEach((child) => vrm.scene.add(child))
-          reject(error)
-        },
-        { binary: true },
-      )
-    })
-  }
+  // レンダリングは SwiftShader 上で重く、WebGL コンテキストも消費するため
+  // beforeAll で1回だけ実行して結果を使い回す
+  let renderResult: { brokenProgramCount: number; pixelCoverage: number }
 
   /**
    * 全メッシュにCOLOR_0(VEC4, 全成分1.0)を注入する
@@ -159,16 +109,21 @@ describe('VertexColor Roundtrip', () => {
       if (pixels[i] > 0) covered++
     }
 
-    // WebGLProgram.diagnostics はコンパイル/リンク失敗時のみ設定される
+    // diagnostics はリンク成功時にも設定されうる（info log が空でなければ
+    // warn 経路でも生成され runnable: true になる）ため、
+    // 存在の有無ではなく runnable を見る。
+    // そうしないとコンパイラの警告だけで壊れた扱いになってしまう
     const programs = renderer.info.programs ?? []
     const brokenProgramCount = programs.filter(
       (program) =>
-        (program as unknown as { diagnostics?: unknown }).diagnostics !==
-        undefined,
+        (program as unknown as { diagnostics?: { runnable?: boolean } })
+          .diagnostics?.runnable === false,
     ).length
 
     scene.remove(vrm.scene)
     target.dispose()
+    // dispose だけでは WebGL コンテキストが残るため明示的に解放する
+    renderer.forceContextLoss()
     renderer.dispose()
 
     return {
@@ -180,7 +135,7 @@ describe('VertexColor Roundtrip', () => {
   beforeAll(async () => {
     const response = await fetch(VRM_FILE_PATH)
     const originalBuffer = await response.arrayBuffer()
-    const { vrm } = await loadVRM(originalBuffer)
+    const { vrm } = await loadVRMFromBuffer(originalBuffer)
 
     const injected = injectVertexColors(vrm)
     expect(injected).toBeGreaterThan(0)
@@ -188,9 +143,10 @@ describe('VertexColor Roundtrip', () => {
     const optimizeResult = await optimizeModel(vrm)
     expect(optimizeResult.isOk()).toBe(true)
 
-    const exportedBuffer = await exportVRM(vrm)
-    const { vrm: reloaded } = await loadVRM(exportedBuffer)
+    const exportedBuffer = await exportVRMToBuffer(vrm)
+    const { vrm: reloaded } = await loadVRMFromBuffer(exportedBuffer)
     reloadedVRM = reloaded
+    renderResult = renderAndInspect(reloadedVRM)
   })
 
   it('should keep COLOR_0 through the roundtrip (test premise)', () => {
@@ -207,14 +163,12 @@ describe('VertexColor Roundtrip', () => {
   })
 
   it('should compile all shader programs after reload', () => {
-    const { brokenProgramCount } = renderAndInspect(reloadedVRM)
-    expect(brokenProgramCount).toBe(0)
+    expect(renderResult.brokenProgramCount).toBe(0)
   })
 
   it('should actually draw the avatar (not invisible)', () => {
-    const { pixelCoverage } = renderAndInspect(reloadedVRM)
     // シェーダーが壊れているとメッシュが1ピクセルも描かれず0になる
-    expect(pixelCoverage).toBeGreaterThan(0.01)
+    expect(renderResult.pixelCoverage).toBeGreaterThan(0.01)
   })
 
   it('should define IGNORE_VERTEX_COLOR on reloaded atlas materials', () => {
