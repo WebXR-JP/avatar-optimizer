@@ -1,383 +1,324 @@
-.vrm-canvas__header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+/*
+ * VRM Debug Viewer のレイアウト
+ *
+ * 3D Viewport タブは「左サイドバー（操作系）＋ ビューポート」の 2 カラム。
+ * 操作系はすべてサイドバー内の折りたたみセクションに収め、
+ * ビューポート上に重ねるのはエラー表示とステータスバーだけにしている。
+ */
+
+:root {
+  --vrm-bg: #1e1e1e;
+  --vrm-bg-raised: #262626;
+  --vrm-border: #3a3a3a;
+  --vrm-text: #e8e8e8;
+  --vrm-text-dim: #9a9a9a;
+  --vrm-accent: #2d7ff9;
+}
+
+.vrm-canvas {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background-color: rgba(30, 30, 30, 0.95);
-  border-bottom: 1px solid #333;
-  z-index: 100;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
-.vrm-canvas__header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #fff;
+.vrm-canvas__viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
-.vrm-canvas__model-select {
-  padding: 0.5rem 0.75rem;
-  background-color: #2a2a2a;
-  color: #fff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
+/* ---------------- サイドバー ---------------- */
 
-.vrm-canvas__model-select:hover:not(:disabled) {
-  border-color: #777;
-}
-
-.vrm-canvas__model-select:focus {
-  outline: none;
-  border-color: #0066cc;
-}
-
-.vrm-canvas__model-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.vrm-canvas__upload-btn,
-.vrm-canvas__optimize-btn,
-.vrm-canvas__export-btn,
-.vrm-canvas__export-gltf-btn {
-  padding: 0.5rem 1rem;
-  background-color: #0066cc;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.vrm-canvas__upload-btn:hover:not(:disabled),
-.vrm-canvas__optimize-btn:hover:not(:disabled),
-.vrm-canvas__export-btn:hover:not(:disabled),
-.vrm-canvas__export-gltf-btn:hover:not(:disabled) {
-  background-color: #0052a3;
-}
-
-.vrm-canvas__upload-btn:disabled,
-.vrm-canvas__optimize-btn:disabled,
-.vrm-canvas__export-btn:disabled,
-.vrm-canvas__export-gltf-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.vrm-canvas__error {
-  position: absolute;
-  top: 60px;
-  left: 0;
-  right: 0;
-  padding: 0.75rem 1rem;
-  background-color: #c41c3b;
-  color: white;
-  font-size: 0.875rem;
-  border-bottom: 1px solid #a01530;
-  z-index: 99;
-}
-
-.vrm-canvas__info {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 0.75rem 1rem;
-  background-color: rgba(30, 30, 30, 0.95);
-  border-top: 1px solid #333;
-  font-size: 0.875rem;
-  color: #fff;
-  z-index: 100;
-}
-
-.vrm-canvas__info p {
-  margin: 0;
-}
-
-/* デバッグパネル */
-.vrm-canvas__debug-panel {
-  position: absolute;
-  bottom: 50px;
-  right: 10px;
-  padding: 0.75rem 1rem;
-  background-color: rgba(30, 30, 30, 0.95);
-  border: 1px solid #444;
-  border-radius: 6px;
+.vrm-sidebar {
+  flex: 0 0 260px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  z-index: 100;
-  color: #fff;
-  font-size: 0.875rem;
-}
-
-.vrm-canvas__debug-panel label {
-  font-weight: 500;
-  color: #ccc;
-}
-
-.vrm-canvas__debug-select {
-  padding: 0.4rem 0.6rem;
-  background-color: #2a2a2a;
-  color: #fff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.vrm-canvas__debug-select:hover {
-  border-color: #777;
-}
-
-.vrm-canvas__debug-select:focus {
-  outline: none;
-  border-color: #0066cc;
-}
-
-.vrm-canvas__debug-hint {
-  font-size: 0.75rem;
-  color: #888;
-  font-style: italic;
-  max-width: 200px;
-}
-
-.vrm-canvas__springbone-toggle,
-.vrm-canvas__bones-toggle,
-.vrm-canvas__colliders-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  margin-top: 0.25rem;
-}
-
-.vrm-canvas__springbone-toggle input[type="checkbox"],
-.vrm-canvas__bones-toggle input[type="checkbox"],
-.vrm-canvas__colliders-toggle input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-/* 表情パネル */
-.vrm-canvas__expression-panel {
-  position: absolute;
-  bottom: 50px;
-  left: 10px;
-  width: 280px;
-  max-height: 400px;
-  background-color: rgba(30, 30, 30, 0.95);
-  border: 1px solid #444;
-  border-radius: 6px;
-  z-index: 100;
-  color: #fff;
-  font-size: 0.875rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.vrm-canvas__expression-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #444;
-  font-weight: 500;
-}
-
-.vrm-canvas__expression-reset-btn {
-  padding: 0.25rem 0.5rem;
-  background-color: #555;
-  color: #fff;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 0.75rem;
-}
-
-.vrm-canvas__expression-reset-btn:hover {
-  background-color: #666;
-}
-
-.vrm-canvas__expression-list {
   overflow-y: auto;
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  padding: 0.75rem;
+  gap: 0.5rem;
+  background-color: var(--vrm-bg);
+  border-right: 1px solid var(--vrm-border);
+  color: var(--vrm-text);
+  font-size: 0.8125rem;
 }
 
-.vrm-canvas__expression-item {
-  display: grid;
-  grid-template-columns: 80px 1fr 40px;
+/* 3D Viewport 以外のタブでは隠す。
+   .vrm-sidebar の display:flex が hidden 属性の既定値を上書きするため明示する */
+.vrm-sidebar[hidden] {
+  display: none;
+}
+
+.vrm-sidebar__title {
+  flex: 0 0 auto;
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------- セクション ---------------- */
+
+.vrm-section {
+  /* サイドバーは flex コラム。既定の flex-shrink だとセクションが潰れて
+     中身が見切れるため、縮ませずサイドバー側をスクロールさせる */
+  flex: 0 0 auto;
+  border: 1px solid var(--vrm-border);
+  border-radius: 6px;
+  background-color: var(--vrm-bg-raised);
+  overflow: hidden;
+}
+
+.vrm-section__header {
+  display: flex;
   align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  background: none;
+  color: var(--vrm-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vrm-section__header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.vrm-section__caret {
+  color: var(--vrm-text-dim);
+  font-size: 0.625rem;
+}
+
+.vrm-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0 0.625rem 0.625rem;
+}
+
+/* ---------------- ボタン ---------------- */
+
+.vrm-btn {
+  padding: 0.4rem 0.625rem;
+  border: 1px solid var(--vrm-border);
+  border-radius: 4px;
+  background-color: #333;
+  color: var(--vrm-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background-color 0.12s, opacity 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vrm-btn:hover:not(:disabled) {
+  background-color: #414141;
+}
+
+.vrm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vrm-btn--primary { background-color: var(--vrm-accent); border-color: transparent; }
+.vrm-btn--primary:hover:not(:disabled) { background-color: #1f6ee0; }
+
+.vrm-btn--optimize { background-color: #2f6f9f; border-color: transparent; }
+.vrm-btn--optimize:hover:not(:disabled) { background-color: #3a83b9; }
+
+.vrm-btn--migrate { background-color: #9f6a2f; border-color: transparent; }
+.vrm-btn--migrate:hover:not(:disabled) { background-color: #b97e3a; }
+
+.vrm-btn--simplify { background-color: #6a3f9f; border-color: transparent; }
+.vrm-btn--simplify:hover:not(:disabled) { background-color: #7e4cb9; }
+
+.vrm-btn--export { background-color: #2f7f5f; border-color: transparent; }
+.vrm-btn--export:hover:not(:disabled) { background-color: #379470; }
+
+.vrm-btn--tool { font-size: 0.75rem; padding: 0.3rem 0.4rem; }
+
+.vrm-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.375rem;
+}
+
+.vrm-btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.375rem;
+}
+
+/* ---------------- フォーム要素 ---------------- */
+
+.vrm-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
-.vrm-canvas__expression-item label {
+/* ラベルを上に積む版。選択肢の文字列が長く、横並びだと見切れる項目に使う */
+.vrm-field--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.vrm-field__label {
+  color: var(--vrm-text-dim);
+  white-space: nowrap;
+}
+
+.vrm-field__select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--vrm-border);
+  border-radius: 4px;
+  background-color: #333;
+  color: var(--vrm-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.vrm-field__select:hover:not(:disabled) { background-color: #414141; }
+.vrm-field__select:focus { outline: 1px solid var(--vrm-accent); }
+.vrm-field__select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.vrm-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.125rem;
+}
+
+.vrm-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vrm-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--vrm-accent);
+  cursor: pointer;
+}
+
+/* ---------------- 補助テキスト・統計 ---------------- */
+
+.vrm-note {
+  margin: 0;
+  color: var(--vrm-text-dim);
   font-size: 0.75rem;
-  color: #ccc;
+  line-height: 1.4;
+}
+
+.vrm-note strong {
+  color: var(--vrm-text);
+  font-weight: 600;
+}
+
+.vrm-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.125rem 0.5rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.vrm-stats dt { color: var(--vrm-text-dim); white-space: nowrap; }
+.vrm-stats dd { margin: 0; }
+.vrm-stats__sub { color: var(--vrm-text-dim); }
+
+/* ---------------- 表情スライダー ---------------- */
+
+.vrm-expressions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.vrm-expression {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 2.25rem;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.vrm-expression__name {
+  color: var(--vrm-text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.vrm-canvas__expression-item input[type="range"] {
+.vrm-expression input[type="range"] {
   width: 100%;
-  height: 4px;
+  accent-color: var(--vrm-accent);
   cursor: pointer;
 }
 
-.vrm-canvas__expression-value {
-  font-size: 0.7rem;
-  color: #888;
+.vrm-expression__value {
+  color: var(--vrm-text-dim);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
   text-align: right;
-  font-family: monospace;
 }
 
-/* アトラス設定パネル */
-.vrm-canvas__atlas-panel {
+/* ---------------- ビューポート上のオーバーレイ ---------------- */
+
+.vrm-canvas__error {
   position: absolute;
-  top: 70px;
-  right: 10px;
-  padding: 0.75rem 1rem;
-  background-color: rgba(30, 30, 30, 0.95);
-  border: 1px solid #444;
-  border-radius: 6px;
-  z-index: 100;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.625rem 0.875rem;
+  background-color: #c41c3b;
   color: #fff;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  z-index: 10;
 }
 
-.vrm-canvas__atlas-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  gap: 1rem;
-}
-
-.vrm-canvas__file-size {
-  font-size: 0.75rem;
-  color: #4caf50;
-  font-weight: 600;
-}
-
-.vrm-canvas__atlas-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.vrm-canvas__atlas-options label {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #ccc;
-}
-
-.vrm-canvas__atlas-options select {
-  padding: 0.25rem 0.4rem;
-  background-color: #2a2a2a;
-  color: #fff;
-  border: 1px solid #555;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.vrm-canvas__atlas-options select:hover {
-  border-color: #777;
-}
-
-.vrm-canvas__atlas-options select:focus {
-  outline: none;
-  border-color: #0066cc;
-}
-
-/* Simplify統計パネル */
-.vrm-canvas__simplify-panel {
+.vrm-canvas__status {
   position: absolute;
-  top: 70px;
-  left: 10px;
-  padding: 0.75rem 1rem;
-  background-color: rgba(30, 30, 30, 0.95);
-  border: 1px solid #9f4aff;
-  border-radius: 6px;
-  z-index: 100;
-  color: #fff;
-  font-size: 0.875rem;
-  max-width: 400px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem 0.875rem;
+  background-color: rgba(30, 30, 30, 0.9);
+  border-top: 1px solid var(--vrm-border);
+  color: var(--vrm-text);
+  font-size: 0.8125rem;
+  z-index: 10;
 }
 
-.vrm-canvas__simplify-header {
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #9f4aff;
+/* ---------------- スクロールバー ---------------- */
+
+.vrm-sidebar::-webkit-scrollbar,
+.vrm-expressions::-webkit-scrollbar {
+  width: 8px;
 }
 
-.vrm-canvas__simplify-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #ccc;
-}
-
-.vrm-canvas__simplify-stats div {
-  font-family: monospace;
-}
-
-/* Spector.js キャプチャボタン */
-.vrm-canvas__spector-btn {
-  margin-left: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  background-color: #2d5a27;
-  color: #fff;
-  border: 1px solid #4a9d40;
+.vrm-sidebar::-webkit-scrollbar-thumb,
+.vrm-expressions::-webkit-scrollbar-thumb {
+  background-color: #454545;
   border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
 }
 
-.vrm-canvas__spector-btn:hover {
-  background-color: #3a7a30;
-}
-
-.vrm-canvas__spector-btn:active {
-  background-color: #1e4a1a;
-}
-
-/* WebGLデバッグボタン（PlaywrightMCP用コンソール出力） */
-.vrm-canvas__debug-btn {
-  margin-left: 0.5rem;
-  padding: 0.25rem 0.4rem;
-  font-size: 0.65rem;
-  background-color: #4a3a6a;
-  color: #fff;
-  border: 1px solid #7a5aaa;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.vrm-canvas__debug-btn:hover {
-  background-color: #5a4a7a;
-}
-
-.vrm-canvas__debug-btn:active {
-  background-color: #3a2a5a;
+.vrm-sidebar::-webkit-scrollbar-track,
+.vrm-expressions::-webkit-scrollbar-track {
+  background-color: transparent;
 }
