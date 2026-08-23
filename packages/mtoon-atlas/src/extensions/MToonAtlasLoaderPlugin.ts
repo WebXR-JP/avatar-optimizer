@@ -2,6 +2,7 @@ import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide,
 import { decode as decodePng } from 'fast-png'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
+import { rememberKtx2Source } from './ktx2-source-cache'
 import
 {
   GLTFParser,
@@ -68,9 +69,48 @@ export class MToonAtlasLoaderPlugin
   public readonly name = MTOON_ATLAS_EXTENSION_NAME
   private parser: GLTFParser
 
+  // 画像インデックス -> 元 KTX2 バイナリの複製（再エクスポート用、issue #39）
+  // 同じアトラス画像が複数マテリアルから参照されるため、画像単位でメモ化する
+  private ktx2SourceByImageIndex: Map<number, Uint8Array> = new Map()
+
   constructor(parser: GLTFParser)
   {
     this.parser = parser
+  }
+
+  /**
+   * 再エクスポート用に元の KTX2 バイナリの複製を取得する（画像単位でメモ化）
+   *
+   * GLTFParser は bufferView を同一の ArrayBuffer でキャッシュして返し、
+   * KTX2Loader.parse はその ArrayBuffer をワーカーへ transfer して detach する。
+   * 通常は同一マイクロタスク内に全マテリアル分の複製が終わるため detach 前に間に合うが、
+   * 呼び出しが後続タイミングにずれた場合に備えて detach 済みかどうかを確認する。
+   * （複製済みならメモ化した方を返すので、実質ここで取りこぼすことはない）
+   *
+   * @param imageIndex - glTF の画像インデックス
+   * @param ktx2Data - bufferView から取得した KTX2 バイナリ
+   * @returns 複製。detach 済みで複製できなかった場合は undefined
+   */
+  private getOrCreateKtx2SourceCopy(
+    imageIndex: number,
+    ktx2Data: ArrayBuffer
+  ): Uint8Array | undefined
+  {
+    const cached = this.ktx2SourceByImageIndex.get(imageIndex)
+    if (cached)
+    {
+      return cached
+    }
+
+    // detach 済みの ArrayBuffer は byteLength が 0 になる
+    if (ktx2Data.byteLength === 0)
+    {
+      return undefined
+    }
+
+    const copy = new Uint8Array(ktx2Data.slice(0))
+    this.ktx2SourceByImageIndex.set(imageIndex, copy)
+    return copy
   }
 
   public loadMaterial(materialIndex: number): Promise<Material> | null
@@ -278,6 +318,11 @@ export class MToonAtlasLoaderPlugin
         return null
       }
 
+      // 再エクスポート用に元の KTX2 バイナリを複製しておく（issue #39）
+      // KTX2Loader.parse は ArrayBuffer をワーカーへ transfer するため、
+      // parse 後の ktx2Data は detach されて読み出せなくなる。必ず parse 前に複製する
+      const ktx2SourceCopy = this.getOrCreateKtx2SourceCopy(imageIndex, ktx2Data)
+
       // KTX2Loaderのparseメソッドを使用してArrayBufferから直接読み込む
       return new Promise<CompressedTexture>((resolve, reject) =>
       {
@@ -292,6 +337,15 @@ export class MToonAtlasLoaderPlugin
             texture.wrapS = RepeatWrapping
             texture.wrapT = RepeatWrapping
             texture.needsUpdate = true
+
+            // 元の KTX2 バイナリを記録しておく
+            // CompressedTexture は CPU から RGBA を読めないため、
+            // 再エクスポート時はこのバイナリをパススルーする（issue #39）
+            if (ktx2SourceCopy)
+            {
+              rememberKtx2Source(texture, ktx2SourceCopy)
+            }
+
             resolve(texture)
           },
           (error: unknown) =>
