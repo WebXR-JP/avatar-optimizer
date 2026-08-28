@@ -132,6 +132,9 @@ describe('VertexColor Roundtrip', () => {
     }
   }
 
+  // 最適化・エクスポート・再読込に加えてソフトウェアGL(SwiftShader)での
+  // フルレンダリングまで行う。vitest.config.ts は testTimeout を 30 秒に
+  // 上げているが hookTimeout は既定の 10 秒のままなので、明示的に延ばす
   beforeAll(async () => {
     const response = await fetch(VRM_FILE_PATH)
     const originalBuffer = await response.arrayBuffer()
@@ -147,7 +150,7 @@ describe('VertexColor Roundtrip', () => {
     const { vrm: reloaded } = await loadVRMFromBuffer(exportedBuffer)
     reloadedVRM = reloaded
     renderResult = renderAndInspect(reloadedVRM)
-  })
+  }, 60_000)
 
   it('should keep COLOR_0 through the roundtrip (test premise)', () => {
     // COLOR_0がエクスポートで消えるとこのテストはトリガーを失う。
