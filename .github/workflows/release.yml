@@ -33,13 +33,37 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted Publishers (OIDC) には npm >= 11.5.1 が必要。
-      # ただし npm@latest だと 12 系が入り、`npm info --json` の出力が
-      # オブジェクトから配列に変わって changesets の公開済み判定が壊れる
-      # （全パッケージが未公開と誤判定され、公開済みバージョンへの
-      # publish を試みて publish 全体が失敗する）。メジャーを 11 に固定する
-      - name: Update npm for Trusted Publishers
+      # npm は 2 つの役割で使われる。
+      # 1. Trusted Publishers (OIDC) の publish（pnpm publish が内部で npm に委譲する）
+      #    → npm >= 11.5.1 が必要
+      # 2. changesets の公開済み判定（`npm info --json`）
+      # かつて npm@latest としていたところ 12 系が入り、2 の出力が
+      # オブジェクトから配列に変わって判定が壊れた（全パッケージが未公開と
+      # 誤判定され、公開済みバージョンへ publish を試みて全体が失敗した）。
+      # 1 を満たしつつ 12 系を避けるため、メジャーを 11 に固定する
+      - name: Setup npm for publish
         run: npm install -g npm@^11.5.1
+
+      # 上記の前提（`npm info --json` がオブジェクトを返す）が崩れていないか確認する。
+      # 崩れたまま publish に進むと changesets は「未公開だから公開する」という
+      # 正常系のログを出すだけで、失敗が publish 時まで表面化しない
+      - name: Verify npm info output shape
+        run: |
+          npm info npm --json \
+            | node -e '
+              let s = "";
+              process.stdin.on("data", (d) => (s += d)).on("end", () => {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed) || !parsed.versions) {
+                  console.error(
+                    "npm info --json の出力形式が変わっています。" +
+                    "changesets の公開済み判定が壊れるため npm のバージョンを見直してください。"
+                  );
+                  process.exit(1);
+                }
+                console.log("npm info --json: OK (object)");
+              });
+            '
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

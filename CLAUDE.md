@@ -137,9 +137,6 @@ pnpm lint
 
 # コード フォーマット
 pnpm format
-
-# 公開前ビルド
-pnpm prepublishOnly
 ```
 
 ### 特定のパッケージ操作
