@@ -23,8 +23,7 @@
     "test:ui": "vitest --ui",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "format": "prettier --write 'src/**/*.ts'",
-    "prepublishOnly": "pnpm run build"
+    "format": "prettier --write 'src/**/*.ts'"
   },
   "peerDependencies": {
     "@pixiv/three-vrm": "^3.4.4",

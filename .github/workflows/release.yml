@@ -33,8 +33,13 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
+      # Trusted Publishers (OIDC) には npm >= 11.5.1 が必要。
+      # ただし npm@latest だと 12 系が入り、`npm info --json` の出力が
+      # オブジェクトから配列に変わって changesets の公開済み判定が壊れる
+      # （全パッケージが未公開と誤判定され、公開済みバージョンへの
+      # publish を試みて publish 全体が失敗する）。メジャーを 11 に固定する
       - name: Update npm for Trusted Publishers
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
