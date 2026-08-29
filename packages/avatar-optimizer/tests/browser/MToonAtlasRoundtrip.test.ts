@@ -1,15 +1,12 @@
-import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
-import {
-  MToonAtlasExporterPlugin,
-  MToonAtlasLoaderPlugin,
-  MToonAtlasMaterial,
-} from '@webxr-jp/mtoon-atlas'
-import { Object3D, Scene, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { VRM } from '@pixiv/three-vrm'
+import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
+import { Object3D, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
-import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
+import {
+  exportVRMToBuffer,
+  loadVRMFromBuffer,
+} from './helpers/vrm-roundtrip'
 
 /**
  * MToonAtlasMaterialを使用した最適化済みVRMのラウンドトリップテスト
@@ -23,62 +20,6 @@ describe('MToonAtlas Roundtrip', () => {
   let optimizedVRM: VRM
   let reloadedVRM: VRM
   let exportedBuffer: ArrayBuffer
-
-  /**
-   * VRMを読み込むヘルパー関数
-   */
-  async function loadVRM(
-    buffer: ArrayBuffer,
-  ): Promise<{ gltf: GLTF; vrm: VRM }> {
-    const loader = new GLTFLoader()
-    loader.register((parser) => new VRMLoaderPlugin(parser))
-    loader.register((parser) => new MToonAtlasLoaderPlugin(parser))
-
-    const gltf = await loader.parseAsync(buffer, '')
-    const vrm = gltf.userData.vrm as VRM
-
-    return { gltf, vrm }
-  }
-
-  /**
-   * VRMをGLBとしてエクスポートするヘルパー関数
-   */
-  async function exportVRM(vrm: VRM): Promise<ArrayBuffer> {
-    const exporter = new GLTFExporter()
-    exporter.register((writer) => {
-      const plugin = new VRMExporterPlugin(writer)
-      plugin.setVRM(vrm)
-      return plugin
-    })
-    exporter.register((writer) => new MToonAtlasExporterPlugin(writer))
-
-    return new Promise<ArrayBuffer>((resolve, reject) => {
-      const exportScene = new Scene()
-      const children = [...vrm.scene.children].filter(
-        (child) =>
-          child.name !== 'VRMHumanoidRig' &&
-          !child.name.startsWith('VRMExpression'),
-      )
-      children.forEach((child) => exportScene.add(child))
-
-      exporter.parse(
-        exportScene,
-        (result) => {
-          children.forEach((child) => vrm.scene.add(child))
-          if (result instanceof ArrayBuffer) {
-            resolve(result)
-          } else {
-            reject(new Error('Expected ArrayBuffer output'))
-          }
-        },
-        (error) => {
-          children.forEach((child) => vrm.scene.add(child))
-          reject(error)
-        },
-        { binary: true },
-      )
-    })
-  }
 
   /**
    * テクスチャからピクセルデータを取得するヘルパー関数
@@ -156,14 +97,14 @@ describe('MToonAtlas Roundtrip', () => {
   beforeAll(async () => {
     const response = await fetch(VRM_FILE_PATH)
     const originalBuffer = await response.arrayBuffer()
-    const { vrm } = await loadVRM(originalBuffer)
+    const { vrm } = await loadVRMFromBuffer(originalBuffer)
 
     const optimizeResult = await optimizeModel(vrm)
     expect(optimizeResult.isOk()).toBe(true)
     optimizedVRM = vrm
 
-    exportedBuffer = await exportVRM(optimizedVRM)
-    const { vrm: reloaded } = await loadVRM(exportedBuffer)
+    exportedBuffer = await exportVRMToBuffer(optimizedVRM)
+    const { vrm: reloaded } = await loadVRMFromBuffer(exportedBuffer)
     reloadedVRM = reloaded
   })
 
