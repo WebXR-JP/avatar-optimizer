@@ -32,6 +32,19 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 export const DEFAULT_KTX2_TRANSCODER_PATH =
   'https://cdn.jsdelivr.net/npm/three@0.181.1/examples/jsm/libs/basis/'
 
+/**
+ * 末尾スラッシュを補う
+ *
+ * KTX2Loader はパスとファイル名を単純連結するため、末尾スラッシュが無いと
+ * `/basisbasis_transcoder.js` を取りに行って 404 になり、
+ * ワーカー内の分かりにくいエラーで KTX2 テクスチャだけが無言で欠落する。
+ * キャッシュキーの表記ゆれを防ぐ意味でもここで揃える。
+ */
+function normalizeTranscoderPath(path: string): string
+{
+  return path.endsWith('/') ? path : `${path}/`
+}
+
 let defaultTranscoderPath: string = DEFAULT_KTX2_TRANSCODER_PATH
 
 /**
@@ -60,7 +73,7 @@ const loaderCache = new Map<string, KTX2Loader>()
  */
 export function setKtx2TranscoderPath(path: string): void
 {
-  defaultTranscoderPath = path
+  defaultTranscoderPath = normalizeTranscoderPath(path)
 }
 
 /**
@@ -80,7 +93,10 @@ export function getKtx2TranscoderPath(): string
  */
 export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
 {
-  const path = transcoderPath ?? defaultTranscoderPath
+  const path =
+    transcoderPath === undefined
+      ? defaultTranscoderPath
+      : normalizeTranscoderPath(transcoderPath)
 
   const cached = loaderCache.get(path)
   if (cached)
@@ -97,6 +113,11 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
     return null
   }
 
+  // 失敗した場合はキャッシュに載らず、テクスチャごとに再試行される。
+  // renderer を解放し損ねるとブラウザの WebGL コンテキスト上限に達して
+  // 既存シーンの描画まで巻き込むため、finally で必ず破棄する
+  let renderer: WebGLRenderer | undefined
+
   try
   {
     // KTX2Loader の初期化には WebGL コンテキストが必要
@@ -110,13 +131,11 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
     }
 
     // detectSupport のために一時的な WebGLRenderer を作る
-    const renderer = new WebGLRenderer({ canvas, context: gl })
+    renderer = new WebGLRenderer({ canvas, context: gl })
 
     const loader = new KTX2Loader()
     loader.setTranscoderPath(path)
     loader.detectSupport(renderer)
-
-    renderer.dispose()
 
     loaderCache.set(path, loader)
     return loader
@@ -124,12 +143,21 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
   {
     console.warn('MToonAtlasLoaderPlugin: KTX2Loaderの初期化に失敗:', error)
     return null
+  } finally
+  {
+    renderer?.dispose()
   }
 }
 
 /**
  * キャッシュ済みの KTX2Loader を破棄する
- * 主にテスト用。パスを変えて作り直したい場合にも使える
+ *
+ * パスを変えて作り直したい場合に、古いローダーが抱えるワーカープールと
+ * WebGL コンテキストを解放するために使う。
+ *
+ * 注意: VRM の読み込み中に呼ばないこと。`loadVRM()` は取得したローダーを
+ * GLTFLoader に渡したまま非同期に読み込むため、途中で dispose すると
+ * ワーカープールが落ちて進行中の parse が分かりにくいエラーで失敗する。
  */
 export function clearKtx2LoaderCache(): void
 {

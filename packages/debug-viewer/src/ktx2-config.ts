@@ -10,6 +10,6 @@
  * 独立したモジュールにして main.tsx の先頭で import することで、
  * 他のモジュールより先に評価されることを保証している。
  */
-import { setKtx2TranscoderPath } from '@webxr-jp/mtoon-atlas'
+import { setKtx2TranscoderPath } from '@webxr-jp/avatar-optimizer'
 
 setKtx2TranscoderPath('/basis/')

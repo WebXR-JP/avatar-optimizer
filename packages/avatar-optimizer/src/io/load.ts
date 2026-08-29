@@ -26,7 +26,12 @@ export type VRMSource = string | File | Blob | ArrayBuffer
  */
 export interface LoadVRMOptions {
   /**
-   * 使用する KTX2Loader。GLTFLoader と MToonAtlasLoaderPlugin の双方で共有される
+   * 使用する KTX2Loader。GLTFLoader と MToonAtlasLoaderPlugin の双方で共有される。
+   *
+   * 渡すインスタンスは `detectSupport(renderer)` 済みである必要がある。
+   * 未初期化のまま渡すと three が
+   * `THREE.KTX2Loader: Missing initialization with .detectSupport( renderer ).`
+   * を投げる
    */
   ktx2Loader?: KTX2Loader
 
@@ -42,6 +47,8 @@ export interface LoadVRMOptions {
  * VRM を読み込む
  *
  * @param source - VRM ソース (URL文字列 / File / Blob / ArrayBuffer)
+ * @param options - KTX2 トランスコーダーの設定。省略時はアプリ全体の既定値
+ *                  （`setKtx2TranscoderPath()` で変更可能）に従う
  * @returns VRM オブジェクトまたはエラー
  *
  * @example

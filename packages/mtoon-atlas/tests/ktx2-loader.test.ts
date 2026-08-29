@@ -102,6 +102,22 @@ describe('KTX2 トランスコーダーパス設定 (Issue #32)', () =>
     })
   })
 
+  describe('末尾スラッシュの正規化', () =>
+  {
+    it('setKtx2TranscoderPath で末尾スラッシュが補われる', () =>
+    {
+      // 無いと /basisbasis_transcoder.js を取りに行って 404 になる
+      setKtx2TranscoderPath('/basis')
+      expect(getKtx2TranscoderPath()).toBe('/basis/')
+    })
+
+    it('既に末尾スラッシュがあれば二重にしない', () =>
+    {
+      setKtx2TranscoderPath('/basis/')
+      expect(getKtx2TranscoderPath()).toBe('/basis/')
+    })
+  })
+
   describe('パスごとのキャッシュ', () =>
   {
     it('異なるパスが同じインスタンスを共有しないこと', () =>

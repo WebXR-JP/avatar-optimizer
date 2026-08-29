@@ -9,7 +9,8 @@
  */
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 
@@ -20,7 +21,7 @@ const ktx2LoaderPath = require.resolve(
 )
 const threeDir = resolve(ktx2LoaderPath, '../../../..')
 const srcDir = join(threeDir, 'examples/jsm/libs/basis')
-const destDir = join(import.meta.dirname, '../public/basis')
+const destDir = join(dirname(fileURLToPath(import.meta.url)), '../public/basis')
 
 mkdirSync(destDir, { recursive: true })
 for (const file of ['basis_transcoder.js', 'basis_transcoder.wasm']) {
