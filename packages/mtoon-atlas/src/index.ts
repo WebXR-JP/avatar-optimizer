@@ -23,6 +23,14 @@ export type {
 
 // GLTF拡張プラグイン
 export { MToonAtlasLoaderPlugin } from './extensions/MToonAtlasLoaderPlugin'
+export type { MToonAtlasLoaderPluginOptions } from './extensions/MToonAtlasLoaderPlugin'
+// KTX2 トランスコーダーの配信元設定（CDN 依存を外して自己ホストする場合に使う）
+export {
+  setKtx2TranscoderPath,
+  getKtx2TranscoderPath,
+  resolveKtx2Loader,
+  DEFAULT_KTX2_TRANSCODER_PATH,
+} from './extensions/ktx2-loader'
 export { MToonAtlasExporterPlugin } from './extensions/MToonAtlasExporterPlugin'
 // 独自ローダーで KTX2 テクスチャを読み込む場合に、再エクスポート可能にするための登録関数
 export { rememberKtx2Source } from './extensions/ktx2-source-cache'

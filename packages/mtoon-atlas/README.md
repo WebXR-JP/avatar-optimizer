@@ -156,6 +156,60 @@ void main() {
 }
 ```
 
+## KTX2 トランスコーダーの配信元
+
+KTX2 テクスチャの読み込みには Basis Universal のトランスコーダー
+(`basis_transcoder.js` / `.wasm`) が必要です。既定では jsdelivr の CDN から
+取得しますが、以下の理由で差し替えたいことがあります。
+
+- CDN 障害や CORS 事故の影響を受けたくない（自己ホストしたい）
+- アプリ側がインストールしている three とバージョンを揃えたい
+
+### アプリ全体で切り替える（推奨）
+
+起動時に一度呼びます。`MToonAtlasLoaderPlugin` を複数箇所で生成している場合でも、
+呼び出しごとにオプションを渡す必要がありません。
+
+```typescript
+import { setKtx2TranscoderPath } from '@webxr-jp/mtoon-atlas'
+
+// public/basis/ に basis_transcoder.js / .wasm を置いて同一オリジンで配信する
+setKtx2TranscoderPath('/basis/')
+```
+
+VRM を読み込む前に呼んでください。生成済みのローダーには影響しません。
+
+トランスコーダーの実体は three が同梱しています。ビルド時に
+`node_modules/three/examples/jsm/libs/basis/` からコピーすれば、
+three を更新してもバージョンがずれません。
+
+### KTX2Loader を共有する
+
+GLTFLoader 側で設定済みのインスタンスを渡すと、二重生成（初期化用の
+一時 WebGLRenderer が 2 つ作られる）も避けられます。
+
+```typescript
+import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
+
+loader.register((parser) => new MToonAtlasLoaderPlugin(parser, { ktx2Loader }))
+```
+
+### プラグイン単位でパスを指定する
+
+```typescript
+loader.register(
+  (parser) => new MToonAtlasLoaderPlugin(parser, { ktx2TranscoderPath: '/basis/' }),
+)
+```
+
+優先順位は `ktx2Loader` > `ktx2TranscoderPath` > `setKtx2TranscoderPath()` の既定値 > CDN です。
+
+`@webxr-jp/avatar-optimizer` の `loadVRM()` も同じオプションを受け取ります。
+
+```typescript
+const result = await loadVRM(file, { ktx2TranscoderPath: '/basis/' })
+```
+
 ## API Reference
 
 ### MToonAtlasMaterial

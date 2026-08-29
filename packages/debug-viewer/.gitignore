@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# three から自動コピーされる Basis トランスコーダ（scripts/copy-basis.mjs）
+public/basis/

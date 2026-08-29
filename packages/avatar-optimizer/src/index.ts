@@ -6,7 +6,7 @@
 export { optimizeModel } from './avatar-optimizer'
 
 // IO (load/export)
-export { exportVRM, loadVRM, type VRMSource } from './io'
+export { exportVRM, loadVRM, type LoadVRMOptions, type VRMSource } from './io'
 
 // Material types
 export type {
