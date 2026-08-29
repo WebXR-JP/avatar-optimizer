@@ -480,3 +480,4 @@ debug-viewer が起動している状態で、Playwright MCP を使って VRM �
 - `playwright-test-assets/Vivi.vrm` (Playwright MCP デバッグ用、優先して使用)
 - `packages/debug-viewer/public/AliciaSolid.vrm`
 - `packages/avatar-optimizer/tests/fixtures/AliciaSolid.vrm`
+- `packages/debug-viewer/public/AliciaSolid_COLOR0.vrm` (COLOR_0 頂点カラーの回帰確認用。詳細は `packages/debug-viewer/README.md`)

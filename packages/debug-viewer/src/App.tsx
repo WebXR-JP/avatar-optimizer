@@ -84,6 +84,9 @@ function App()
   // 利用可能なデフォルトモデル一覧
   const defaultModels = [
     { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
+    // COLOR_0(頂点カラー)を持つモデルの回帰確認用。生成方法は
+    // packages/avatar-optimizer/tools/inject-color0.js を参照
+    { name: 'AliciaSolid (COLOR_0)', path: '/AliciaSolid_COLOR0.vrm' },
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
     { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
