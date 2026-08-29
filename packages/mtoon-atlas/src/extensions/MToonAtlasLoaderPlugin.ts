@@ -1,8 +1,9 @@
-import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat, CompressedTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, WebGLRenderer } from 'three'
+import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat, CompressedTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping } from 'three'
 import { decode as decodePng } from 'fast-png'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import { rememberKtx2Source } from './ktx2-source-cache'
+import { resolveKtx2Loader } from './ktx2-loader'
 import
 {
   GLTFParser,
@@ -10,58 +11,23 @@ import
   MToonAtlasExtensionSchema,
 } from './types'
 
-// KTX2Loaderのシングルトンインスタンス
-let ktx2LoaderInstance: KTX2Loader | null = null
-
 /**
- * KTX2Loaderを取得または初期化する
- * ブラウザ環境でのみ動作（WebGLコンテキストが必要）
+ * MToonAtlasLoaderPlugin のオプション
  */
-function getKTX2Loader(): KTX2Loader | null
+export interface MToonAtlasLoaderPluginOptions
 {
-  if (ktx2LoaderInstance)
-  {
-    return ktx2LoaderInstance
-  }
+  /**
+   * 使用する KTX2Loader。
+   * GLTFLoader 側で設定済みのインスタンスを渡せば、二重生成を避けつつ
+   * three 本体とバージョンの揃ったトランスコーダーを共有できる
+   */
+  ktx2Loader?: KTX2Loader
 
-  // ブラウザ環境チェック
-  if (
-    typeof document === 'undefined' ||
-    typeof WebGLRenderingContext === 'undefined'
-  )
-  {
-    return null
-  }
-
-  try
-  {
-    // KTX2Loaderの初期化にはWebGLコンテキストが必要
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2')
-
-    if (!gl)
-    {
-      console.warn('MToonAtlasLoaderPlugin: WebGL2がサポートされていません')
-      return null
-    }
-
-    // WebGLRendererを一時的に作成してdetectSupportを呼び出す
-    const renderer = new WebGLRenderer({ canvas, context: gl })
-
-    ktx2LoaderInstance = new KTX2Loader()
-    ktx2LoaderInstance.setTranscoderPath(
-      'https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/libs/basis/'
-    )
-    ktx2LoaderInstance.detectSupport(renderer)
-
-    renderer.dispose()
-
-    return ktx2LoaderInstance
-  } catch (error)
-  {
-    console.warn('MToonAtlasLoaderPlugin: KTX2Loaderの初期化に失敗:', error)
-    return null
-  }
+  /**
+   * トランスコーダーの配信元ディレクトリ（末尾スラッシュ必須）。
+   * `ktx2Loader` を渡した場合は無視される
+   */
+  ktx2TranscoderPath?: string
 }
 
 export class MToonAtlasLoaderPlugin
@@ -73,9 +39,26 @@ export class MToonAtlasLoaderPlugin
   // 同じアトラス画像が複数マテリアルから参照されるため、画像単位でメモ化する
   private ktx2SourceByImageIndex: Map<number, Uint8Array> = new Map()
 
-  constructor(parser: GLTFParser)
+  // 呼び出し側から渡された KTX2Loader（あればこれを優先して使う）
+  private injectedKtx2Loader?: KTX2Loader
+
+  // 呼び出し側から渡されたトランスコーダーパス
+  private ktx2TranscoderPath?: string
+
+  constructor(parser: GLTFParser, options: MToonAtlasLoaderPluginOptions = {})
   {
     this.parser = parser
+    this.injectedKtx2Loader = options.ktx2Loader
+    this.ktx2TranscoderPath = options.ktx2TranscoderPath
+  }
+
+  /**
+   * このプラグインが使う KTX2Loader を取得する
+   * 注入されたインスタンス > 指定パス > アプリ全体の既定値 の順に解決する
+   */
+  private getKtx2Loader(): KTX2Loader | null
+  {
+    return this.injectedKtx2Loader ?? resolveKtx2Loader(this.ktx2TranscoderPath)
   }
 
   /**
@@ -311,7 +294,7 @@ export class MToonAtlasLoaderPlugin
       }
 
       // KTX2Loaderで読み込む
-      const ktx2Loader = getKTX2Loader()
+      const ktx2Loader = this.getKtx2Loader()
       if (!ktx2Loader)
       {
         console.warn('MToonAtlasLoaderPlugin: KTX2Loaderが利用できません')

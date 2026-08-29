@@ -6,11 +6,13 @@ import type { VRM } from '@pixiv/three-vrm'
 import { VRMLoaderPlugin } from '@pixiv/three-vrm'
 import { VRMMetaLoaderPlugin } from '@pixiv/three-vrm-core'
 import { VRMNodeConstraintLoaderPlugin } from '@pixiv/three-vrm-node-constraint'
-import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
+import {
+  MToonAtlasLoaderPlugin,
+  resolveKtx2Loader,
+} from '@webxr-jp/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
-import { WebGLRenderer } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { VRMLoaderError } from '../types'
 
 /**
@@ -19,72 +21,34 @@ import type { VRMLoaderError } from '../types'
  */
 export type VRMSource = string | File | Blob | ArrayBuffer
 
-// KTX2Loader のシングルトンインスタンス
-// WebGLRenderer との関連付けが必要なため、遅延初期化
-let ktx2LoaderInstance: KTX2Loader | null = null
-
 /**
- * KTX2Loader を取得または初期化する
- * ブラウザ環境でのみ動作（WebGL コンテキストが必要）
+ * loadVRM のオプション
  */
-function getKTX2Loader(): KTX2Loader | null {
-  if (ktx2LoaderInstance) {
-    return ktx2LoaderInstance
-  }
+export interface LoadVRMOptions {
+  /**
+   * 使用する KTX2Loader。GLTFLoader と MToonAtlasLoaderPlugin の双方で共有される。
+   *
+   * 渡すインスタンスは `detectSupport(renderer)` 済みである必要がある。
+   * 未初期化のまま渡すと three が
+   * `THREE.KTX2Loader: Missing initialization with .detectSupport( renderer ).`
+   * を投げる
+   */
+  ktx2Loader?: KTX2Loader
 
-  // ブラウザ環境チェック
-  if (
-    typeof document === 'undefined' ||
-    typeof WebGLRenderingContext === 'undefined'
-  ) {
-    return null
-  }
-
-  try {
-    // KTX2Loader の初期化には WebGL コンテキストが必要
-    // 一時的な canvas から WebGLRenderer を作成
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2')
-
-    if (!gl) {
-      console.warn(
-        'WebGL2 がサポートされていません。KTX2 テクスチャは読み込めません。',
-      )
-      return null
-    }
-
-    const renderer = new WebGLRenderer({
-      canvas,
-      context: gl,
-    })
-
-    ktx2LoaderInstance = new KTX2Loader()
-    // Basis Universal transcoder のパス（CDN から読み込み）
-    ktx2LoaderInstance.setTranscoderPath(
-      'https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/libs/basis/',
-    )
-    ktx2LoaderInstance.detectSupport(renderer)
-
-    // eslint-disable-next-line no-console
-    console.log('KTX2Loader 初期化完了')
-
-    // 一時的な renderer を破棄
-    renderer.dispose()
-
-    return ktx2LoaderInstance
-  } catch (error) {
-    console.warn(
-      'KTX2Loader の初期化に失敗しました。KTX2 テクスチャは読み込めません。',
-      error,
-    )
-    return null
-  }
+  /**
+   * KTX2 トランスコーダーの配信元ディレクトリ（末尾スラッシュ必須）。
+   * `ktx2Loader` を渡した場合は無視される。
+   * アプリ全体で切り替えるなら `setKtx2TranscoderPath()` の方が簡単
+   */
+  ktx2TranscoderPath?: string
 }
 
 /**
  * VRM を読み込む
  *
  * @param source - VRM ソース (URL文字列 / File / Blob / ArrayBuffer)
+ * @param options - KTX2 トランスコーダーの設定。省略時はアプリ全体の既定値
+ *                  （`setKtx2TranscoderPath()` で変更可能）に従う
  * @returns VRM オブジェクトまたはエラー
  *
  * @example
@@ -99,13 +63,19 @@ function getKTX2Loader(): KTX2Loader | null {
  * const result = await loadVRM(arrayBuffer)
  * ```
  */
-export function loadVRM(source: VRMSource): ResultAsync<VRM, VRMLoaderError> {
+export function loadVRM(
+  source: VRMSource,
+  options: LoadVRMOptions = {},
+): ResultAsync<VRM, VRMLoaderError> {
   return ResultAsync.fromPromise(
     (async () => {
       const loader = new GLTFLoader()
 
       // KTX2Loader を設定（KTX2 テクスチャのサポート）
-      const ktx2Loader = getKTX2Loader()
+      // GLTFLoader と MToonAtlasLoaderPlugin で同じインスタンスを共有し、
+      // 二重生成（一時 WebGLRenderer が 2 つ作られる）を避ける
+      const ktx2Loader =
+        options.ktx2Loader ?? resolveKtx2Loader(options.ktx2TranscoderPath)
       if (ktx2Loader) {
         loader.setKTX2Loader(ktx2Loader)
       }
@@ -137,8 +107,16 @@ export function loadVRM(source: VRMSource): ResultAsync<VRM, VRMLoaderError> {
       })
       // NodeConstraint拡張をロード（VRM1.0のaim/roll/rotation制約）
       loader.register((parser) => new VRMNodeConstraintLoaderPlugin(parser))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      loader.register((parser) => new MToonAtlasLoaderPlugin(parser as any))
+      loader.register(
+        (parser) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          new MToonAtlasLoaderPlugin(parser as any, {
+            ktx2Loader: ktx2Loader ?? undefined,
+            // ローダーの生成に失敗した場合、プラグイン側の再解決が
+            // 既定値（CDN）に落ちないよう、指定パスも渡しておく
+            ktx2TranscoderPath: options.ktx2TranscoderPath,
+          }),
+      )
 
       let gltf
       let blobUrl: string | null = null

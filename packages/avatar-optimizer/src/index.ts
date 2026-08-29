@@ -6,7 +6,18 @@
 export { optimizeModel } from './avatar-optimizer'
 
 // IO (load/export)
-export { exportVRM, loadVRM, type VRMSource } from './io'
+export { exportVRM, loadVRM, type LoadVRMOptions, type VRMSource } from './io'
+// KTX2 トランスコーダーの配信元設定。
+// 実体は @webxr-jp/mtoon-atlas だが、これは本パッケージの dependencies なので
+// avatar-optimizer だけを入れている利用者からは直接 import できない。
+// また利用者が mtoon-atlas を別途インストールしてバージョンがずれると、
+// モジュールが二重化して設定が loadVRM 側に効かなくなる。ここから再エクスポートする
+export {
+  clearKtx2LoaderCache,
+  DEFAULT_KTX2_TRANSCODER_PATH,
+  getKtx2TranscoderPath,
+  setKtx2TranscoderPath,
+} from '@webxr-jp/mtoon-atlas'
 
 // Material types
 export type {

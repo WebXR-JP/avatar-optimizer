@@ -13,10 +13,7 @@ import {
 } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
-import {
-  exportVRMToBuffer,
-  loadVRMFromBuffer,
-} from './helpers/vrm-roundtrip'
+import { exportVRMToBuffer, loadVRMFromBuffer } from './helpers/vrm-roundtrip'
 
 /**
  * COLOR_0頂点カラーを持つVRMのラウンドトリップ回帰テスト

@@ -3,10 +3,7 @@ import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
 import { Object3D, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
-import {
-  exportVRMToBuffer,
-  loadVRMFromBuffer,
-} from './helpers/vrm-roundtrip'
+import { exportVRMToBuffer, loadVRMFromBuffer } from './helpers/vrm-roundtrip'
 
 /**
  * MToonAtlasMaterialを使用した最適化済みVRMのラウンドトリップテスト

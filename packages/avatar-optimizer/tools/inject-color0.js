@@ -24,7 +24,10 @@ function parseGlb(buf) {
   }
   const jsonChunk = chunks.find((c) => c.type === CHUNK_JSON)
   const binChunk = chunks.find((c) => c.type === CHUNK_BIN)
-  return { json: JSON.parse(jsonChunk.data.toString('utf8')), bin: binChunk.data }
+  return {
+    json: JSON.parse(jsonChunk.data.toString('utf8')),
+    bin: binChunk.data,
+  }
 }
 
 function pad4(n) {
@@ -52,7 +55,15 @@ function buildGlb(json, bin) {
   binHeader.writeUInt32LE(binLen, 0)
   binHeader.writeUInt32LE(CHUNK_BIN, 4)
 
-  return Buffer.concat([header, jsonHeader, jsonBuf, jsonPad, binHeader, bin, binPad])
+  return Buffer.concat([
+    header,
+    jsonHeader,
+    jsonBuf,
+    jsonPad,
+    binHeader,
+    bin,
+    binPad,
+  ])
 }
 
 const [input, output] = process.argv.slice(2)
