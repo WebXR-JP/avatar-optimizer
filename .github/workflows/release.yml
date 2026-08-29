@@ -33,10 +33,39 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted Publishers (OIDC) には npm >= 11.5.1 が必要。
-      # pnpm publish が内部で npm に委譲するため、npm 側のバージョンが効く
+      # npm は 2 つの役割で使われる。
+      # 1. Trusted Publishers (OIDC) の publish → npm >= 11.5.1 が必要
+      # 2. changesets の公開済み判定。pnpm ワークスペースでは `pnpm info --json` が
+      #    使われるが、pnpm はこれを npm へパススルーする（pnpm.cjs の
+      #    passThruToNpm、runNpm が PATH から npm を解決する）
+      #
+      # npm 12 は `info --json` の出力をオブジェクトから配列に変更した。
+      # changesets 3.x は npm 経路（parseInfoResult$1）では配列に対応したが、
+      # pnpm 経路（parseInfoResult）は `JSON.parse(stdout)` のみで未対応のため、
+      # versions が undefined になり publish が落ちる。
+      # 1 を満たしつつ 12 系を避けるため、メジャーを 11 に固定する
       - name: Setup npm for publish
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.5.1
+
+      # 上記の前提が崩れていないか、実際に使われる `pnpm info --json` で確認する。
+      # 崩れたまま進むと publish 時まで失敗が表面化しない
+      - name: Verify pnpm info output shape
+        run: |
+          pnpm info pnpm --json \
+            | node -e '
+              let s = "";
+              process.stdin.on("data", (d) => (s += d)).on("end", () => {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed) || !parsed.versions) {
+                  console.error(
+                    "pnpm info --json の出力形式が変わっています。" +
+                    "changesets の公開済み判定が壊れるため npm のバージョンを見直してください。"
+                  );
+                  process.exit(1);
+                }
+                console.log("pnpm info --json: OK (object)");
+              });
+            '
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -47,7 +76,7 @@ jobs:
       # v2 は @changesets/cli 3.x が前提（v1 は CLI 3.x を弾く）。
       # 入力名が kebab-case になり、token は env ではなく github-token で渡す
       - name: Create Release Pull Request or Publish
-        uses: changesets/action@v2
+        uses: changesets/action@v2.1.1
         with:
           version-script: pnpm changeset:version
           publish-script: pnpm changeset:publish
