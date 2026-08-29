@@ -2,7 +2,7 @@ import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide,
 import { decode as decodePng } from 'fast-png'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
-import { isCompressedTexture, rememberKtx2Source } from './ktx2-source-cache'
+import { rememberKtx2Source } from './ktx2-source-cache'
 import { resolveKtx2Loader } from './ktx2-loader'
 import
 {
@@ -24,18 +24,24 @@ const SRGB_ATLAS_SLOTS = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
  * （debug-viewer では問題なく見えるのに、DFD をそのまま使う実環境では
  *   色が破綻する、という食い違いの原因になる）。
  *
- * 非圧縮テクスチャ（PNG など）は DFD を持たないため、
- * 従来どおりスロット名から設定する。
+ * KTX2 かどうかは呼び出し側から渡す。圧縮テクスチャかどうかでは判定できない:
+ * KTX2Loader はトランスコード不要なペイロード（VK_FORMAT_R8G8B8A8_UNORM など）
+ * に対して非圧縮の DataTexture を返すことがあり、その場合も colorSpace は
+ * DFD から設定されるため。
+ *
+ * KTX2 以外（PNG など）は DFD を持たないので、従来どおりスロット名から設定する。
  *
  * @param texture - 対象テクスチャ
  * @param slot - アトラススロット名（baseColor / normal など）
+ * @param isKtx2 - KTX2 から読み込んだテクスチャかどうか
  */
 export function applyAtlasTextureColorSpace(
   texture: Texture,
-  slot: string
+  slot: string,
+  isKtx2: boolean
 ): void
 {
-  if (isCompressedTexture(texture))
+  if (isKtx2)
   {
     return
   }
@@ -428,7 +434,7 @@ export class MToonAtlasLoaderPlugin
           }
           texture.flipY = false
 
-          applyAtlasTextureColorSpace(texture, key)
+          applyAtlasTextureColorSpace(texture, key, isKtx2)
 
           atlasedTextures[key] = texture
         } catch (error)

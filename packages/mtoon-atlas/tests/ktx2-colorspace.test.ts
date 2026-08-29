@@ -50,7 +50,7 @@ describe('KTX2 の colorSpace 尊重 (Issue #40)', () =>
     it('KTX2Loader が設定した sRGB を上書きしない', () =>
     {
       const texture = createCompressedTexture(SRGBColorSpace)
-      applyAtlasTextureColorSpace(texture, 'baseColor')
+      applyAtlasTextureColorSpace(texture, 'baseColor', true)
       expect(texture.colorSpace).toBe(SRGBColorSpace)
     })
 
@@ -59,15 +59,30 @@ describe('KTX2 の colorSpace 尊重 (Issue #40)', () =>
       // これが本題。ここで sRGB に塗り替えると、KTX2 のタグが誤っていても
       // 正しく表示されてしまい、エンコード側のバグを検知できなくなる
       const texture = createCompressedTexture(LinearSRGBColorSpace)
-      applyAtlasTextureColorSpace(texture, 'baseColor')
+      applyAtlasTextureColorSpace(texture, 'baseColor', true)
       expect(texture.colorSpace).toBe(LinearSRGBColorSpace)
     })
 
     it('非カラースロットでも KTX2 側の指定を保つ', () =>
     {
       const texture = createCompressedTexture(NoColorSpace)
-      applyAtlasTextureColorSpace(texture, 'normal')
+      applyAtlasTextureColorSpace(texture, 'normal', true)
       expect(texture.colorSpace).toBe(NoColorSpace)
+    })
+  })
+
+  describe('非圧縮だが KTX2 由来のテクスチャ', () =>
+  {
+    it('DataTexture でも KTX2 由来なら上書きしない', () =>
+    {
+      // KTX2Loader はトランスコード不要なペイロード
+      // （VK_FORMAT_R8G8B8A8_UNORM など）に対して非圧縮の DataTexture を返す。
+      // この場合も colorSpace は DFD から設定されるため、
+      // 「圧縮テクスチャかどうか」で判定すると取りこぼす
+      const texture = createPlainTexture()
+      texture.colorSpace = LinearSRGBColorSpace
+      applyAtlasTextureColorSpace(texture, 'baseColor', true)
+      expect(texture.colorSpace).toBe(LinearSRGBColorSpace)
     })
   })
 
@@ -78,7 +93,7 @@ describe('KTX2 の colorSpace 尊重 (Issue #40)', () =>
       for (const key of ['baseColor', 'shade', 'emissive', 'matcap', 'rim'])
       {
         const texture = createPlainTexture()
-        applyAtlasTextureColorSpace(texture, key)
+        applyAtlasTextureColorSpace(texture, key, false)
         expect(texture.colorSpace, key).toBe(SRGBColorSpace)
       }
     })
@@ -88,7 +103,7 @@ describe('KTX2 の colorSpace 尊重 (Issue #40)', () =>
       for (const key of ['normal', 'shadingShift', 'uvAnimationMask'])
       {
         const texture = createPlainTexture()
-        applyAtlasTextureColorSpace(texture, key)
+        applyAtlasTextureColorSpace(texture, key, false)
         expect(texture.colorSpace, key).toBe(NoColorSpace)
       }
     })
@@ -104,7 +119,7 @@ describe('KTX2 の colorSpace 尊重 (Issue #40)', () =>
       const cloned = texture.clone()
       expect(cloned.colorSpace).toBe(LinearSRGBColorSpace)
 
-      applyAtlasTextureColorSpace(cloned, 'baseColor')
+      applyAtlasTextureColorSpace(cloned, 'baseColor', true)
       expect(cloned.colorSpace).toBe(LinearSRGBColorSpace)
     })
   })
