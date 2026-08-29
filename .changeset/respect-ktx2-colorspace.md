@@ -1,5 +1,5 @@
 ---
-'@webxr-jp/mtoon-atlas': patch
+'@webxr-jp/mtoon-atlas': minor
 ---
 
 KTX2 テクスチャの colorSpace を上書きしないようにした (#40)
@@ -11,3 +11,5 @@ KTX2 テクスチャの colorSpace を上書きしないようにした (#40)
 KTX2Loader は DFD から正しい `colorSpace` を設定するので、圧縮テクスチャの場合は上書きしないようにした。非圧縮テクスチャ（PNG など）は DFD を持たないため、従来どおりスロット名から設定する。
 
 判定は `applyAtlasTextureColorSpace()` として公開した。
+
+**注意: 見た目が変わるアバターがあります。** `@webxr-jp/texture-compression@0.1.1`（2026-08-05、#36 の修正）より前に KTX2 圧縮したモデルは baseColor などがリニアタグで書き出されています。従来はこの上書きによって正しく表示されていましたが、本修正以降は DFD のとおりに扱われるため色が白く浮きます。該当するモデルは最適化をやり直してください。
