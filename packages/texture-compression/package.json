@@ -19,7 +19,6 @@
   "scripts": {
     "build": "pnpm lint:fix && pnpm typecheck && tsup",
     "dev": "tsup --watch",
-    "prepublishOnly": "npm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "format": "prettier --write .",
