@@ -29,6 +29,7 @@ export {
   setKtx2TranscoderPath,
   getKtx2TranscoderPath,
   resolveKtx2Loader,
+  clearKtx2LoaderCache,
   DEFAULT_KTX2_TRANSCODER_PATH,
 } from './extensions/ktx2-loader'
 export { MToonAtlasExporterPlugin } from './extensions/MToonAtlasExporterPlugin'

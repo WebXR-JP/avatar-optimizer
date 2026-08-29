@@ -33,10 +33,22 @@ describe('KTX2 トランスコーダーパス設定 (Issue #32)', () =>
 
   describe('既定値', () =>
   {
-    it('後方互換のため既定は従来の CDN のまま', () =>
+    it('未設定なら CDN の既定値を使う', () =>
     {
       expect(getKtx2TranscoderPath()).toBe(DEFAULT_KTX2_TRANSCODER_PATH)
       expect(DEFAULT_KTX2_TRANSCODER_PATH).toContain('cdn.jsdelivr.net')
+    })
+
+    it('既定の three バージョンが peerDependencies の下限と一致する', () =>
+    {
+      // 既定パスが peer より古い three を指していると、KTX2Loader（three 側の
+      // コード）が新しい transcoder API を呼んだときに壊れる
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const peerRange: string = require('../package.json').peerDependencies
+        .three
+      const floor = peerRange.replace(/^[^\d]*/, '')
+      const major = floor.split('.').slice(0, 2).join('.')
+      expect(DEFAULT_KTX2_TRANSCODER_PATH).toContain(`three@${major}`)
     })
   })
 

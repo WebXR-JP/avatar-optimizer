@@ -105,6 +105,9 @@ export function loadVRM(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           new MToonAtlasLoaderPlugin(parser as any, {
             ktx2Loader: ktx2Loader ?? undefined,
+            // ローダーの生成に失敗した場合、プラグイン側の再解決が
+            // 既定値（CDN）に落ちないよう、指定パスも渡しておく
+            ktx2TranscoderPath: options.ktx2TranscoderPath,
           }),
       )
 

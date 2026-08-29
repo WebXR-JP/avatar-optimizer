@@ -18,10 +18,19 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 
 /**
  * トランスコーダーパスの既定値
- * 後方互換のため、明示的に設定されない限りこれまでどおり CDN を使う
+ *
+ * 明示的に設定されない限り CDN を使う。バージョンは peerDependencies の
+ * 下限 (three >= 0.181) に合わせてある。KTX2Loader のワーカーは three 側の
+ * コードなので、極端に古いトランスコーダーだと将来の three で
+ * 未実装 API を呼んで壊れうる（例: r181 は ktx2File.isHDR() を参照する）。
+ *
+ * とはいえ URL に固定バージョンを書く以上、利用側の three とのずれは残る。
+ * 確実に揃えたい場合は three が同梱するトランスコーダーを
+ * node_modules からコピーして自己ホストし、setKtx2TranscoderPath() で
+ * そのパスを指定すること（README 参照）。
  */
 export const DEFAULT_KTX2_TRANSCODER_PATH =
-  'https://cdn.jsdelivr.net/npm/three@0.175.0/examples/jsm/libs/basis/'
+  'https://cdn.jsdelivr.net/npm/three@0.181.1/examples/jsm/libs/basis/'
 
 let defaultTranscoderPath: string = DEFAULT_KTX2_TRANSCODER_PATH
 
