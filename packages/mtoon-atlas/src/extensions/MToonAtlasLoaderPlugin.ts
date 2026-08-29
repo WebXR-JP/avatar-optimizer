@@ -2,7 +2,7 @@ import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide,
 import { decode as decodePng } from 'fast-png'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
-import { rememberKtx2Source } from './ktx2-source-cache'
+import { isCompressedTexture, rememberKtx2Source } from './ktx2-source-cache'
 import { resolveKtx2Loader } from './ktx2-loader'
 import
 {
@@ -10,6 +10,40 @@ import
   MTOON_ATLAS_EXTENSION_NAME,
   MToonAtlasExtensionSchema,
 } from './types'
+
+/** カラーデータとして扱うアトラススロット（sRGB） */
+const SRGB_ATLAS_SLOTS = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
+
+/**
+ * アトラステクスチャの colorSpace を決める
+ *
+ * KTX2 由来のテクスチャは KTX2Loader が DFD の transferFunction から
+ * colorSpace を設定済みなので、それを尊重して何もしない。
+ * ここで名前ベースに塗り替えると、KTX2 側のタグが誤っていても結果的に
+ * 正しく表示されてしまい、エンコード時のバグを隠してしまう
+ * （debug-viewer では問題なく見えるのに、DFD をそのまま使う実環境では
+ *   色が破綻する、という食い違いの原因になる）。
+ *
+ * 非圧縮テクスチャ（PNG など）は DFD を持たないため、
+ * 従来どおりスロット名から設定する。
+ *
+ * @param texture - 対象テクスチャ
+ * @param slot - アトラススロット名（baseColor / normal など）
+ */
+export function applyAtlasTextureColorSpace(
+  texture: Texture,
+  slot: string
+): void
+{
+  if (isCompressedTexture(texture))
+  {
+    return
+  }
+
+  texture.colorSpace = SRGB_ATLAS_SLOTS.includes(slot)
+    ? SRGBColorSpace
+    : NoColorSpace
+}
 
 /**
  * MToonAtlasLoaderPlugin のオプション
@@ -394,17 +428,7 @@ export class MToonAtlasLoaderPlugin
           }
           texture.flipY = false
 
-          // Set color space based on texture type
-          // baseColor, shade, emissive, matcap, rim are usually sRGB (color data)
-          // normal, shadingShift, uvAnimationMask are Linear (non-color data)
-          const srgbTextures = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
-          if (srgbTextures.includes(key))
-          {
-            texture.colorSpace = SRGBColorSpace
-          } else
-          {
-            texture.colorSpace = NoColorSpace
-          }
+          applyAtlasTextureColorSpace(texture, key)
 
           atlasedTextures[key] = texture
         } catch (error)
