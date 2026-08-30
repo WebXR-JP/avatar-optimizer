@@ -1,7 +1,33 @@
 import type { MToonMaterial, VRMExpressionManager } from '@pixiv/three-vrm'
-import { Mesh, SkinnedMesh } from 'three'
+import { Mesh, type Object3D, SkinnedMesh } from 'three'
 import type { SimplifyStatistics } from '../process/simplify'
-import type { CombinedMeshResult } from './material/types'
+import type { AtlasSkipped, CombinedMeshResult } from './material/types'
+
+/**
+ * 既にアトラス化済みか（MToonAtlasMaterial を含むか）を判定する
+ *
+ * アトラス化するとマテリアルは MToonAtlasMaterial に置き換わるため、
+ * 2 回目以降の実行では MToonMaterial が見つからない。
+ * 「元から MToon が無いモデル」と区別するために使う。
+ *
+ * instanceof を使わないのは、@webxr-jp/mtoon-atlas が
+ * 二重インストールされた場合にクラス実体が別になり判定が壊れるため。
+ *
+ * @param rootNode - 探索の起点
+ */
+export function hasAtlasedMaterial(rootNode: Object3D): boolean {
+  let found = false
+  rootNode.traverse((obj) => {
+    if (found || !(obj instanceof Mesh)) return
+    const materials = Array.isArray(obj.material)
+      ? obj.material
+      : [obj.material]
+    if (materials.some((m) => m && 'isMToonAtlasMaterial' in m)) {
+      found = true
+    }
+  })
+  return found
+}
 
 /**
  * materialMeshMap から非SkinnedMeshを収集する
@@ -71,8 +97,10 @@ export function collectExpressionMeshes(
  */
 export function createEmptyCombinedMeshResult(
   simplifyStats?: SimplifyStatistics,
+  atlasSkipped?: AtlasSkipped,
 ): CombinedMeshResult {
   return {
+    atlasSkipped,
     groups: new Map(),
     materialSlotIndex: new Map(),
     statistics: {

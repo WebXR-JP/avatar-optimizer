@@ -17,6 +17,7 @@ import {
   collectExpressionMeshes,
   collectNonSkinnedMeshes,
   createEmptyCombinedMeshResult,
+  hasAtlasedMaterial,
 } from './util/optimize-helpers'
 import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
 import { migrateSpringBone } from './util/springbone'
@@ -220,7 +221,25 @@ export function optimizeModel(
         )
       }
 
-      combineResult = createEmptyCombinedMeshResult(simplifyStats)
+      // スキップしたことを呼び出し側へ伝える。
+      // エラーにはしないため、これが無いと「最適化したのに何も起きていない」
+      // 状態に気づけない（後続の KTX2 圧縮も効かないまま出力される）
+      combineResult = createEmptyCombinedMeshResult(
+        simplifyStats,
+        hasAtlasedMaterial(rootNode)
+          ? {
+              reason: 'ALREADY_OPTIMIZED',
+              message:
+                '既にアトラス化済みのため、アトラス化とマテリアル統合を' +
+                'スキップしました。',
+            }
+          : {
+              reason: 'NO_MTOON_MATERIAL',
+              message:
+                'MToonMaterial が見つからないため、アトラス化とマテリアル統合を' +
+                'スキップしました（簡略化とマイグレーションのみ実行）。',
+            },
+      )
     }
 
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）

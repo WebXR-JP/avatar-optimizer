@@ -6,7 +6,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
+import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
 import './App.css'
 
@@ -142,6 +142,28 @@ function App()
     [setErrorWithLog],
   )
 
+  /**
+   * 最適化結果を UI に反映する
+   *
+   * MToonMaterial が無いモデルではアトラス化がスキップされ、
+   * optimizeModel は成功を返す。そのままだと「押したのに何も起きない」
+   * ように見えるため、スキップ理由を警告として表示する。
+   * 後続の KTX2 圧縮も効かないので、気づけないと未圧縮の VRM が出力される。
+   */
+  const reportOptimizationResult = useCallback(
+    (result: CombinedMeshResult, label: string) =>
+    {
+      if (result.atlasSkipped)
+      {
+        setErrorWithLog(`⚠ ${result.atlasSkipped.message}`)
+        return
+      }
+      // eslint-disable-next-line no-console
+      console.log(`${label}:`, result.statistics)
+    },
+    [setErrorWithLog],
+  )
+
   const handleOptimize = useCallback(async () =>
   {
     if (!vrm) return
@@ -159,13 +181,9 @@ function App()
       return
     }
 
-    const optimizationResult = result.value
-    if (optimizationResult.groups.size > 0)
-    {
-      console.log('Optimization successful:', optimizationResult.statistics)
-    }
+    reportOptimizationResult(result.value, 'Optimization successful')
     setIsOptimizing(false)
-  }, [vrm, atlasOptions, setErrorWithLog])
+  }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションなしの最適化のみ（デバッグ用）
   const handleOptimizeOnly = useCallback(async () =>
@@ -186,9 +204,12 @@ function App()
       return
     }
 
-    console.log('Optimization (without migration) successful:', result.value.statistics)
+    reportOptimizationResult(
+      result.value,
+      'Optimization (without migration) successful',
+    )
     setIsOptimizing(false)
-  }, [vrm, atlasOptions, setErrorWithLog])
+  }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションのみ（デバッグ用）
   const handleMigrateOnly = useCallback(() =>

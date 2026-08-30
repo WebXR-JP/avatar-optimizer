@@ -1,10 +1,11 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
-import { Bone, BoxGeometry, Mesh, Skeleton, SkinnedMesh } from 'three'
+import { Bone, BoxGeometry, Mesh, Object3D, Skeleton, SkinnedMesh } from 'three'
 import { describe, expect, it } from 'vitest'
 import {
   collectExpressionMeshes,
   collectNonSkinnedMeshes,
   createEmptyCombinedMeshResult,
+  hasAtlasedMaterial,
 } from '../../src/util/optimize-helpers'
 
 describe('optimize-helpers', () => {
@@ -133,6 +134,43 @@ describe('optimize-helpers', () => {
     })
   })
 
+  describe('hasAtlasedMaterial', () => {
+    it('MToonAtlasMaterial があれば true', () => {
+      // instanceof ではなくプロパティで判定するため、
+      // フラグを持つだけのオブジェクトでも検出される
+      const mat = new MToonMaterial()
+      ;(
+        mat as unknown as { isMToonAtlasMaterial: boolean }
+      ).isMToonAtlasMaterial = true
+      const root = new Object3D()
+      root.add(new Mesh(new BoxGeometry(), mat))
+
+      expect(hasAtlasedMaterial(root)).toBe(true)
+    })
+
+    it('通常の MToonMaterial だけなら false', () => {
+      const root = new Object3D()
+      root.add(new Mesh(new BoxGeometry(), new MToonMaterial()))
+
+      expect(hasAtlasedMaterial(root)).toBe(false)
+    })
+
+    it('マテリアル配列の中にあっても検出する', () => {
+      const atlas = new MToonMaterial()
+      ;(
+        atlas as unknown as { isMToonAtlasMaterial: boolean }
+      ).isMToonAtlasMaterial = true
+      const root = new Object3D()
+      root.add(new Mesh(new BoxGeometry(), [new MToonMaterial(), atlas]))
+
+      expect(hasAtlasedMaterial(root)).toBe(true)
+    })
+
+    it('メッシュが無ければ false', () => {
+      expect(hasAtlasedMaterial(new Object3D())).toBe(false)
+    })
+  })
+
   describe('createEmptyCombinedMeshResult', () => {
     it('simplifyStatsなしの場合、全フィールドが初期値', () => {
       const result = createEmptyCombinedMeshResult()
@@ -160,6 +198,33 @@ describe('optimize-helpers', () => {
       expect(result.statistics.simplify).toBe(simplifyStats)
       expect(result.statistics.simplify?.processedMeshCount).toBe(5)
       expect(result.statistics.simplify?.simplifiedVertexCount).toBe(5000)
+    })
+
+    it('atlasSkippedを渡さない場合はundefined', () => {
+      const result = createEmptyCombinedMeshResult()
+
+      expect(result.atlasSkipped).toBeUndefined()
+    })
+
+    it('ALREADY_OPTIMIZED も保持できる', () => {
+      const result = createEmptyCombinedMeshResult(undefined, {
+        reason: 'ALREADY_OPTIMIZED',
+        message: '既にアトラス化済み',
+      })
+
+      expect(result.atlasSkipped?.reason).toBe('ALREADY_OPTIMIZED')
+    })
+
+    it('atlasSkippedを渡すとそのまま保持される', () => {
+      // 呼び出し側が「アトラス化がスキップされた」ことを検知できるようにする。
+      // これが無いと最適化が no-op でも正常終了に見えてしまう
+      const result = createEmptyCombinedMeshResult(undefined, {
+        reason: 'NO_MTOON_MATERIAL',
+        message: 'テスト用メッセージ',
+      })
+
+      expect(result.atlasSkipped?.reason).toBe('NO_MTOON_MATERIAL')
+      expect(result.atlasSkipped?.message).toBe('テスト用メッセージ')
     })
   })
 })
