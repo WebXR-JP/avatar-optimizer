@@ -781,7 +781,28 @@ export class VRMExporterPlugin {
           constraintData.aim.weight = aim.weight
         }
       } else {
-        // roll / aim 以外の VRMNodeConstraint は rotation 制約
+        // roll / aim 以外の VRMNodeConstraint は rotation 制約として出力する。
+        // VRMC_node_constraint 1.0 の制約は roll / aim / rotation の 3 種のみ
+        // なので通常は正しいが、VRMNodeConstraint を直接継承した spec 外の
+        // カスタム制約もここに落ちる。その場合は回転コピーとして書き出され、
+        // 再生側で意図しない挙動になりうるため警告する。
+        //
+        // 判定に constructor.name を使わないのは、利用側のバンドラが
+        // minify するとクラス名が潰れ、正規の rotation 制約まで
+        // 警告してしまうため。
+        // _dstRestQuat は three-vrm の組み込み制約 3 種が共通で持つ
+        // フィールド（傘・standalone どちらの dist にも残る）。
+        // roll / aim は上の分岐で除かれているので、ここに来て
+        // このフィールドを持たないものは組み込み由来ではない。
+        if (!('_dstRestQuat' in constraint)) {
+          console.warn(
+            `VRMExporterPlugin: 未知の制約 (${constraint.constructor?.name ?? 'unknown'}) を ` +
+              'rotation 制約として出力します。VRMC_node_constraint 1.0 は ' +
+              'roll / aim / rotation のみ対応しているため、再生側で ' +
+              '意図しない回転コピーが発生する可能性があります',
+          )
+        }
+
         constraintData.rotation = {
           source: sourceIndex,
         }
