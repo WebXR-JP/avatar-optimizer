@@ -738,6 +738,8 @@ export class VRMExporterPlugin {
 
     const json = this.writer.json
     let hasConstraints = false
+    // rotation として書き出した組み込み由来でない制約のクラス名（ループ後にまとめて警告する）
+    const unknownConstraintNames = new Set<string>()
 
     for (const constraint of manager.constraints) {
       // destination（制約を受けるノード）のインデックスを取得
@@ -789,18 +791,23 @@ export class VRMExporterPlugin {
         //
         // 判定に constructor.name を使わないのは、利用側のバンドラが
         // minify するとクラス名が潰れ、正規の rotation 制約まで
-        // 警告してしまうため。
-        // _dstRestQuat は three-vrm の組み込み制約 3 種が共通で持つ
-        // フィールド（傘・standalone どちらの dist にも残る）。
-        // roll / aim は上の分岐で除かれているので、ここに来て
-        // このフィールドを持たないものは組み込み由来ではない。
-        if (!('_dstRestQuat' in constraint)) {
-          console.warn(
-            `VRMExporterPlugin: 未知の制約 (${constraint.constructor?.name ?? 'unknown'}) を ` +
-              'rotation 制約として出力します。VRMC_node_constraint 1.0 は ' +
-              'roll / aim / rotation のみ対応しているため、再生側で ' +
-              '意図しない回転コピーが発生する可能性があります',
-          )
+        // 警告してしまうため。代わりに three-vrm の組み込み制約 3 種が
+        // 共通で持つ _dstRestQuat / _invSrcRestQuat の有無を見る。
+        // roll / aim は上の分岐で除かれているので、ここに来てどちらも
+        // 持たないものは組み込み由来ではない。
+        //
+        // これはヒューリスティックで、両側に穴がある:
+        //   - 誤検知: three-vrm 側のフィールド改名や、利用側バンドラの
+        //     プロパティ mangle（terser の mangle.properties 等）
+        //   - 見逃し: VRMRotationConstraint を雛形にしたカスタム制約は
+        //     これらのフィールドを引き継ぐため検知できない
+        // どちらも出力される glTF には影響しない（警告の有無が変わるだけ）。
+        // 誤検知時に大量出力しないよう、警告はループ後に 1 回だけ出す。
+        if (
+          !('_dstRestQuat' in constraint) &&
+          !('_invSrcRestQuat' in constraint)
+        ) {
+          unknownConstraintNames.add(constraint.constructor?.name ?? 'unknown')
         }
 
         constraintData.rotation = {
@@ -817,6 +824,15 @@ export class VRMExporterPlugin {
       }
 
       hasConstraints = true
+    }
+
+    if (unknownConstraintNames.size > 0) {
+      console.warn(
+        `VRMExporterPlugin: 組み込み以外の制約 (${[...unknownConstraintNames].join(', ')}) を ` +
+          'rotation 制約として出力しました。VRMC_node_constraint 1.0 は ' +
+          'roll / aim / rotation のみ対応しているため、再生側で ' +
+          '意図しない回転コピーが発生する可能性があります',
+      )
     }
 
     // extensionsUsed に登録

@@ -11,40 +11,52 @@ import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
  * サイレントだと再生側で意図しない回転コピーが起きても原因を追えない。
  */
 
-/** exportNodeConstraints が必要とする最小限の GLTFWriter を作る */
-function createWriter(nodes: Object3D[]) {
-  return {
-    json: { nodes: nodes.map(() => ({})) as Record<string, unknown>[] },
+type ExportedNode = {
+  extensions?: {
+    VRMC_node_constraint?: { constraint: Record<string, unknown> }
+  }
+}
+
+/**
+ * 制約群をエクスポートし、destination ノードごとの出力 JSON を返す
+ *
+ * 各制約に destination / source / weight を補ってから
+ * 最小限の GLTFWriter を組み立てる。
+ */
+function exportConstraints(
+  constraints: Record<string, unknown>[],
+): ExportedNode[] {
+  const nodes: Object3D[] = []
+  for (const constraint of constraints) {
+    const destination = new Object3D()
+    const source = new Object3D()
+    Object.assign(constraint, { destination, source, weight: 1.0 })
+    nodes.push(destination, source)
+  }
+
+  const writer = {
+    json: { nodes: nodes.map(() => ({})) as ExportedNode[] },
     nodeMap: new Map(nodes.map((node, index) => [node, index])),
   }
-}
 
-/** 制約 1 件だけを持つ VRM 相当のオブジェクトを作る */
-function createVRM(constraint: object): VRM {
-  return {
-    nodeConstraintManager: { constraints: new Set([constraint]) },
+  const vrm = {
+    nodeConstraintManager: { constraints: new Set(constraints) },
   } as unknown as VRM
+
+  // exportNodeConstraints は private だが、検証対象は分岐そのものなので直接呼ぶ
+  const plugin = new VRMExporterPlugin(writer) as unknown as {
+    exportNodeConstraints(vrm: VRM): void
+  }
+  plugin.exportNodeConstraints(vrm)
+
+  // destination は 2 つおきに並んでいる
+  return constraints.map((_, i) => writer.json.nodes[i * 2])
 }
 
-/** プラグインを組み立てて制約をエクスポートし、生成された JSON を返す */
-function exportConstraint(constraint: Record<string, unknown>) {
-  const destination = new Object3D()
-  const source = new Object3D()
-  Object.assign(constraint, { destination, source, weight: 1.0 })
-
-  const writer = createWriter([destination, source])
-  const plugin = new VRMExporterPlugin(writer)
-  // exportNodeConstraints は private だが、ここでの検証対象は
-  // 分岐そのものなので直接呼ぶ
-  ;(
-    plugin as unknown as { exportNodeConstraints(vrm: VRM): void }
-  ).exportNodeConstraints(createVRM(constraint))
-
-  return writer.json.nodes[0] as {
-    extensions?: {
-      VRMC_node_constraint?: { constraint: Record<string, unknown> }
-    }
-  }
+/** 出力された制約タイプ（roll / aim / rotation）を取り出す */
+function constraintTypeOf(node: ExportedNode): string | undefined {
+  const constraint = node.extensions?.VRMC_node_constraint?.constraint
+  return constraint && Object.keys(constraint)[0]
 }
 
 describe('exportNodeConstraints の未知の制約に対する警告', () => {
@@ -52,23 +64,19 @@ describe('exportNodeConstraints の未知の制約に対する警告', () => {
     vi.restoreAllMocks()
   })
 
-  it('正規の rotation 制約では警告しない', () => {
+  it('組み込みの roll / aim / rotation 制約では警告しない', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    // three-vrm の組み込み制約が持つフィールド
-    const node = exportConstraint({ _dstRestQuat: {}, _invSrcRestQuat: {} })
+    const [roll, aim, rotation] = exportConstraints([
+      { rollAxis: 'X', _dstRestQuat: {}, _invSrcRestQuat: {} },
+      { aimAxis: 'PositiveX', _dstRestQuat: {}, _invSrcRestQuat: {} },
+      { _dstRestQuat: {}, _invSrcRestQuat: {} },
+    ])
 
-    expect(warn).not.toHaveBeenCalled()
-    expect(node.extensions?.VRMC_node_constraint?.constraint).toHaveProperty(
-      'rotation',
-    )
-  })
-
-  it('roll / aim 制約では警告しない', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    exportConstraint({ rollAxis: 'X' })
-    exportConstraint({ aimAxis: 'PositiveX' })
+    // 分岐に到達せず素通りしていないことを、出力 JSON で確かめる
+    expect(constraintTypeOf(roll)).toBe('roll')
+    expect(constraintTypeOf(aim)).toBe('aim')
+    expect(constraintTypeOf(rotation)).toBe('rotation')
 
     expect(warn).not.toHaveBeenCalled()
   })
@@ -77,17 +85,31 @@ describe('exportNodeConstraints の未知の制約に対する警告', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     class MyCustomConstraint {}
-    const node = exportConstraint(
+    const [node] = exportConstraints([
       new MyCustomConstraint() as unknown as Record<string, unknown>,
-    )
+    ])
 
     // 挙動は従来どおり（rotation として出力）
-    expect(node.extensions?.VRMC_node_constraint?.constraint).toHaveProperty(
-      'rotation',
-    )
+    expect(constraintTypeOf(node)).toBe('rotation')
 
     // 診断できるようクラス名を含めて警告する
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0][0]).toContain('MyCustomConstraint')
+  })
+
+  it('複数のカスタム制約があっても警告は 1 回にまとめる', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    class ConstraintA {}
+    class ConstraintB {}
+    exportConstraints([
+      new ConstraintA() as unknown as Record<string, unknown>,
+      new ConstraintA() as unknown as Record<string, unknown>,
+      new ConstraintB() as unknown as Record<string, unknown>,
+    ])
+
+    // 誤検知したときにログを埋め尽くさないよう、種類ごとに 1 度だけ挙げる
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('ConstraintA, ConstraintB')
   })
 })
