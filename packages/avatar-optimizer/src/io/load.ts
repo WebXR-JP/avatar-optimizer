@@ -5,7 +5,6 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { VRMLoaderPlugin } from '@pixiv/three-vrm'
 import { VRMMetaLoaderPlugin } from '@pixiv/three-vrm-core'
-import { VRMNodeConstraintLoaderPlugin } from '@pixiv/three-vrm-node-constraint'
 import {
   MToonAtlasLoaderPlugin,
   resolveKtx2Loader,
@@ -105,8 +104,6 @@ export function loadVRM(
 
         return new VRMLoaderPlugin(parser, { metaPlugin })
       })
-      // NodeConstraint拡張をロード（VRM1.0のaim/roll/rotation制約）
-      loader.register((parser) => new VRMNodeConstraintLoaderPlugin(parser))
       loader.register(
         (parser) =>
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
