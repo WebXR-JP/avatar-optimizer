@@ -23,6 +23,10 @@ export {
 export type {
   AtlasBuildResult,
   AtlasResult,
+  // optimizeModel の戻り値。アトラス化をスキップした場合は atlasSkipped が入る
+  AtlasSkipped,
+  AtlasSkipReason,
+  CombinedMeshResult,
   MaterialPlacement,
   PackingLayouts as PackingResult,
   SlotAtlasImage,

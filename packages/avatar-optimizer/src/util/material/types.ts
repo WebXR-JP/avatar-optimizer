@@ -157,9 +157,40 @@ export interface MaterialSlotInfo {
 }
 
 /**
+ * アトラス化・マテリアル統合をスキップした理由
+ *
+ * `ALREADY_OPTIMIZED`: 既に最適化済みだった。アトラス化するとマテリアルは
+ *   MToonAtlasMaterial に置き換わるため、2 回目以降は MToonMaterial が
+ *   見つからない。この場合は簡略化・マイグレーションも含めて何も行わない
+ *   （いずれも冪等ではなく、再適用するとモデルが劣化・破壊されるため）。
+ * `NO_MTOON_MATERIAL`: モデルに MToonMaterial が 1 つも無かった。
+ *   最適化対象が存在しないため、簡略化とマイグレーションのみ実行される。
+ */
+export type AtlasSkipReason = 'ALREADY_OPTIMIZED' | 'NO_MTOON_MATERIAL'
+
+export interface AtlasSkipped {
+  reason: AtlasSkipReason
+  /** 呼び出し側でそのまま表示できる説明文 */
+  message: string
+}
+
+/**
  * マテリアル結合の結果
  */
 export interface CombinedMeshResult {
+  /**
+   * アトラス化・マテリアル統合をスキップした場合に理由が入る。
+   *
+   * スキップしても `optimizeModel` はエラーにならず、簡略化と
+   * マイグレーションだけを実行して正常終了する。呼び出し側からは
+   * 「最適化したのに何も起きていない」ように見えるため、
+   * 気づけるようにここへ理由を残す。
+   *
+   * 後続の KTX2 テクスチャ圧縮はアトラス化されたマテリアルにしか
+   * 適用されないので、スキップに気づかないまま圧縮されていない
+   * VRM が出力される点に注意。
+   */
+  atlasSkipped?: AtlasSkipped
   /** レンダーモードごとのメッシュグループ */
   groups: Map<RenderMode, MeshGroup>
   /** マテリアルからスロット情報へのマッピング */
