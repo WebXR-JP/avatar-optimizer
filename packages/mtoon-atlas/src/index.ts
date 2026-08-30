@@ -24,6 +24,8 @@ export type {
 // GLTF拡張プラグイン
 export { MToonAtlasLoaderPlugin } from './extensions/MToonAtlasLoaderPlugin'
 export type { MToonAtlasLoaderPluginOptions } from './extensions/MToonAtlasLoaderPlugin'
+// アトラステクスチャの colorSpace 決定ロジック（独自ローダー実装向け）
+export { applyAtlasTextureColorSpace } from './extensions/MToonAtlasLoaderPlugin'
 // KTX2 トランスコーダーの配信元設定（CDN 依存を外して自己ホストする場合に使う）
 export {
   setKtx2TranscoderPath,

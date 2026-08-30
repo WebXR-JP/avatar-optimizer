@@ -11,6 +11,46 @@ import
   MToonAtlasExtensionSchema,
 } from './types'
 
+/** カラーデータとして扱うアトラススロット（sRGB） */
+const SRGB_ATLAS_SLOTS = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
+
+/**
+ * アトラステクスチャの colorSpace を決める
+ *
+ * KTX2 由来のテクスチャは KTX2Loader が DFD の transferFunction から
+ * colorSpace を設定済みなので、それを尊重して何もしない。
+ * ここで名前ベースに塗り替えると、KTX2 側のタグが誤っていても結果的に
+ * 正しく表示されてしまい、エンコード時のバグを隠してしまう
+ * （debug-viewer では問題なく見えるのに、DFD をそのまま使う実環境では
+ *   色が破綻する、という食い違いの原因になる）。
+ *
+ * KTX2 かどうかは呼び出し側から渡す。圧縮テクスチャかどうかでは判定できない:
+ * KTX2Loader はトランスコード不要なペイロード（VK_FORMAT_R8G8B8A8_UNORM など）
+ * に対して非圧縮の DataTexture を返すことがあり、その場合も colorSpace は
+ * DFD から設定されるため。
+ *
+ * KTX2 以外（PNG など）は DFD を持たないので、従来どおりスロット名から設定する。
+ *
+ * @param texture - 対象テクスチャ
+ * @param slot - アトラススロット名（baseColor / normal など）
+ * @param isKtx2 - KTX2 から読み込んだテクスチャかどうか
+ */
+export function applyAtlasTextureColorSpace(
+  texture: Texture,
+  slot: string,
+  isKtx2: boolean
+): void
+{
+  if (isKtx2)
+  {
+    return
+  }
+
+  texture.colorSpace = SRGB_ATLAS_SLOTS.includes(slot)
+    ? SRGBColorSpace
+    : NoColorSpace
+}
+
 /**
  * MToonAtlasLoaderPlugin のオプション
  */
@@ -394,17 +434,7 @@ export class MToonAtlasLoaderPlugin
           }
           texture.flipY = false
 
-          // Set color space based on texture type
-          // baseColor, shade, emissive, matcap, rim are usually sRGB (color data)
-          // normal, shadingShift, uvAnimationMask are Linear (non-color data)
-          const srgbTextures = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
-          if (srgbTextures.includes(key))
-          {
-            texture.colorSpace = SRGBColorSpace
-          } else
-          {
-            texture.colorSpace = NoColorSpace
-          }
+          applyAtlasTextureColorSpace(texture, key, isKtx2)
 
           atlasedTextures[key] = texture
         } catch (error)
