@@ -205,6 +205,11 @@ export function optimizeModel(
         yield* materialInfoResult
       }
 
+      // 既に最適化済みか（＝同じモデルへの重複実行か）を先に判定する。
+      // 重複実行では簡略化もマイグレーションも冪等ではなく、
+      // 適用するたびにモデルが劣化・破壊されるため何もしない。
+      const isAlreadyOptimized = hasAtlasedMaterial(rootNode)
+
       // MToonMaterialがない場合: アトラス化・マテリアル統合をスキップして
       // 簡略化とマイグレーションのみ実行する（エラーにはしない）
       for (const mesh of collectExpressionMeshes(
@@ -213,7 +218,8 @@ export function optimizeModel(
         excludedMeshes.add(mesh)
       }
 
-      if (options.simplify) {
+      // 簡略化は再実行のたびに頂点が減り続けるので、重複実行では行わない
+      if (options.simplify && !isAlreadyOptimized) {
         simplifyStats = yield* await simplifyMeshes(
           rootNode,
           excludedMeshes,
@@ -226,13 +232,13 @@ export function optimizeModel(
       // 状態に気づけない（後続の KTX2 圧縮も効かないまま出力される）
       combineResult = createEmptyCombinedMeshResult(
         simplifyStats,
-        hasAtlasedMaterial(rootNode)
+        isAlreadyOptimized
           ? {
               reason: 'ALREADY_OPTIMIZED',
               message:
-                '既にアトラス化済みのため、アトラス化とマテリアル統合を' +
-                'スキップしました（簡略化とマイグレーションは実行されます。' +
-                '簡略化は再実行のたびに累積するので注意）。',
+                '既に最適化済みのため、何も行いませんでした' +
+                '（アトラス化・簡略化・マイグレーションはいずれも' +
+                '再実行するとモデルが壊れるためスキップします）。',
             }
           : {
               reason: 'NO_MTOON_MATERIAL',
@@ -246,7 +252,15 @@ export function optimizeModel(
     // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
     // VRM1.0の場合はスキップ（metaVersion === '1'）
     const isVRM1 = vrm.meta?.metaVersion === '1'
-    if (options.migrateVRM0ToVRM1 && !isVRM1) {
+
+    // 既に最適化済みのモデルではマイグレーションもスキップする。
+    // migrateSkeletonVRM0ToVRM1 は Y軸180度回転と頂点/bindMatrix の焼き込みを
+    // 行うが vrm.meta.metaVersion は更新されないため、同じ VRM に対して
+    // 二重に適用され、アバターが後ろ向きになる（実機で再現確認済み）。
+    const skipAsAlreadyOptimized =
+      combineResult.atlasSkipped?.reason === 'ALREADY_OPTIMIZED'
+
+    if (options.migrateVRM0ToVRM1 && !isVRM1 && !skipAsAlreadyOptimized) {
       // SpringBoneManagerを一時的に退避
       // マイグレーション中に外部からvrm.update()が呼ばれても
       // SpringBoneが動かないようにする

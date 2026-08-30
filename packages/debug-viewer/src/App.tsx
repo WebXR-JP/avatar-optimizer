@@ -153,12 +153,12 @@ function App()
   const reportOptimizationResult = useCallback(
     (result: CombinedMeshResult, label: string) =>
     {
+      // 警告と統計は排他にしない。NO_MTOON_MATERIAL では簡略化が
+      // 実行されているので、その統計を握り潰さないようにする
       if (result.atlasSkipped)
       {
         setErrorWithLog(`⚠ ${result.atlasSkipped.message}`)
-        return
       }
-      // eslint-disable-next-line no-console
       console.log(`${label}:`, result.statistics)
     },
     [setErrorWithLog],

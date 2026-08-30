@@ -22,6 +22,13 @@ if (result.isOk() && result.value.atlasSkipped) {
 - `ALREADY_OPTIMIZED` … 既にアトラス化済み。アトラス化するとマテリアルは `MToonAtlasMaterial` に置き換わるため、2 回目以降は MToonMaterial が見つからない
 - `NO_MTOON_MATERIAL` … モデルに MToonMaterial が 1 つも無い
 
+**あわせて重複実行時の破壊を防ぐようにした。** これまで `ALREADY_OPTIMIZED` に該当するケースでも簡略化とマイグレーションは実行されていたが、どちらも冪等ではない。
+
+- 簡略化は再実行のたびに頂点が減り続ける
+- `migrateSkeletonVRM0ToVRM1` は Y 軸 180 度回転と頂点／bindMatrix の焼き込みを行うが `vrm.meta.metaVersion` を更新しないため、VRM0 モデルでは二重適用されてアバターが後ろ向きになる
+
+既に最適化済みと判定した場合は、これらも含めて何も行わない。
+
 `message` は呼び出し側でそのまま表示できる説明文。
 
 既存フィールドは変更していないため後方互換性は保たれる。あわせて `CombinedMeshResult`（`optimizeModel` の戻り値型）を公開 API に追加した。
