@@ -231,7 +231,8 @@ export function optimizeModel(
               reason: 'ALREADY_OPTIMIZED',
               message:
                 '既にアトラス化済みのため、アトラス化とマテリアル統合を' +
-                'スキップしました。',
+                'スキップしました（簡略化とマイグレーションは実行されます。' +
+                '簡略化は再実行のたびに累積するので注意）。',
             }
           : {
               reason: 'NO_MTOON_MATERIAL',

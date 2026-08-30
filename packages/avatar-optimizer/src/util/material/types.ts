@@ -164,7 +164,8 @@ export interface MaterialSlotInfo {
  *
  * `ALREADY_OPTIMIZED`: 既に最適化済みだった。アトラス化するとマテリアルは
  *   MToonAtlasMaterial に置き換わるため、2 回目以降は MToonMaterial が
- *   見つからない。同じモデルに対する重複実行なので何もしない。
+ *   見つからない。アトラス化はスキップされるが簡略化とマイグレーションは
+ *   実行される点に注意（簡略化は再実行のたびに累積する）。
  * `NO_MTOON_MATERIAL`: モデルに MToonMaterial が 1 つも無かった。
  *   最適化対象が存在しないため、簡略化とマイグレーションのみ実行される。
  */
