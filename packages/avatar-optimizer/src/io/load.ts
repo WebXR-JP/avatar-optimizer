@@ -82,6 +82,9 @@ export function loadVRM(
       loader.register((parser) => {
         // VRMMetaLoaderPlugin をインスタンス化して広範囲のライセンスを許可
         const metaPlugin = new VRMMetaLoaderPlugin(parser, {
+          // サムネイルは既定では読み込まれず、エクスポート時に失われる。
+          // meta.thumbnailImage を維持するために明示的に要求する
+          needThumbnailImage: true,
           acceptLicenseUrls: [
             // VRM 1.0 公式ライセンス
             'https://vrm.dev/licenses/1.0/',
