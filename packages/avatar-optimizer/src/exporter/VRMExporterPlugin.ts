@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { VRM } from '@pixiv/three-vrm'
+import type { VRM, VRMMeta } from '@pixiv/three-vrm'
 import type {
   VRMAimConstraint,
   VRMRollConstraint,
 } from '@pixiv/three-vrm-node-constraint'
-import { Bone, Object3D, Vector3 } from 'three'
+import { Bone, Object3D, RGBAFormat, type Texture, Vector3 } from 'three'
+import type { VRM1MetaDef } from '../types'
+import { buildVRM1MetaDef } from './meta'
 
 export class VRMExporterPlugin {
   public readonly name = 'VRMC_vrm'
@@ -193,61 +195,46 @@ export class VRMExporterPlugin {
     this.exportNodeConstraints(vrm)
   }
 
-  private exportMeta(vrm: VRM) {
+  /**
+   * VRMC_vrm.meta をエクスポートする
+   *
+   * VRM 0.x / 1.0 の読み替えは meta.ts に切り出してある。
+   * ここは three の GLTFWriter に依存するサムネイル解決のみ受け持つ。
+   */
+  private exportMeta(vrm: VRM): VRM1MetaDef | undefined {
     if (!vrm.meta) return undefined
+    return buildVRM1MetaDef(vrm.meta, this.processThumbnail(vrm.meta))
+  }
 
-    const meta = vrm.meta as any // Cast to any to handle both VRM 0.0 and 1.0 meta types
+  /**
+   * サムネイルを gltf.images へ登録してインデックスを返す
+   *
+   * 仕様上 meta.thumbnailImage は textures ではなく images のインデックス。
+   * 実行時の持ち方が VRM 0.x (THREE.Texture) と 1.0 (HTMLImageElement) で
+   * 異なるため、どちらも生の画像に均してから processImage へ渡す。
+   */
+  private processThumbnail(meta: VRMMeta): number | undefined {
+    // VRM 0.x は meta.texture、1.0 は meta.thumbnailImage
+    const texture = (meta as any).texture as Texture | undefined
+    const image = texture?.image ?? (meta as any).thumbnailImage
+    if (!image) return undefined
 
-    // Map VRM 0.0 meta to VRM 1.0 if necessary, or just use what's available
-    // VRM 0.0 uses 'title', VRM 1.0 uses 'name'
-
-    // VRM 0.0のライセンス名をVRM 1.0のライセンスURLに変換
-    let licenseUrl = meta.licenseUrl
-    if (!licenseUrl && meta.licenseName) {
-      // VRM 0.0のライセンス名からVRM 1.0のURLへマッピング
-      const licenseMapping: Record<string, string> = {
-        Redistribution_Prohibited: 'https://vrm.dev/licenses/1.0/',
-        CC0: 'https://creativecommons.org/publicdomain/zero/1.0/',
-        CC_BY: 'https://creativecommons.org/licenses/by/4.0/',
-        CC_BY_NC: 'https://creativecommons.org/licenses/by-nc/4.0/',
-        CC_BY_SA: 'https://creativecommons.org/licenses/by-sa/4.0/',
-        CC_BY_NC_SA: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
-        CC_BY_ND: 'https://creativecommons.org/licenses/by-nd/4.0/',
-        CC_BY_NC_ND: 'https://creativecommons.org/licenses/by-nc-nd/4.0/',
-        Other: 'https://vrm.dev/licenses/1.0/',
-      }
-      licenseUrl =
-        licenseMapping[meta.licenseName] ?? 'https://vrm.dev/licenses/1.0/'
-    }
-
-    // licenseUrlが未定義の場合はデフォルトを設定
-    if (!licenseUrl) {
-      licenseUrl = 'https://vrm.dev/licenses/1.0/'
-    }
-
-    return {
-      name: meta.name ?? meta.title,
-      version: meta.version,
-      authors: meta.authors ?? (meta.author ? [meta.author] : undefined),
-      copyrightInformation: meta.copyrightInformation,
-      contactInformation: meta.contactInformation,
-      references:
-        meta.references ?? (meta.reference ? [meta.reference] : undefined),
-      thirdPartyLicenses: meta.thirdPartyLicenses,
-      thumbnailImage: meta.thumbnailImage
-        ? this.writer.processTexture(meta.thumbnailImage)
-        : undefined,
-      licenseUrl,
-      avatarPermission: meta.avatarPermission ?? 'onlyAuthor',
-      allowExcessivelyViolentUsage: meta.allowExcessivelyViolentUsage ?? false,
-      allowExcessivelySexualUsage: meta.allowExcessivelySexualUsage ?? false,
-      commercialUsage: meta.commercialUsage ?? 'personalNonProfit',
-      allowPoliticalOrReligiousUsage:
-        meta.allowPoliticalOrReligiousUsage ?? false,
-      allowAntisocialOrHateUsage: meta.allowAntisocialOrHateUsage ?? false,
-      creditNotation: meta.creditNotation ?? 'required',
-      allowRedistribution: meta.allowRedistribution ?? false,
-      modification: meta.modification ?? 'prohibited',
+    // processImage は扱えない画像（KTX2 由来の CompressedTexture など）で
+    // 例外を投げる。afterParse から呼ぶためそのままだと export 全体が
+    // 失敗するので、サムネイル無しに縮退させる
+    try {
+      const index = this.writer.processImage(
+        image,
+        texture?.format ?? RGBAFormat,
+        texture?.flipY ?? false,
+      )
+      return typeof index === 'number' ? index : undefined
+    } catch (error) {
+      console.warn(
+        'VRMExporterPlugin: サムネイルを書き出せませんでした',
+        error instanceof Error ? error.message : error,
+      )
+      return undefined
     }
   }
 

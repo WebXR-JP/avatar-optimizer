@@ -333,3 +333,35 @@ export interface ExportVRMOptions {
 export type ExportVRMError =
   | { type: 'EXPORT_FAILED'; message: string }
   | { type: 'INVALID_VRM'; message: string }
+
+/**
+ * glTF に書き出す VRMC_vrm.meta の形
+ *
+ * three-vrm の VRM1Meta は実行時表現（thumbnailImage が HTMLImageElement）
+ * なので、直列化後の形を別に持つ。thumbnailImage は仕様どおり
+ * gltf.images へのインデックス。
+ */
+export interface VRM1MetaDef {
+  name?: string
+  version?: string
+  authors?: string[]
+  copyrightInformation?: string
+  contactInformation?: string
+  references?: string[]
+  thirdPartyLicenses?: string
+  thumbnailImage?: number
+  licenseUrl: string
+  otherLicenseUrl?: string
+  avatarPermission: 'onlyAuthor' | 'onlySeparatelyLicensedPerson' | 'everyone'
+  allowExcessivelyViolentUsage: boolean
+  allowExcessivelySexualUsage: boolean
+  commercialUsage: 'personalNonProfit' | 'personalProfit' | 'corporation'
+  allowPoliticalOrReligiousUsage: boolean
+  allowAntisocialOrHateUsage: boolean
+  creditNotation: 'required' | 'unnecessary'
+  allowRedistribution: boolean
+  modification:
+    | 'prohibited'
+    | 'allowModification'
+    | 'allowModificationRedistribution'
+}
