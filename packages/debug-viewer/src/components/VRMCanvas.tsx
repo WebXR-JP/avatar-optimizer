@@ -9,6 +9,7 @@ import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avata
 import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
+import { LicenseSection } from './LicenseSection'
 import './VRMCanvas.css'
 
 
@@ -382,6 +383,12 @@ function VRMCanvas({
             style={{ display: 'none' }}
           />
         </Section>
+
+        {vrm && (
+          <Section title="ライセンス">
+            <LicenseSection key={vrm.scene.uuid} vrm={vrm} />
+          </Section>
+        )}
 
         <Section title="最適化" defaultOpen>
           <button

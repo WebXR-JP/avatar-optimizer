@@ -238,7 +238,7 @@
 }
 
 .vrm-stats dt { color: var(--vrm-text-dim); white-space: nowrap; }
-.vrm-stats dd { margin: 0; }
+.vrm-stats dd { margin: 0; min-width: 0; }
 .vrm-stats__sub { color: var(--vrm-text-dim); }
 
 /* ---------------- 表情スライダー ---------------- */
@@ -321,4 +321,18 @@
 .vrm-sidebar::-webkit-scrollbar-track,
 .vrm-expressions::-webkit-scrollbar-track {
   background-color: transparent;
+}
+
+/* URL は長いので 1 行に省略する。全文は title 属性で見せる */
+.vrm-link {
+  display: block;
+  color: var(--vrm-accent);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vrm-link:hover {
+  text-decoration: underline;
 }
