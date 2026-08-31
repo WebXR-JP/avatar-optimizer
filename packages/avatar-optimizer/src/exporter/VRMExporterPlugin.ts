@@ -219,12 +219,23 @@ export class VRMExporterPlugin {
     const image = texture?.image ?? (meta as any).thumbnailImage
     if (!image) return undefined
 
-    const index = this.writer.processImage(
-      image,
-      texture?.format ?? RGBAFormat,
-      texture?.flipY ?? false,
-    )
-    return typeof index === 'number' ? index : undefined
+    // processImage は扱えない画像（KTX2 由来の CompressedTexture など）で
+    // 例外を投げる。afterParse から呼ぶためそのままだと export 全体が
+    // 失敗するので、サムネイル無しに縮退させる
+    try {
+      const index = this.writer.processImage(
+        image,
+        texture?.format ?? RGBAFormat,
+        texture?.flipY ?? false,
+      )
+      return typeof index === 'number' ? index : undefined
+    } catch (error) {
+      console.warn(
+        'VRMExporterPlugin: サムネイルを書き出せませんでした',
+        error instanceof Error ? error.message : error,
+      )
+      return undefined
+    }
   }
 
   private exportHumanoid(vrm: VRM) {

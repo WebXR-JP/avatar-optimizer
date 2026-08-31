@@ -20,9 +20,16 @@ import type { VRM1MetaDef } from '../types'
 /** VRM 1.0 の既定ライセンス URL */
 const DEFAULT_LICENSE_URL = 'https://vrm.dev/licenses/1.0/'
 
-/** VRM 0.x の licenseName から VRM 1.0 の licenseUrl へのマッピング */
+/**
+ * VRM 0.x の licenseName に対応する条文の URL
+ *
+ * licenseUrl には入れない。three-vrm の VRMMetaLoaderPlugin は
+ * acceptLicenseUrls の既定が VRM 1.0 の URL のみで、それ以外を書くと
+ * 「The license url ... is not accepted」で読み込めないファイルになる。
+ * UniVRM も licenseUrl は VRM 1.0 の URL で固定している。
+ * 情報を失わないよう otherLicenseUrl 側へ寄せる。
+ */
 const LICENSE_URL_BY_NAME: Record<string, string> = {
-  Redistribution_Prohibited: DEFAULT_LICENSE_URL,
   CC0: 'https://creativecommons.org/publicdomain/zero/1.0/',
   CC_BY: 'https://creativecommons.org/licenses/by/4.0/',
   CC_BY_NC: 'https://creativecommons.org/licenses/by-nc/4.0/',
@@ -30,7 +37,6 @@ const LICENSE_URL_BY_NAME: Record<string, string> = {
   CC_BY_NC_SA: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
   CC_BY_ND: 'https://creativecommons.org/licenses/by-nd/4.0/',
   CC_BY_NC_ND: 'https://creativecommons.org/licenses/by-nc-nd/4.0/',
-  Other: DEFAULT_LICENSE_URL,
 }
 
 /** VRM 0.x の allowedUserName から VRM 1.0 の avatarPermission へ */
@@ -51,7 +57,17 @@ const AVATAR_PERMISSION_BY_ALLOWED_USER: Record<
  */
 function isVRM0Meta(meta: VRMMeta): meta is VRM0Meta {
   if (meta.metaVersion === '0') return true
-  return 'allowedUserName' in meta || 'commercialUssageName' in meta
+  if (meta.metaVersion === '1') return false
+  // VRM 1.0 にしかないフィールドが無く、0.x にしかないものがあれば 0.x
+  const vrm0Only = [
+    'allowedUserName',
+    'commercialUssageName',
+    'title',
+    'author',
+    'licenseName',
+    'texture',
+  ]
+  return vrm0Only.some((key) => key in meta)
 }
 
 /**
@@ -60,17 +76,12 @@ function isVRM0Meta(meta: VRMMeta): meta is VRM0Meta {
  * VRM 1.0 には otherLicenseUrl しかない。UniVRM は内容が異なる場合に
  * どちらも失わないよう連結する (vrm-c/UniVRM#1611)。
  */
-function mergeOtherUrls(
-  licenseUrl: string | undefined,
-  permissionUrl: string | undefined,
-): string | undefined {
-  const license = licenseUrl?.trim()
-  const permission = permissionUrl?.trim()
+function mergeOtherUrls(...urls: (string | undefined)[]): string | undefined {
+  const unique = [...new Set(urls.map((url) => url?.trim()).filter(Boolean))]
 
-  if (license && permission) {
-    return license === permission ? license : `'${license}', '${permission}'`
-  }
-  return license || permission || undefined
+  if (unique.length === 0) return undefined
+  if (unique.length === 1) return unique[0]
+  return unique.map((url) => `'${url}'`).join(', ')
 }
 
 /**
@@ -84,24 +95,26 @@ function migrateVRM0Meta(
   thumbnailImage: number | undefined,
 ): VRM1MetaDef {
   return {
-    name: meta.title,
+    // name / authors は VRM 1.0 の必須フィールドなので undefined にしない
+    name: meta.title || '',
     version: meta.version,
-    authors: meta.author ? [meta.author] : undefined,
+    authors: meta.author ? [meta.author] : [],
     contactInformation: meta.contactInformation,
     references: meta.reference ? [meta.reference] : undefined,
     thumbnailImage,
 
-    licenseUrl:
-      (meta.licenseName && LICENSE_URL_BY_NAME[meta.licenseName]) ??
-      DEFAULT_LICENSE_URL,
+    licenseUrl: DEFAULT_LICENSE_URL,
+    // CC の条文 URL は licenseUrl ではなくこちらへ寄せる
     otherLicenseUrl: mergeOtherUrls(
       meta.otherLicenseUrl,
       meta.otherPermissionUrl,
+      meta.licenseName ? LICENSE_URL_BY_NAME[meta.licenseName] : undefined,
     ),
 
+    // 空文字が来ても既定値に落とすため ?? ではなく ||
     avatarPermission:
       (meta.allowedUserName &&
-        AVATAR_PERMISSION_BY_ALLOWED_USER[meta.allowedUserName]) ??
+        AVATAR_PERMISSION_BY_ALLOWED_USER[meta.allowedUserName]) ||
       'onlyAuthor',
     allowExcessivelyViolentUsage: meta.violentUssageName === 'Allow',
     allowExcessivelySexualUsage: meta.sexualUssageName === 'Allow',
@@ -131,9 +144,9 @@ function convertVRM1Meta(
   thumbnailImage: number | undefined,
 ): VRM1MetaDef {
   return {
-    name: meta.name,
+    name: meta.name || '',
     version: meta.version,
-    authors: meta.authors,
+    authors: meta.authors ?? [],
     copyrightInformation: meta.copyrightInformation,
     contactInformation: meta.contactInformation,
     references: meta.references,

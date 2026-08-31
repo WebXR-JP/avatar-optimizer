@@ -73,10 +73,57 @@ describe('buildVRM1MetaDef: VRM 0.x からの移行', () => {
     expect(def.allowRedistribution).toBe(false)
     expect(def.creditNotation).toBe('required')
 
-    // licenseUrl には反映する（情報としては残す）
-    expect(def.licenseUrl).toBe(
+    // licenseUrl は VRM 1.0 の URL で固定する。CC の URL を書くと
+    // three-vrm の既定 acceptLicenseUrls に弾かれて読めなくなる
+    expect(def.licenseUrl).toBe('https://vrm.dev/licenses/1.0/')
+
+    // 条文の URL は otherLicenseUrl に残す
+    expect(def.otherLicenseUrl).toBe(
       'https://creativecommons.org/publicdomain/zero/1.0/',
     )
+  })
+
+  it('CC の URL を otherLicenseUrl の既存値と併記する', () => {
+    const own = 'https://a.test'
+    const cc = 'https://creativecommons.org/licenses/by/4.0/'
+    const def = buildVRM1MetaDef(
+      vrm0({ licenseName: 'CC_BY', otherLicenseUrl: own }),
+      undefined,
+    )
+
+    expect(def.otherLicenseUrl).toBe(`'${own}', '${cc}'`)
+  })
+
+  it('name / authors は必須なので空でも undefined にしない', () => {
+    const def = buildVRM1MetaDef(vrm0({}), undefined)
+
+    expect(def.name).toBe('')
+    expect(def.authors).toEqual([])
+  })
+
+  it('空文字の権限は既定値に落とす', () => {
+    // ?? だと空文字が素通りし、列挙値として不正な値を書き出してしまう
+    const def = buildVRM1MetaDef(
+      vrm0({
+        allowedUserName: '' as VRM0Meta['allowedUserName'],
+        licenseName: '' as VRM0Meta['licenseName'],
+      }),
+      undefined,
+    )
+
+    expect(def.avatarPermission).toBe('onlyAuthor')
+    expect(def.licenseUrl).toBe('https://vrm.dev/licenses/1.0/')
+  })
+
+  it('title / author しか無いメタも VRM 0.x として扱う', () => {
+    // metaVersion も allowedUserName も無い手組みのメタ
+    const def = buildVRM1MetaDef(
+      { title: 'Foo', author: 'Bar' } as unknown as VRM0Meta,
+      undefined,
+    )
+
+    expect(def.name).toBe('Foo')
+    expect(def.authors).toEqual(['Bar'])
   })
 
   it('title / author / reference を 1.0 の名前と配列に移す', () => {
@@ -155,6 +202,24 @@ describe('buildVRM1MetaDef: VRM 1.0 はそのまま写す', () => {
     expect(def.modification).toBe('allowModificationRedistribution')
     expect(def.allowRedistribution).toBe(true)
     expect(def.creditNotation).toBe('unnecessary')
+  })
+
+  it('0.x のフィールドが紛れていても metaVersion を優先する', () => {
+    const def = buildVRM1MetaDef(
+      {
+        metaVersion: '1',
+        name: 'ただしい名前',
+        authors: ['me'],
+        licenseUrl: 'https://vrm.dev/licenses/1.0/',
+        avatarPermission: 'everyone',
+        // 何かの拍子に 0.x のキーが残っていても 1.0 として扱う
+        title: 'まちがった名前',
+      } as unknown as VRM1Meta,
+      undefined,
+    )
+
+    expect(def.name).toBe('ただしい名前')
+    expect(def.avatarPermission).toBe('everyone')
   })
 
   it('未指定の権限は制限的な既定値で埋める', () => {

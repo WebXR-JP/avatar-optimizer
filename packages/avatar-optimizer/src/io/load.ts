@@ -62,6 +62,22 @@ export interface LoadVRMOptions {
  * const result = await loadVRM(arrayBuffer)
  * ```
  */
+/**
+ * サムネイル読み込みで作られた blob URL を解放する
+ *
+ * three-vrm は VRM 1.0 のサムネイルを bufferView から作った blob URL 経由で
+ * 読み込むが、解放しないためロードのたびに漏れる。
+ * 画像はデコード済みで URL はもう不要なので、ここで解放する。
+ */
+function revokeThumbnailObjectURL(vrm: VRM): void {
+  // VRM 0.x のサムネイルは Texture 経由なのでここでは対象外
+  const image = (vrm.meta as { thumbnailImage?: HTMLImageElement } | undefined)
+    ?.thumbnailImage
+  if (image?.src?.startsWith('blob:')) {
+    URL.revokeObjectURL(image.src)
+  }
+}
+
 export function loadVRM(
   source: VRMSource,
   options: LoadVRMOptions = {},
@@ -150,6 +166,8 @@ export function loadVRM(
         // VRM を読み込んだ後にシーン全体の matrixWorld を更新することで、
         // すべてのノード（特に動的に追加された tail ノード）の matrixWorld を初期化する。
         vrm.scene.updateMatrixWorld(true)
+
+        revokeThumbnailObjectURL(vrm)
 
         return vrm
       } finally {

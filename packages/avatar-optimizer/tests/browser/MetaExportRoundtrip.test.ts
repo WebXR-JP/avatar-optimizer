@@ -1,4 +1,5 @@
-import type { VRM } from '@pixiv/three-vrm'
+import { type VRM, VRMLoaderPlugin } from '@pixiv/three-vrm'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
 import { exportVRM } from '../../src/io/export'
 import { loadVRM } from '../../src/io/load'
@@ -92,6 +93,29 @@ describe('Meta Export Roundtrip (VRM 0.x)', () => {
     // 仕様上 textures ではなく images のインデックス
     expect(typeof thumbnail).toBe('number')
     expect(thumbnail as number).toBeLessThan((json.images ?? []).length)
+  })
+
+  it('CC ライセンスでも既定設定の three-vrm で読み込める', async () => {
+    const buf = await (await fetch(VRM_FILE)).arrayBuffer()
+    const vrm = await loadVrmFromBuffer(buf)
+    // Alicia は licenseName: Other なので CC 系に差し替えて確かめる
+    ;(vrm.meta as unknown as Record<string, unknown>).licenseName = 'CC0'
+
+    const outBuf = (await exportVRM(vrm, {}))._unsafeUnwrap()
+    const meta = parseGlbJson(outBuf).extensions?.VRMC_vrm?.meta
+
+    // CC の URL を licenseUrl に書くと acceptLicenseUrls の既定に弾かれる。
+    // 条文は otherLicenseUrl に残す
+    expect(meta?.licenseUrl).toBe('https://vrm.dev/licenses/1.0/')
+    expect(meta?.otherLicenseUrl).toContain(
+      'https://creativecommons.org/publicdomain/zero/1.0/',
+    )
+
+    // acceptLicenseUrls を広げない素の three-vrm で読めること
+    const loader = new GLTFLoader()
+    loader.register((parser) => new VRMLoaderPlugin(parser))
+    const gltf = await loader.parseAsync(outBuf, '')
+    expect(gltf.userData.vrm).toBeTruthy()
   })
 
   it('再ロードしても権限が保たれる', async () => {

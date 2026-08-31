@@ -10,6 +10,8 @@ VRM 0.x と VRM 1.0 では権限フィールドの名前が異なる（`allowedU
 
 `licenseName`（CC ライセンス）は権限に反映しません。UniVRM も同様で、CC の条文から権限を推論して緩めることを避けています。そのため CC0 のモデルでも `modification` は `prohibited` のままです。
 
+VRM 0.x の CC ライセンスは `licenseUrl` ではなく `otherLicenseUrl` に記録します。CC の URL を `licenseUrl` に書くと、three-vrm の `acceptLicenseUrls`（既定は VRM 1.0 の URL のみ）に弾かれ、標準設定のアプリで開けないファイルになるためです。
+
 あわせて、VRM 0.x / 1.0 を問わず起きていた 2 つの欠落も直しました。
 
 - `otherLicenseUrl` / `otherPermissionUrl` が常に消えていた（`licenseName: Other` では条文への唯一のリンク）
