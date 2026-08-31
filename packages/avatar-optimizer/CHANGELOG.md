@@ -1,5 +1,70 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.3.0
+
+### Minor Changes
+
+- 81f2454: アトラス化をスキップした場合に理由を返すようにした (#41)
+
+  `optimizeModel` は MToonMaterial が見つからない場合、アトラス化とマテリアル統合をスキップして正常終了する。仕様どおりの挙動だが、呼び出し側から「スキップされた」ことを知る手段が無く、**最適化を実行したのに何も起きていない状態に気づけなかった**。
+
+  後続の KTX2 テクスチャ圧縮はアトラス化されたマテリアルにしか適用されないため、スキップに気づかないまま圧縮されていない VRM が出力される点も問題だった。
+
+  `CombinedMeshResult` に `atlasSkipped` を追加した。スキップした場合のみ入る。
+
+  ```ts
+  const result = await optimizeModel(vrm)
+  if (result.isOk() && result.value.atlasSkipped) {
+    console.warn(result.value.atlasSkipped.message)
+  }
+  ```
+
+  理由は 2 種類ある。
+  - `ALREADY_OPTIMIZED` … 既にアトラス化済み。アトラス化するとマテリアルは `MToonAtlasMaterial` に置き換わるため、2 回目以降は MToonMaterial が見つからない
+  - `NO_MTOON_MATERIAL` … モデルに MToonMaterial が 1 つも無い
+
+  **あわせて重複実行時の破壊を防ぐようにした。** これまで `ALREADY_OPTIMIZED` に該当するケースでも簡略化とマイグレーションは実行されていたが、どちらも冪等ではない。
+  - 簡略化は再実行のたびに頂点が減り続ける
+  - `migrateSkeletonVRM0ToVRM1` は Y 軸 180 度回転と頂点／bindMatrix の焼き込みを行うが `vrm.meta.metaVersion` を更新しないため、VRM0 モデルでは二重適用されてアバターが後ろ向きになる
+
+  既に最適化済みと判定した場合は、これらも含めて何も行わない。
+
+  `message` は呼び出し側でそのまま表示できる説明文。
+
+  既存フィールドは変更していないため後方互換性は保たれる。あわせて `CombinedMeshResult`（`optimizeModel` の戻り値型）を公開 API に追加した。
+
+- f29f1b9: VRM 0.x のライセンス・権限情報が最適化後に失われる問題を修正しました。
+
+  VRM 0.x と VRM 1.0 では権限フィールドの名前が異なる（`allowedUserName` / `avatarPermission` など）ため、読み替えないと未定義扱いになり、最も制限的な既定値で書き出されていました。「誰でも利用可・商用可」のモデルが「作者のみ・非営利」として記録されます。
+
+  変換規則は UniVRM のリファレンス実装（`MigrationVrmMeta.cs`）に準拠しています。「きつくなる方向は許すが、緩くなる方向は許さない」という方針で、`commercialUssageName: Allow` は `corporation` ではなく `personalProfit` に落とします。
+
+  `licenseName`（CC ライセンス）は権限に反映しません。UniVRM も同様で、CC の条文から権限を推論して緩めることを避けています。そのため CC0 のモデルでも `modification` は `prohibited` のままです。
+
+  VRM 0.x の CC ライセンスは `licenseUrl` ではなく `otherLicenseUrl` に記録します。CC の URL を `licenseUrl` に書くと、three-vrm の `acceptLicenseUrls`（既定は VRM 1.0 の URL のみ）に弾かれ、標準設定のアプリで開けないファイルになるためです。
+
+  あわせて、VRM 0.x / 1.0 を問わず起きていた 2 つの欠落も直しました。
+  - `otherLicenseUrl` / `otherPermissionUrl` が常に消えていた（`licenseName: Other` では条文への唯一のリンク）
+  - サムネイルが失われていた。仕様上 `meta.thumbnailImage` は `gltf.images` のインデックスですが、`textures` のインデックスを書いていました
+
+  VRM 1.0 のモデルで既に指定済みの権限は変わりません。
+
+### Patch Changes
+
+- c702e7d: `loadVRM` で冗長だった `VRMNodeConstraintLoaderPlugin` の個別登録を削除 (#43)
+
+  傘パッケージ `@pixiv/three-vrm` の `VRMLoaderPlugin` は、`options.nodeConstraintPlugin` が未指定なら内部で `VRMNodeConstraintLoaderPlugin` を生成する。`loadVRM` は `metaPlugin` しか渡していないため、その隣で行っていた個別登録は重複していた。
+
+  VRM が掴む `nodeConstraintManager` は常に傘側が生成したものなので、個別登録したプラグインは manager を二重に作るだけで実際には使われていなかった。挙動の変更はない。
+
+  傘に同梱されたクラスと単体パッケージのクラスは別実体になり、`instanceof` 判定が成立しないという紛らわしさの温床にもなっていた（エクスポート側は #37 でダックタイピング化済み）。
+
+- 4ea142f: VRMC_node_constraint のエクスポート時、spec 外のカスタム制約を rotation 制約として書き出す際に警告を出すようにしました。
+
+  VRMC_node_constraint 1.0 が定義するのは roll / aim / rotation の 3 種のみですが、`VRMNodeConstraint` を直接継承した独自の制約もこの経路に落ちて rotation として出力されます。これまでは無言だったため、再生側で意図しない回転コピーが起きても原因を追えませんでした。
+
+  出力される glTF は変わりません。診断用の `console.warn` が増えるだけです。
+
 ## 0.2.1
 
 ### Patch Changes

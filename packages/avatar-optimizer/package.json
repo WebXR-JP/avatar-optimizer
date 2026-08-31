@@ -1,6 +1,6 @@
 {
   "name": "@webxr-jp/avatar-optimizer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "3D model optimization library for WebXR applications",
   "type": "module",
   "main": "./dist/index.js",
