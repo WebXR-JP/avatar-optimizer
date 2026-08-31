@@ -36,10 +36,17 @@ jobs:
       #   run: pnpm lint
 
       # changeset のパッケージ名の誤りを PR 時点で捕まえる。
-      # 存在しない/ignore 済みのパッケージを指していると失敗するため、
-      # main にマージしてからリリースが落ちるのを防げる
+      # 存在しない / ignore 済みのパッケージを指していると失敗するので、
+      # main にマージしてからリリースが落ちるのを防げる。
+      #
+      # status ではなく version を空打ちするのは、status が main との差分を
+      # 取るため shallow clone では動かないから。version は .changeset を
+      # 読むだけで git 履歴を要らない（release.yml も同じ条件で動いている）。
+      # 生成物は使わないので破棄する。
       - name: Validate changesets
-        run: pnpm changeset status
+        run: |
+          pnpm changeset version
+          git checkout -- . && git clean -fd
 
       - name: Build
         run: pnpm build
