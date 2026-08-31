@@ -43,8 +43,16 @@ jobs:
       # 取るため shallow clone では動かないから。version は .changeset を
       # 読むだけで git 履歴を要らない（release.yml も同じ条件で動いている）。
       # 生成物は使わないので破棄する。
+      #
+      # version は changeset が 0 件だと exit 1 になる（リリース PR は
+      # 消費済みでこの状態）。先に件数を数えてスキップする。
       - name: Validate changesets
         run: |
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "changeset なし。検証をスキップする"
+            exit 0
+          fi
           pnpm changeset version
           git checkout -- . && git clean -fd
 
