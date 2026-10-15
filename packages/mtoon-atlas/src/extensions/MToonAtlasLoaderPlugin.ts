@@ -1,4 +1,5 @@
-import { Material, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat, CompressedTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping } from 'three'
+import { Material, Mesh, Texture, SRGBColorSpace, NoColorSpace, DoubleSide, FrontSide, NearestFilter, DataTexture, FloatType, RGBAFormat, CompressedTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping } from 'three'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { decode as decodePng } from 'fast-png'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
@@ -148,6 +149,34 @@ export class MToonAtlasLoaderPlugin
     }
 
     return this._loadMaterialAsync(materialIndex)
+  }
+
+  /**
+   * アウトラインメッシュの描画順を本体より前に戻す
+   *
+   * avatar-optimizer はアウトラインを本体と別メッシュ（isOutline のマテリアル）で
+   * 書き出し、本体より小さい renderOrder を付けて先に描いている。renderOrder は
+   * glTF に保存されないため、再読み込み後は両方 0 になり three がオブジェクト id 順に
+   * 並べる。透明グループは depthWrite=false なので、アウトライン（BackSide・黒）が
+   * 本体の後に描かれると深度でも隠れず、髪などが真っ黒になる。
+   * ここで isOutline のメッシュだけ renderOrder を 1 つ下げ、必ず本体より先に描く
+   */
+  public afterRoot(gltf: GLTF): Promise<void> | null
+  {
+    gltf.scene.traverse((object) =>
+    {
+      if (!(object instanceof Mesh)) return
+      const materials = Array.isArray(object.material)
+        ? object.material
+        : [object.material]
+      const hasOutline = materials.some(
+        (material) =>
+          material instanceof MToonAtlasMaterial && material.isOutline,
+      )
+      if (!hasOutline) return
+      object.renderOrder -= 1
+    })
+    return null
   }
 
   /**

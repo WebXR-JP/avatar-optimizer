@@ -1,6 +1,6 @@
 import { VRM } from '@pixiv/three-vrm'
 import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
-import { Object3D, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
+import { Mesh, Object3D, SkinnedMesh, SRGBColorSpace, Texture } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
 import { exportVRMToBuffer, loadVRMFromBuffer } from './helpers/vrm-roundtrip'
@@ -140,6 +140,31 @@ describe('MToonAtlas Roundtrip', () => {
       expect(reloadedMaterial.parameterTexture?.texelsPerSlot).toBe(
         originalTexelsPerSlot,
       )
+    })
+
+    it('should render outline meshes before their main meshes (issue #66)', () => {
+      // renderOrder は glTF に保存されない。ローダーが isOutline のメッシュを
+      // 本体より先に描くよう復元しないと、透明グループ（depthWrite=false）の
+      // 黒いアウトラインが本体の上に乗って髪が真っ黒になる
+      const outlineMeshes: Mesh[] = []
+      const mainMeshes: Mesh[] = []
+      reloadedVRM.scene.traverse((object) => {
+        if (!(object instanceof Mesh)) return
+        const material = Array.isArray(object.material)
+          ? object.material[0]
+          : object.material
+        if (!(material instanceof MToonAtlasMaterial)) return
+        if (material.isOutline) outlineMeshes.push(object)
+        else mainMeshes.push(object)
+      })
+      expect(outlineMeshes.length).toBeGreaterThan(0)
+      expect(mainMeshes.length).toBeGreaterThan(0)
+
+      for (const outline of outlineMeshes) {
+        for (const main of mainMeshes) {
+          expect(outline.renderOrder).toBeLessThan(main.renderOrder)
+        }
+      }
     })
 
     it('should preserve atlased textures', () => {
