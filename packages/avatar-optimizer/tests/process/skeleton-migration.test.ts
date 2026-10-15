@@ -1177,6 +1177,145 @@ describe('skeleton-migration', () => {
     })
   })
 
+  describe('non-bone nodes in the bone tree', () => {
+    /**
+     * hips(Bone, humanoid) -> hair(Bone, 非humanoid・回転あり) の階層に
+     * 非Boneノードをぶら下げた SkinnedMesh を作る
+     */
+    function createSceneWithHairBone(): {
+      rootNode: Object3D
+      hips: Bone
+      hair: Bone
+      bones: Bone[]
+    } {
+      const hips = new Bone()
+      hips.name = 'hips'
+      hips.position.set(0, 1, 0)
+
+      const hair = new Bone()
+      hair.name = 'hair'
+      hair.position.set(0.1, 0.5, 0.05)
+      hair.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 6)
+      hips.add(hair)
+
+      const bones = [hips, hair]
+      const skeleton = new Skeleton(bones)
+
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geometry.setAttribute(
+        'skinWeight',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+      geometry.setAttribute(
+        'skinIndex',
+        new BufferAttribute(new Float32Array(12).fill(0), 4),
+      )
+
+      const mesh = new SkinnedMesh(geometry)
+      mesh.add(hips)
+      mesh.bind(skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+      return { rootNode, hips, hair, bones }
+    }
+
+    function worldPos(obj: Object3D): Vector3 {
+      obj.updateWorldMatrix(true, false)
+      return obj.getWorldPosition(new Vector3())
+    }
+
+    function expectRotated180(after: Vector3, before: Vector3): void {
+      expect(after.x).toBeCloseTo(-before.x, 5)
+      expect(after.y).toBeCloseTo(before.y, 5)
+      expect(after.z).toBeCloseTo(-before.z, 5)
+    }
+
+    it('should rotate an end node (plain Object3D) under a non-humanoid bone', () => {
+      // スキンの joint でない末端ノードは GLTFLoader が Object3D として生成する。
+      // Bone だけを辿ると補正から漏れ、親の座標系だけ反転して前後逆になる
+      const { rootNode, hips, hair } = createSceneWithHairBone()
+      const endNode = new Object3D()
+      endNode.name = 'hair_end'
+      endNode.position.set(-0.02, -0.1, 0.08)
+      hair.add(endNode)
+
+      const before = worldPos(endNode)
+      const beforeHair = worldPos(hair)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, {
+        humanoidBones: new Set([hips]),
+      })
+      expect(result.isOk()).toBe(true)
+
+      expectRotated180(worldPos(hair), beforeHair)
+      expectRotated180(worldPos(endNode), before)
+    })
+
+    it('should keep bones under an intermediate Object3D at rotated world positions', () => {
+      // Head -> Armature_Hair(Object3D) -> Hair_Root(Bone) のような階層。
+      // 中間ノードを先に補正し、その下の Bone は独立したルートとして
+      // 二重に処理しないこと
+      const { rootNode, hips, hair } = createSceneWithHairBone()
+      const armature = new Object3D()
+      armature.name = 'armature_hair'
+      armature.position.set(0, 0.1, 0.02)
+      hair.add(armature)
+
+      const hairRoot = new Bone()
+      hairRoot.name = 'hair_root'
+      hairRoot.position.set(0.03, 0.05, 0.1)
+      hairRoot.quaternion.setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 4)
+      armature.add(hairRoot)
+
+      const tip = new Bone()
+      tip.name = 'hair_tip'
+      tip.position.set(0, -0.2, 0)
+      hairRoot.add(tip)
+
+      // 髪ボーンもスケルトンに含める（joint として登録されている状態）
+      const mesh = rootNode.children[0] as SkinnedMesh
+      mesh.bind(new Skeleton([hips, hair, hairRoot, tip]))
+
+      const beforeArmature = worldPos(armature)
+      const beforeHairRoot = worldPos(hairRoot)
+      const beforeTip = worldPos(tip)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, {
+        humanoidBones: new Set([hips]),
+      })
+      expect(result.isOk()).toBe(true)
+
+      expectRotated180(worldPos(armature), beforeArmature)
+      expectRotated180(worldPos(hairRoot), beforeHairRoot)
+      expectRotated180(worldPos(tip), beforeTip)
+    })
+
+    it('should leave spring bone colliders untouched', () => {
+      // コライダーは rotateSpringBoneColliderOffsets で offset 側を回すので
+      // ノード自体の変換は変えない（二重適用しない）
+      const { rootNode, hips, hair } = createSceneWithHairBone()
+      const collider = new Object3D() as Object3D & { shape: unknown }
+      collider.name = 'collider'
+      collider.shape = { offset: new Vector3(0.1, 0, 0.2), radius: 0.05 }
+      hair.add(collider)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, {
+        humanoidBones: new Set([hips]),
+      })
+      expect(result.isOk()).toBe(true)
+
+      expect(collider.position.x).toBe(0)
+      expect(collider.position.y).toBe(0)
+      expect(collider.position.z).toBe(0)
+      expect(collider.quaternion.w).toBe(1)
+    })
+  })
+
   describe('morphTarget rotation', () => {
     /**
      * morphTarget付きのSkinnedMeshを作成するヘルパー

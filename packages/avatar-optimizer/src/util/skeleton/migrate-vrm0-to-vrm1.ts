@@ -110,17 +110,20 @@ export function migrateSkeletonVRM0ToVRM1(
       // 5. 座標をY軸180度回転
       const rotatedPositions = rotateBonePositions(allBonePositions)
 
-      // 6. 全ボーンから真のルートボーン（親がBoneでないもの）を特定
+      // 6. 全ボーンから真のルートボーン（祖先にBoneを1つも持たないもの）を特定
       // VRMでは各SkinnedMesh.skeleton.bonesは使用するボーンのみを含むが、
       // 実際のボーン階層は1つなので、全ボーンを走査して真のルートを見つける
+      //
+      // 「親がBoneでない」ではなく「祖先にBoneがない」で判定する。
+      // Head の下に Armature_Hair（Object3D）→ Hair_Root（Bone）のように
+      // Bone でないノードを挟む階層があり、Hair_Root を独立したルートとして
+      // 処理すると Armature_Hair の補正と順序が噛み合わなくなる。
+      // そうした Bone は rebuildBoneTransforms が中間ノードを経由して辿る
       const allRootBones = new Set<Bone>()
       for (const bone of allBonePositions.keys()) {
-        // 親を辿って真のルートを見つける
-        let current: Bone = bone
-        while (current.parent instanceof Bone) {
-          current = current.parent
+        if (!hasBoneAncestor(bone)) {
+          allRootBones.add(bone)
         }
-        allRootBones.add(current)
       }
 
       if (allRootBones.size === 0) {
@@ -140,14 +143,15 @@ export function migrateSkeletonVRM0ToVRM1(
       }
 
       // 8. 各ルートボーンからボーン変換を再構築
+      // 非Bone子要素（末端ノード・装飾メッシュ・中間の空ノード）も
+      // 同じ走査の中で親の新しい座標系に合わせて補正する
       for (const rootBone of allRootBones) {
-        rebuildBoneTransforms(rootBone, rotatedPositions, options.humanoidBones)
-      }
-
-      // 9. 非Bone子要素のローカル変換を補正（Y軸180°回転を適用）
-      if (nonBoneWorldMatrices.size > 0) {
-        const yRotation = new Matrix4().makeRotationY(Math.PI)
-        compensateNonBoneChildren(nonBoneWorldMatrices, yRotation)
+        rebuildBoneTransforms(
+          rootBone,
+          rotatedPositions,
+          options.humanoidBones,
+          nonBoneWorldMatrices,
+        )
       }
 
       // 10. すべてのスケルトンのInverseBoneMatrixを再計算
@@ -319,18 +323,75 @@ export function findRootBone(skeleton: Skeleton): Bone | null {
  * VRM1.0仕様では Humanoid Bone のみ rotation が identity である必要がある。
  * 非Humanoid Bone（髪、服、SpringBone制御のボーンなど）は相対的な回転を保持する。
  *
+ * Bone でないノードも同じ走査で辿る。スキンの joint でない末端ノード
+ * （`Breast_1_L_end` のような `*_end`）は three の GLTFLoader が Object3D として
+ * 生成するため、Bone だけを辿ると補正から漏れて親の座標系だけが反転し、
+ * ワールド位置が前後逆になる。SpringBone の末端がそこを指すため、
+ * 静止方向が体の内側を向き、コライダーに押されて胸などが背中側へ振れていた。
+ *
  * @param rootBone - ルートボーン
  * @param rotatedPositions - Y軸180度回転後のワールド座標
  * @param humanoidBones - Humanoid Boneのセット（これらのみidentityにする）
+ * @param nonBoneWorldMatrices - 非Bone子要素の変換前ワールド行列
+ *   （collectNonBoneChildWorldMatrices で記録したもの）
  */
 export function rebuildBoneTransforms(
   rootBone: Bone,
   rotatedPositions: Map<Bone, Vector3>,
   humanoidBones?: Set<Bone>,
+  nonBoneWorldMatrices?: Map<Object3D, Matrix4>,
 ): void {
   const identityQuat = new Quaternion()
   const rotationMatrix = new Matrix4().makeRotationY(Math.PI)
   const rotationQuat = new Quaternion().setFromRotationMatrix(rotationMatrix)
+
+  /**
+   * 非Boneノードを処理する再帰関数
+   *
+   * - SkinnedMesh: step 2b で position を回転済みなので触らない
+   * - SpringBone コライダー: offset 側を rotateSpringBoneColliderOffsets で回すので触らない
+   * - Mesh（非スキンの装飾メッシュ）: 頂点を回転していないので
+   *   ワールド姿勢ごと Y軸180°回転した位置・向きに補正する
+   * - その他の Object3D（末端ノード・中間の空ノード）: 非Humanoid Bone と同じ規則で
+   *   位置はワールド座標を回転、回転は q' = R q R^-1 で座標系に合わせる
+   *
+   * いずれの場合も子に Bone や Object3D が続いていれば辿り続ける
+   */
+  function processNonBone(obj: Object3D, parentWorldMatrix: Matrix4): void {
+    const recorded = nonBoneWorldMatrices?.get(obj)
+    const isSkinned = obj instanceof SkinnedMesh
+    const isCollider = isSpringBoneCollider(obj)
+
+    if (recorded && !isSkinned && !isCollider) {
+      if (obj instanceof Mesh) {
+        compensateNonBoneChildren(new Map([[obj, recorded]]), rotationMatrix)
+      } else {
+        const targetWorldPos = new Vector3()
+          .setFromMatrixPosition(recorded)
+          .applyMatrix4(rotationMatrix)
+        const localPos = targetWorldPos.applyMatrix4(
+          parentWorldMatrix.clone().invert(),
+        )
+        obj.position.copy(localPos)
+        obj.quaternion.copy(
+          rotationQuat
+            .clone()
+            .multiply(obj.quaternion)
+            .multiply(rotationQuat.clone().invert()),
+        )
+        obj.updateMatrix()
+        obj.updateMatrixWorld(true)
+      }
+    }
+
+    for (const child of obj.children) {
+      if (child instanceof Bone) {
+        processBone(child, obj.matrixWorld)
+      } else {
+        processNonBone(child, obj.matrixWorld)
+      }
+    }
+  }
 
   /**
    * ボーンを処理する再帰関数
@@ -396,10 +457,12 @@ export function rebuildBoneTransforms(
     bone.updateMatrix()
     bone.updateMatrixWorld(true)
 
-    // 子ボーンを再帰処理（更新後のワールド行列を渡す）
+    // 子を再帰処理（更新後のワールド行列を渡す）
     for (const child of bone.children) {
       if (child instanceof Bone) {
         processBone(child, bone.matrixWorld)
+      } else {
+        processNonBone(child, bone.matrixWorld)
       }
     }
   }
@@ -416,8 +479,33 @@ export function rebuildBoneTransforms(
 }
 
 /**
- * ボーンツリーを走査し、非Bone子要素（Mesh等）のワールド行列を記録する
+ * ボーンが祖先に Bone を持つか
+ */
+function hasBoneAncestor(bone: Bone): boolean {
+  let current = bone.parent
+  while (current) {
+    if (current instanceof Bone) return true
+    current = current.parent
+  }
+  return false
+}
+
+/**
+ * SpringBone のコライダーか（VRMSpringBoneCollider は shape を持つ Object3D）
+ * instanceof を使わないのは three-vrm が二重インストールされた場合に
+ * クラス実体が別になり判定が壊れるため
+ */
+function isSpringBoneCollider(obj: Object3D): boolean {
+  return (obj as { shape?: unknown }).shape !== undefined
+}
+
+/**
+ * ボーンツリーを走査し、非Bone子要素のワールド行列を記録する
  * rebuildBoneTransforms の前に呼び出すことで、ボーン変換変更前の位置を保存する
+ *
+ * 対象は Bone 以外の全ノード（装飾メッシュ、末端ノード、中間の空ノード）。
+ * SkinnedMesh は step 2b の position 回転で、SpringBone コライダーは
+ * offset の回転でそれぞれ別途処理されるため除外する
  *
  * @param rootBone - ルートボーン
  * @returns 非Bone子要素とそのワールド行列のMap
@@ -427,15 +515,11 @@ export function collectNonBoneChildWorldMatrices(
 ): Map<Object3D, Matrix4> {
   const result = new Map<Object3D, Matrix4>()
   rootBone.traverse((obj) => {
-    // Meshオブジェクトのみ補正対象（VRMSpringBoneCollider等はcollider offset回転で別途処理される）
-    // SkinnedMeshはstep 2bのposition回転で処理済みのため除外
-    if (
-      obj.parent instanceof Bone &&
-      obj instanceof Mesh &&
-      !(obj instanceof SkinnedMesh)
-    ) {
-      result.set(obj, obj.matrixWorld.clone())
-    }
+    if (obj === rootBone) return
+    if (obj instanceof Bone) return
+    if (obj instanceof SkinnedMesh) return
+    if (isSpringBoneCollider(obj)) return
+    result.set(obj, obj.matrixWorld.clone())
   })
   return result
 }
