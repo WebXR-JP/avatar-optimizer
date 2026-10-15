@@ -110,26 +110,45 @@ export function migrateSkeletonVRM0ToVRM1(
       // 5. 座標をY軸180度回転
       const rotatedPositions = rotateBonePositions(allBonePositions)
 
-      // 6. 全ボーンから真のルートボーン（祖先にBoneを1つも持たないもの）を特定
+      // 6. 全ボーンから真のルートボーン（祖先の中で最も上にある Bone）を特定
       // VRMでは各SkinnedMesh.skeleton.bonesは使用するボーンのみを含むが、
       // 実際のボーン階層は1つなので、全ボーンを走査して真のルートを見つける
       //
-      // 「親がBoneでない」ではなく「祖先にBoneがない」で判定する。
-      // Head の下に Armature_Hair（Object3D）→ Hair_Root（Bone）のように
-      // Bone でないノードを挟む階層があり、Hair_Root を独立したルートとして
-      // 処理すると Armature_Hair の補正と順序が噛み合わなくなる。
-      // そうした Bone は rebuildBoneTransforms が中間ノードを経由して辿る
+      // 「親がBoneでない」で止めずに、Bone でないノードを挟んでも祖先を
+      // 最後まで辿る。Head の下に Armature_Hair（Object3D）→ Hair_Root（Bone）
+      // のような階層で Hair_Root を独立したルートとして処理すると、
+      // Armature_Hair の補正と順序が噛み合わなくなるため。
+      // そうした Bone は rebuildBoneTransforms が中間ノードを経由して辿る。
+      // どのスケルトンにも含まれない Bone が joint の上にある場合も、
+      // その Bone をルートとして扱う（ルートが 0 件になって失敗しない）
       const allRootBones = new Set<Bone>()
       for (const bone of allBonePositions.keys()) {
-        if (!hasBoneAncestor(bone)) {
-          allRootBones.add(bone)
-        }
+        allRootBones.add(findTopmostBone(bone))
       }
 
       if (allRootBones.size === 0) {
         return err({
           type: 'ASSET_ERROR',
           message: 'ルートボーンが見つかりません',
+        })
+      }
+
+      // 6b. スケルトンに含まれない Bone のワールド座標も変換前に記録する
+      // GLTFLoader は skin の joint を Bone として生成するが、その skin を持つ
+      // メッシュが最適化の途中で消えていると allBonePositions に載らない。
+      // rebuildBoneTransforms は親から順に書き換えるため、処理中に
+      // 「現在のワールド座標」を取ると新しい親 × 古いローカルの位置になり、
+      // 回転後の目標が狂う。全 Bone をここで記録しておき、後段で現在位置を
+      // 読む経路に頼らない
+      for (const rootBone of allRootBones) {
+        rootBone.traverse((obj) => {
+          if (!(obj instanceof Bone) || rotatedPositions.has(obj)) return
+          obj.updateWorldMatrix(true, false)
+          const worldPos = obj.getWorldPosition(new Vector3())
+          rotatedPositions.set(
+            obj,
+            worldPos.applyMatrix4(new Matrix4().makeRotationY(Math.PI)),
+          )
         })
       }
 
@@ -401,8 +420,11 @@ export function rebuildBoneTransforms(
   function processBone(bone: Bone, parentWorldMatrix: Matrix4): void {
     let targetWorldPos = rotatedPositions.get(bone)
 
-    // rotatedPositionsに含まれないボーン（SpringBone専用ボーンなど）は
-    // 現在のワールド位置を取得してY軸180度回転
+    // rotatedPositions に含まれないボーンは現在のワールド位置を取得してY軸180度回転
+    // migrateSkeletonVRM0ToVRM1 からの呼び出しではツリー内の全 Bone を事前に
+    // 記録しているので通常ここには来ない。親を先に書き換えているため、
+    // ここで取れる位置は「新しい親 × 古いローカル」であり正確ではない。
+    // 単体で rebuildBoneTransforms を使う場合の最後の手段として残している
     if (!targetWorldPos) {
       bone.updateMatrixWorld(true)
       const currentWorldPos = new Vector3()
@@ -479,15 +501,17 @@ export function rebuildBoneTransforms(
 }
 
 /**
- * ボーンが祖先に Bone を持つか
+ * 祖先を最後まで辿り、最も上にある Bone を返す（Bone でないノードを挟んでも止まらない）
+ * 祖先に Bone がなければ自分自身がルート
  */
-function hasBoneAncestor(bone: Bone): boolean {
+function findTopmostBone(bone: Bone): Bone {
+  let topmost = bone
   let current = bone.parent
   while (current) {
-    if (current instanceof Bone) return true
+    if (current instanceof Bone) topmost = current
     current = current.parent
   }
-  return false
+  return topmost
 }
 
 /**

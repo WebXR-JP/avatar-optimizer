@@ -1297,22 +1297,73 @@ describe('skeleton-migration', () => {
 
     it('should leave spring bone colliders untouched', () => {
       // コライダーは rotateSpringBoneColliderOffsets で offset 側を回すので
-      // ノード自体の変換は変えない（二重適用しない）
+      // ノード自体の変換は変えない（二重適用しない）。
+      // 位置・回転を非ゼロにしておく。Object3D の経路で処理されると
+      // 親フレーム内で x/z が反転し、X 軸回転も共役で向きが変わるので検出できる
       const { rootNode, hips, hair } = createSceneWithHairBone()
       const collider = new Object3D() as Object3D & { shape: unknown }
       collider.name = 'collider'
       collider.shape = { offset: new Vector3(0.1, 0, 0.2), radius: 0.05 }
+      collider.position.set(0.1, 0.02, 0.2)
+      collider.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 3)
       hair.add(collider)
+      const beforePos = collider.position.clone()
+      const beforeQuat = collider.quaternion.clone()
 
       const result = migrateSkeletonVRM0ToVRM1(rootNode, {
         humanoidBones: new Set([hips]),
       })
       expect(result.isOk()).toBe(true)
 
-      expect(collider.position.x).toBe(0)
-      expect(collider.position.y).toBe(0)
-      expect(collider.position.z).toBe(0)
-      expect(collider.quaternion.w).toBe(1)
+      expect(collider.position.toArray()).toEqual(beforePos.toArray())
+      expect(collider.quaternion.toArray()).toEqual(beforeQuat.toArray())
+    })
+
+    it('should treat an unregistered Bone above the joints as the root', () => {
+      // GLTFLoader は skin の joint を Bone にするが、その skin を持つメッシュが
+      // 最適化の途中で消えると、どのスケルトンにも載らない Bone が残る。
+      // それが hips の上にあっても「ルートが 0 件」で失敗せず、
+      // そのボーンをルートとして全体を回転できること
+      const { rootNode, hips, hair } = createSceneWithHairBone()
+      const mesh = rootNode.children[0] as SkinnedMesh
+      const armature = new Bone()
+      armature.name = 'armature'
+      armature.position.set(0.2, 0, 0.1)
+      mesh.remove(hips)
+      armature.add(hips)
+      mesh.add(armature)
+
+      const beforeArmature = worldPos(armature)
+      const beforeHips = worldPos(hips)
+      const beforeHair = worldPos(hair)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, {
+        humanoidBones: new Set([hips]),
+      })
+      expect(result.isOk()).toBe(true)
+
+      expectRotated180(worldPos(armature), beforeArmature)
+      expectRotated180(worldPos(hips), beforeHips)
+      expectRotated180(worldPos(hair), beforeHair)
+    })
+
+    it('should rotate an unregistered Bone at the end of a chain', () => {
+      // スケルトンに含まれない Bone 型の末端。処理中に「現在のワールド座標」を
+      // 読むと新しい親 × 古いローカルになって狂うので、事前記録で正しく回ること
+      const { rootNode, hips, hair } = createSceneWithHairBone()
+      const endBone = new Bone()
+      endBone.name = 'hair_end_bone'
+      endBone.position.set(-0.02, -0.1, 0.08)
+      hair.add(endBone)
+
+      const before = worldPos(endBone)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode, {
+        humanoidBones: new Set([hips]),
+      })
+      expect(result.isOk()).toBe(true)
+
+      expectRotated180(worldPos(endBone), before)
     })
   })
 
