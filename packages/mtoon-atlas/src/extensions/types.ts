@@ -30,6 +30,12 @@ export interface MToonAtlasExtensionSchema
     uvAnimationMask?: { index: number }
   }
   /**
+   * 半透明（alphaMode: BLEND）で深度書き込みを行うか
+   * MToon の transparentWithZWrite に相当する。glTF 標準の alphaMode には
+   * 深度書き込みの有無が無いため、ここに保存して読み込み時に depthWrite を復元する
+   */
+  transparentWithZWrite?: boolean
+  /**
    * アウトラインマテリアルかどうか
    * true の場合、このマテリアルはアウトライン描画用
    */

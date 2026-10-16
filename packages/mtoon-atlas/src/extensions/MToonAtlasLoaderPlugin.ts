@@ -152,29 +152,25 @@ export class MToonAtlasLoaderPlugin
   }
 
   /**
-   * アウトラインメッシュの描画順を本体より前に戻す
+   * 半透明メッシュの描画順を three-vrm と同じ規則に揃える
    *
-   * avatar-optimizer はアウトラインを本体と別メッシュ（isOutline のマテリアル）で
-   * 書き出し、本体より小さい renderOrder を付けて先に描いている。renderOrder は
-   * glTF に保存されないため、再読み込み後は両方 0 になり three がオブジェクト id 順に
-   * 並べる。透明グループは depthWrite=false なので、アウトライン（BackSide・黒）が
-   * 本体の後に描かれると深度でも隠れず、髪などが真っ黒になる。
-   * ここで isOutline のメッシュだけ renderOrder を 1 つ下げ、必ず本体より先に描く
+   * three-vrm は MToon の半透明を「深度書き込みあり（transparentWithZWrite）は 0、
+   * なしは 19」の renderOrder で描き、深度を書くものを先に描く。renderOrder は
+   * glTF に保存されないため、再読み込み時にここで同じ規則を適用する
+   * （three-vrm の MToonMaterialLoaderPlugin._parseRenderOrder と同じ値。
+   * renderQueueOffsetNumber は保存していないので 0 扱い）
    */
   public afterRoot(gltf: GLTF): Promise<void> | null
   {
     gltf.scene.traverse((object) =>
     {
       if (!(object instanceof Mesh)) return
-      const materials = Array.isArray(object.material)
-        ? object.material
-        : [object.material]
-      const hasOutline = materials.some(
-        (material) =>
-          material instanceof MToonAtlasMaterial && material.isOutline,
-      )
-      if (!hasOutline) return
-      object.renderOrder -= 1
+      const material = Array.isArray(object.material)
+        ? object.material[0]
+        : object.material
+      if (!(material instanceof MToonAtlasMaterial)) return
+      if (!material.transparent) return
+      object.renderOrder = material.depthWrite ? 0 : 19
     })
     return null
   }
@@ -538,7 +534,9 @@ export class MToonAtlasLoaderPlugin
     if (materialDef.alphaMode === 'BLEND')
     {
       material.transparent = true
-      material.depthWrite = false
+      // TransparentWithZWrite（髪など）は深度を書く。glTF の alphaMode には
+      // この区別が無いので拡張側のフラグから復元する
+      material.depthWrite = extension.transparentWithZWrite === true
     } else if (materialDef.alphaMode === 'MASK')
     {
       material.transparent = false

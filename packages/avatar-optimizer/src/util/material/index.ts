@@ -24,6 +24,8 @@ export type {
 
 /**
  * MToonMaterialのレンダーモードを判定
+ * - transparent: true かつ depthWrite: true → 'transparentZWrite'
+ *   （three-vrm は MToon の transparentWithZWrite を depthWrite=true に写す）
  * - transparent: true → 'transparent'
  * - alphaTest > 0 → 'alphaTest'
  * - それ以外 → 'opaque'
@@ -31,7 +33,9 @@ export type {
 export function getRenderMode(
   material: MToonMaterial,
 ): import('./types').RenderMode {
-  if (material.transparent) return 'transparent'
+  if (material.transparent) {
+    return material.depthWrite ? 'transparentZWrite' : 'transparent'
+  }
   if (material.alphaTest > 0) return 'alphaTest'
   return 'opaque'
 }

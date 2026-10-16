@@ -7,7 +7,8 @@
  * レンダーモード:
  * - opaque: 不透明（transparent === false && alphaTest === 0）
  * - alphaTest: MASKモード（alphaTest > 0）
- * - transparent: 半透明（transparent === true）
+ * - transparentZWrite: 半透明・深度書き込みあり（transparent === true && depthWrite === true）
+ * - transparent: 半透明・深度書き込みなし（transparent === true && depthWrite === false）
  */
 
 import { MToonMaterial } from '@pixiv/three-vrm'
@@ -315,7 +316,13 @@ function combineMToonMaterialsInternal(
     let totalMaterialCount = 0
 
     // レンダーモードの処理順序（描画順に影響）
-    const renderModeOrder: RenderMode[] = ['opaque', 'alphaTest', 'transparent']
+    // three-vrm と同じく、深度書き込みありの半透明を深度書き込みなしより先に描く
+    const renderModeOrder: RenderMode[] = [
+      'opaque',
+      'alphaTest',
+      'transparentZWrite',
+      'transparent',
+    ]
 
     for (const renderMode of renderModeOrder) {
       const infos = groupedInfos.get(renderMode)
@@ -436,7 +443,10 @@ function createMToonAtlasMaterial(
   })
 
   // レンダーモードに応じた設定
-  if (renderMode === 'transparent') {
+  if (renderMode === 'transparentZWrite') {
+    material.transparent = true
+    material.depthWrite = true
+  } else if (renderMode === 'transparent') {
     material.transparent = true
     material.depthWrite = false
   } else if (renderMode === 'alphaTest') {
