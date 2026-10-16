@@ -161,6 +161,8 @@ describe('MToonAtlas Roundtrip', () => {
       }
       const before = collect(optimizedVRM)
       const after = collect(reloadedVRM)
+      // AliciaSolid は TransparentWithZWrite の半透明を持つ（なしは TransparentZWriteRoundtrip で検証）
+      expect(before.zwrite).toBeGreaterThan(0)
       expect(after).toEqual(before)
     })
 

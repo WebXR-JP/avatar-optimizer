@@ -3,6 +3,7 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { decode as decodePng } from 'fast-png'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
+import { getMToonRenderOrder } from '../render-order'
 import { rememberKtx2Source } from './ktx2-source-cache'
 import { resolveKtx2Loader } from './ktx2-loader'
 import
@@ -157,8 +158,7 @@ export class MToonAtlasLoaderPlugin
    * three-vrm は MToon の半透明を「深度書き込みあり（transparentWithZWrite）は 0、
    * なしは 19」の renderOrder で描き、深度を書くものを先に描く。renderOrder は
    * glTF に保存されないため、再読み込み時にここで同じ規則を適用する
-   * （three-vrm の MToonMaterialLoaderPlugin._parseRenderOrder と同じ値。
-   * renderQueueOffsetNumber は保存していないので 0 扱い）
+   * （値の定義と three-vrm との差分は render-order.ts を参照）
    */
   public afterRoot(gltf: GLTF): Promise<void> | null
   {
@@ -170,7 +170,7 @@ export class MToonAtlasLoaderPlugin
         : object.material
       if (!(material instanceof MToonAtlasMaterial)) return
       if (!material.transparent) return
-      object.renderOrder = material.depthWrite ? 0 : 19
+      object.renderOrder = getMToonRenderOrder(material)
     })
     return null
   }

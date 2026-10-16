@@ -3,6 +3,10 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
 import { MToonAtlasLoaderPlugin } from '../src/extensions/MToonAtlasLoaderPlugin'
 import { MToonAtlasMaterial } from '../src/MToonAtlasMaterial'
+import {
+  MTOON_TRANSPARENT_RENDER_ORDER,
+  MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER,
+} from '../src/render-order'
 
 /**
  * 半透明メッシュの描画順（three-vrm と同じ規則）
@@ -35,8 +39,9 @@ describe('MToonAtlasLoaderPlugin.afterRoot', () =>
 
     runAfterRoot(scene)
 
-    expect(zwrite.renderOrder).toBe(0)
-    expect(plain.renderOrder).toBe(19)
+    expect(zwrite.renderOrder).toBe(MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER)
+    expect(plain.renderOrder).toBe(MTOON_TRANSPARENT_RENDER_ORDER)
+    expect(zwrite.renderOrder).toBeLessThan(plain.renderOrder)
   })
 
   it('不透明メッシュと MToonAtlasMaterial 以外には触らない', () =>
@@ -63,6 +68,6 @@ describe('MToonAtlasLoaderPlugin.afterRoot', () =>
 
     runAfterRoot(scene)
 
-    expect(mesh.renderOrder).toBe(19)
+    expect(mesh.renderOrder).toBe(MTOON_TRANSPARENT_RENDER_ORDER)
   })
 })

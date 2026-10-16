@@ -1,6 +1,10 @@
 import { MToonMaterial } from '@pixiv/three-vrm'
+import {
+  MTOON_TRANSPARENT_RENDER_ORDER,
+  MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER,
+} from '@webxr-jp/mtoon-atlas'
 import { describe, expect, it } from 'vitest'
-import { getRenderMode } from '../../src/util/material'
+import { getRenderMode, getRenderOrderForMode } from '../../src/util/material'
 
 /**
  * レンダーモード判定
@@ -30,5 +34,24 @@ describe('getRenderMode', () => {
     material.transparent = true
     expect(material.depthWrite).toBe(true)
     expect(getRenderMode(material)).toBe('transparentZWrite')
+  })
+})
+
+describe('getRenderOrderForMode', () => {
+  it('should match the loader rule for transparent groups', () => {
+    expect(getRenderOrderForMode('transparentZWrite')).toBe(
+      MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER,
+    )
+    expect(getRenderOrderForMode('transparent')).toBe(
+      MTOON_TRANSPARENT_RENDER_ORDER,
+    )
+    expect(getRenderOrderForMode('transparentZWrite')).toBeLessThan(
+      getRenderOrderForMode('transparent'),
+    )
+  })
+
+  it('should leave opaque and alphaTest at the default order', () => {
+    expect(getRenderOrderForMode('opaque')).toBe(0)
+    expect(getRenderOrderForMode('alphaTest')).toBe(0)
   })
 })

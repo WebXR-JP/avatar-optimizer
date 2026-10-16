@@ -23,7 +23,7 @@ import { BufferGeometry, DataTexture, Mesh, SkinnedMesh } from 'three'
 import type { OptimizationError } from '../../types'
 import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
 import { createParameterTexture } from '../texture'
-import { getRenderMode } from './index'
+import { getRenderMode, getRenderOrderForMode } from './index'
 import type {
   CombinedMeshResult,
   CombineMaterialOptions,
@@ -216,6 +216,8 @@ function processSingleGroup(
       meshesForMerge,
       `CombinedMToonMesh_${renderMode}`,
     )
+    // 半透明の描画順は再読み込み時にローダーが付ける値と揃える
+    combinedMesh.renderOrder = getRenderOrderForMode(renderMode)
 
     // アウトラインメッシュの作成
     let outlineMesh: Mesh | undefined
