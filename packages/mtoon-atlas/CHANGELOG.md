@@ -1,5 +1,12 @@
 # @webxr-jp/mtoon-atlas
 
+## 0.3.1
+
+### Patch Changes
+
+- 46cde63: ローダーの afterRoot でアウトライン（isOutline）マテリアルのメッシュの renderOrder を本体より下げるようにした。renderOrder は glTF に保存されず、再読み込み後は透明グループの黒いアウトラインが本体の後に描かれて髪などが真っ黒になっていた（#66）
+- 3358f8f: 半透明マテリアルを深度書き込みの有無で別グループ（transparentZWrite / transparent）に分け、MToon の TransparentWithZWrite を最適化後も保持するようにした。これまでは半透明を一律 depthWrite=false にまとめていたため、髪など TransparentWithZWrite のマテリアルで作者が意図した深度による前後関係（毛束の重なり・アウトラインの隠蔽）が失われていた。あわせて拡張に `transparentWithZWrite` を保存して読み込み時に depthWrite を復元し、ローダーの描画順は three-vrm と同じ規則（深度書き込みなしの半透明を renderOrder 19 で後に描く）に揃えた（#66）
+
 ## 0.3.0
 
 ### Minor Changes

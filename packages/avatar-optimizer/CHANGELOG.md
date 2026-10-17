@@ -1,5 +1,15 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.3.1
+
+### Patch Changes
+
+- 3358f8f: 半透明マテリアルを深度書き込みの有無で別グループ（transparentZWrite / transparent）に分け、MToon の TransparentWithZWrite を最適化後も保持するようにした。これまでは半透明を一律 depthWrite=false にまとめていたため、髪など TransparentWithZWrite のマテリアルで作者が意図した深度による前後関係（毛束の重なり・アウトラインの隠蔽）が失われていた。あわせて拡張に `transparentWithZWrite` を保存して読み込み時に depthWrite を復元し、ローダーの描画順は three-vrm と同じ規則（深度書き込みなしの半透明を renderOrder 19 で後に描く）に揃えた（#66）
+- 0083669: VRM0→VRM1 マイグレーションで、スキンの joint でない末端ノード（`*_end` など Bone でない Object3D）や、Bone でない中間ノード配下のボーンも Y 軸 180° 回転に合わせて補正するようにした。これまでは Bone だけを辿っていたため末端ノードの位置が前後逆になり、SpringBone の静止方向が体の内側を向いてコライダーに押され、胸が背中側へ振れていた（#65）
+- Updated dependencies [46cde63]
+- Updated dependencies [3358f8f]
+  - @webxr-jp/mtoon-atlas@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
