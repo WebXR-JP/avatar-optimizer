@@ -1093,6 +1093,12 @@ export class MToonAtlasExporterPlugin
       atlasedTextures: {},
     }
 
+    // 半透明で深度書き込みありのマテリアル（TransparentWithZWrite）を記録
+    if (material.transparent && material.depthWrite)
+    {
+      extension.transparentWithZWrite = true
+    }
+
     // アウトライン関連のプロパティを設定
     if (material.isOutline)
     {

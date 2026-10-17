@@ -111,9 +111,19 @@ export type OutlineWidthMode = 'none' | 'worldCoordinates' | 'screenCoordinates'
  * レンダーモード（透過分離用）
  * - opaque: 不透明（transparent === false && alphaTest === 0）
  * - alphaTest: MASKモード（alphaTest > 0）
- * - transparent: 半透明（transparent === true）
+ * - transparentZWrite: 半透明かつ深度書き込みあり（MToon の TransparentWithZWrite）
+ * - transparent: 半透明で深度書き込みなし（transparent === true && depthWrite === false）
+ *
+ * 半透明を depthWrite で分けるのは、結合後の共有マテリアルが depthWrite を
+ * 1 値しか持てないため。髪など TransparentWithZWrite のマテリアルを
+ * depthWrite=false の半透明と同じグループにまとめると、作者が意図した
+ * 深度による前後関係（毛束の重なり・アウトラインの隠蔽）が失われる
  */
-export type RenderMode = 'opaque' | 'alphaTest' | 'transparent'
+export type RenderMode =
+  | 'opaque'
+  | 'alphaTest'
+  | 'transparentZWrite'
+  | 'transparent'
 
 /**
  * マテリアル情報（アウトライン情報を含む）

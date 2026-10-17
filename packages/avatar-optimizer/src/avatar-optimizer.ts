@@ -11,6 +11,7 @@ import {
   CombinedMeshResult,
   combineMToonMaterials as combineMeshAndMaterial,
   getMToonMaterialInfoFromObject3D,
+  getRenderOrderForMode,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import {
@@ -157,6 +158,8 @@ export function optimizeModel(
 
         // MToonAtlasMaterialを適用（同じレンダーモードのマテリアルを共有）
         mesh.material = group.material
+        // 描画順も統合メッシュと同じ規則にする（再読み込み時のローダーと一致）
+        mesh.renderOrder = getRenderOrderForMode(slotInfo.renderMode)
       }
 
       // 元のrootNodeから既存のメッシュを削除

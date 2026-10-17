@@ -6,6 +6,7 @@
  */
 
 import { MToonMaterial } from '@pixiv/three-vrm'
+import { getMToonRenderOrder } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result } from 'neverthrow'
 import { Mesh, Object3D } from 'three'
 import { AtlasImageMap, OptimizationError } from '../../types'
@@ -24,6 +25,8 @@ export type {
 
 /**
  * MToonMaterialのレンダーモードを判定
+ * - transparent: true かつ depthWrite: true → 'transparentZWrite'
+ *   （three-vrm は MToon の transparentWithZWrite を depthWrite=true に写す）
  * - transparent: true → 'transparent'
  * - alphaTest > 0 → 'alphaTest'
  * - それ以外 → 'opaque'
@@ -31,9 +34,27 @@ export type {
 export function getRenderMode(
   material: MToonMaterial,
 ): import('./types').RenderMode {
-  if (material.transparent) return 'transparent'
+  if (material.transparent) {
+    return material.depthWrite ? 'transparentZWrite' : 'transparent'
+  }
   if (material.alphaTest > 0) return 'alphaTest'
   return 'opaque'
+}
+
+/**
+ * レンダーモードに対応する renderOrder
+ *
+ * 再読み込み時に MToonAtlasLoaderPlugin が付ける値と同じにして、
+ * 最適化直後と再読み込み後で半透明の描画順が変わらないようにする
+ */
+export function getRenderOrderForMode(
+  renderMode: import('./types').RenderMode,
+): number {
+  return getMToonRenderOrder({
+    transparent:
+      renderMode === 'transparent' || renderMode === 'transparentZWrite',
+    depthWrite: renderMode !== 'transparent',
+  })
 }
 
 /**

@@ -35,6 +35,12 @@ export {
   DEFAULT_KTX2_TRANSCODER_PATH,
 } from './extensions/ktx2-loader'
 export { MToonAtlasExporterPlugin } from './extensions/MToonAtlasExporterPlugin'
+// 半透明メッシュの renderOrder（three-vrm と同じ規則。最適化側と読み込み側で共有）
+export {
+  getMToonRenderOrder,
+  MTOON_TRANSPARENT_RENDER_ORDER,
+  MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER,
+} from './render-order'
 // 独自ローダーで KTX2 テクスチャを読み込む場合に、再エクスポート可能にするための登録関数
 export { rememberKtx2Source } from './extensions/ktx2-source-cache'
 export type { TextureCompressionOptions } from './extensions/MToonAtlasExporterPlugin'

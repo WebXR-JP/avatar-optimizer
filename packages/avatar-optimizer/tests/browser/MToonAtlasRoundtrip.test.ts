@@ -142,29 +142,40 @@ describe('MToonAtlas Roundtrip', () => {
       )
     })
 
-    it('should render outline meshes before their main meshes (issue #66)', () => {
-      // renderOrder は glTF に保存されない。ローダーが isOutline のメッシュを
-      // 本体より先に描くよう復元しないと、透明グループ（depthWrite=false）の
-      // 黒いアウトラインが本体の上に乗って髪が真っ黒になる
-      const outlineMeshes: Mesh[] = []
-      const mainMeshes: Mesh[] = []
+    it('should keep depthWrite of transparent groups through roundtrip', () => {
+      // 半透明グループは depthWrite で 2 つに分かれる（transparentZWrite / transparent）。
+      // glTF の alphaMode には深度書き込みの区別が無いので、拡張に保存して復元する
+      const collect = (vrm: VRM) => {
+        const result = { zwrite: 0, plain: 0 }
+        vrm.scene.traverse((object) => {
+          if (!(object instanceof Mesh)) return
+          const material = Array.isArray(object.material)
+            ? object.material[0]
+            : object.material
+          if (!(material instanceof MToonAtlasMaterial)) return
+          if (!material.transparent || material.isOutline) return
+          if (material.depthWrite) result.zwrite++
+          else result.plain++
+        })
+        return result
+      }
+      const before = collect(optimizedVRM)
+      const after = collect(reloadedVRM)
+      // AliciaSolid は TransparentWithZWrite の半透明を持つ（なしは TransparentZWriteRoundtrip で検証）
+      expect(before.zwrite).toBeGreaterThan(0)
+      expect(after).toEqual(before)
+    })
+
+    it('should give non-ZWrite transparent meshes renderOrder 19 like three-vrm', () => {
       reloadedVRM.scene.traverse((object) => {
         if (!(object instanceof Mesh)) return
         const material = Array.isArray(object.material)
           ? object.material[0]
           : object.material
-        if (!(material instanceof MToonAtlasMaterial)) return
-        if (material.isOutline) outlineMeshes.push(object)
-        else mainMeshes.push(object)
+        if (!(material instanceof MToonAtlasMaterial) || !material.transparent)
+          return
+        expect(object.renderOrder).toBe(material.depthWrite ? 0 : 19)
       })
-      expect(outlineMeshes.length).toBeGreaterThan(0)
-      expect(mainMeshes.length).toBeGreaterThan(0)
-
-      for (const outline of outlineMeshes) {
-        for (const main of mainMeshes) {
-          expect(outline.renderOrder).toBeLessThan(main.renderOrder)
-        }
-      }
     })
 
     it('should preserve atlased textures', () => {
