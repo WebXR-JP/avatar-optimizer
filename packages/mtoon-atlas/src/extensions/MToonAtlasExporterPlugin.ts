@@ -611,11 +611,9 @@ export class MToonAtlasExporterPlugin
     })
 
     // extensionsUsed に KHR_texture_basisu を追加
-    json.extensionsUsed = json.extensionsUsed || []
-    if (!json.extensionsUsed.includes('KHR_texture_basisu'))
-    {
-      json.extensionsUsed.push('KHR_texture_basisu')
-    }
+    // json.extensionsUsed は GLTFExporter が書き出し時に writer.extensionsUsed で
+    // 上書きするため、writer 側に登録する
+    this.writer.extensionsUsed.KHR_texture_basisu = true
 
     return { textureIndex, imageDef }
   }
@@ -1024,12 +1022,8 @@ export class MToonAtlasExporterPlugin
       this.updateMeshPrimitive(mesh, materials, materialIndexMap)
     }
 
-    // extensionsUsedに追加
-    json.extensionsUsed = json.extensionsUsed || []
-    if (!json.extensionsUsed.includes(MTOON_ATLAS_EXTENSION_NAME))
-    {
-      json.extensionsUsed.push(MTOON_ATLAS_EXTENSION_NAME)
-    }
+    // extensionsUsedに追加（json に直接追加すると GLTFExporter に上書きされる）
+    this.writer.extensionsUsed[MTOON_ATLAS_EXTENSION_NAME] = true
 
     // テクスチャ処理完了後にマテリアル定義のインデックスを更新するPromiseをpendingに追加
     const updateMaterialDefsPromise = this.waitForAllTextureIndices().then(() =>

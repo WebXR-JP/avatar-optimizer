@@ -177,18 +177,17 @@ export class VRMExporterPlugin {
       firstPerson: this.exportFirstPerson(vrm),
     }
 
-    json.extensionsUsed = json.extensionsUsed || []
-    if (!json.extensionsUsed.includes('VRMC_vrm')) {
-      json.extensionsUsed.push('VRMC_vrm')
-    }
+    // extensionsUsed は json ではなく writer.extensionsUsed に登録する。
+    // GLTFExporter は書き出し時に writer.extensionsUsed のキーで
+    // json.extensionsUsed を上書きするため、組み込み拡張（KHR_materials_unlit など）が
+    // 1 つでも使われると json に直接追加した名前は消えてしまう
+    this.writer.extensionsUsed.VRMC_vrm = true
 
     // SpringBone拡張をエクスポート
     const springBoneExtension = this.exportSpringBone(vrm)
     if (springBoneExtension) {
       json.extensions.VRMC_springBone = springBoneExtension
-      if (!json.extensionsUsed.includes('VRMC_springBone')) {
-        json.extensionsUsed.push('VRMC_springBone')
-      }
+      this.writer.extensionsUsed.VRMC_springBone = true
     }
 
     // NodeConstraint拡張をエクスポート（各ノードに設定）
@@ -822,12 +821,9 @@ export class VRMExporterPlugin {
       )
     }
 
-    // extensionsUsed に登録
+    // extensionsUsed に登録（json に直接追加すると GLTFExporter に上書きされる）
     if (hasConstraints) {
-      json.extensionsUsed = json.extensionsUsed || []
-      if (!json.extensionsUsed.includes('VRMC_node_constraint')) {
-        json.extensionsUsed.push('VRMC_node_constraint')
-      }
+      this.writer.extensionsUsed.VRMC_node_constraint = true
     }
   }
 }

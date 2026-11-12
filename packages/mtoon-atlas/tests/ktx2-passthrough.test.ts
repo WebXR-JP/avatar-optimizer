@@ -19,6 +19,7 @@ function createMockWriter()
 {
   return {
     json: {} as any,
+    extensionsUsed: {} as Record<string, boolean>,
     pending: [] as Promise<unknown>[],
     processAccessor: vi.fn(),
     processBufferViewImage: vi.fn().mockResolvedValue(7),
@@ -187,7 +188,8 @@ describe('KTX2 パススルー (Issue #39)', () =>
         source: 0,
         extensions: { KHR_texture_basisu: { source: 0 } },
       })
-      expect(writer.json.extensionsUsed).toContain('KHR_texture_basisu')
+      // json.extensionsUsed は GLTFExporter が writer.extensionsUsed で上書きするため writer 側に登録される
+      expect(writer.extensionsUsed.KHR_texture_basisu).toBe(true)
     })
 
     it('圧縮オプション未設定でも KTX2 由来ならパススルーされる（PNG 化を試みない）', async () =>

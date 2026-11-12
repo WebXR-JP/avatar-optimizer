@@ -1,5 +1,12 @@
 import { VRM, VRMExpression, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { Bone, Group, Scene } from 'three'
+import {
+  Bone,
+  BoxGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  Scene,
+} from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { describe, expect, it } from 'vitest'
 import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
@@ -120,6 +127,36 @@ describe('VRMExporterPlugin', () => {
     expect(jsonOutput.extensions.VRMC_vrm).toBeDefined()
     expect(jsonOutput.extensions.VRMC_vrm.specVersion).toBe('1.0')
     expect(jsonOutput.extensions.VRMC_vrm.meta.name).toBe('TestAvatar')
+    expect(jsonOutput.extensionsUsed).toContain('VRMC_vrm')
+  })
+
+  it('GLTFExporter 組み込みの拡張と併用しても extensionsUsed に VRMC_vrm が残る', async () => {
+    const { scene, vrm } = createTestVRM()
+
+    // MeshBasicMaterial は GLTFExporter 組み込みの KHR_materials_unlit で書き出される。
+    // 組み込み拡張が 1 つでも使われると GLTFExporter は json.extensionsUsed を
+    // writer.extensionsUsed の内容で上書きするため、json に直接 push した
+    // VRMC_vrm が消えて VRM として読み込めなくなっていた
+    scene.add(new Mesh(new BoxGeometry(), new MeshBasicMaterial()))
+
+    const exporter = new GLTFExporter()
+    exporter.register((writer) => {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jsonOutput = await new Promise<any>((resolve, reject) => {
+      exporter.parse(
+        scene,
+        (result) => resolve(result),
+        (error) => reject(error),
+        { binary: false },
+      )
+    })
+
+    expect(jsonOutput.extensionsUsed).toContain('KHR_materials_unlit')
     expect(jsonOutput.extensionsUsed).toContain('VRMC_vrm')
   })
 
