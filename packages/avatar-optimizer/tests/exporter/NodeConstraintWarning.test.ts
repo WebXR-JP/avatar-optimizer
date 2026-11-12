@@ -36,6 +36,7 @@ function exportConstraints(
 
   const writer = {
     json: { nodes: nodes.map(() => ({})) as ExportedNode[] },
+    extensionsUsed: {} as Record<string, boolean>,
     nodeMap: new Map(nodes.map((node, index) => [node, index])),
   }
 
