@@ -64,6 +64,8 @@ export interface GLTFParser
 export interface GLTFWriter
 {
   json: any
+  // 書き出し時に json.extensionsUsed はこのキー一覧で上書きされる
+  extensionsUsed: { [name: string]: boolean }
   nodeMap: Map<any, number>
   pending: Promise<void>[]
   byteOffset: number
