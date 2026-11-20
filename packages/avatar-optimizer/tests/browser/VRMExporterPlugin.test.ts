@@ -1,12 +1,5 @@
 import { VRM, VRMExpression, VRMHumanBoneName } from '@pixiv/three-vrm'
-import {
-  Bone,
-  BoxGeometry,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  Scene,
-} from 'three'
+import { Bone, BoxGeometry, Group, Mesh, MeshBasicMaterial, Scene } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { describe, expect, it } from 'vitest'
 import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
