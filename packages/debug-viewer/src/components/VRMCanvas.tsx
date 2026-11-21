@@ -689,14 +689,21 @@ function VRMCanvas({
             far: 100,
           }}
           gl={CANVAS_GL_PROPS}
-          onCreated={({ gl, scene }) =>
+          onCreated={({ gl, scene, size, camera }) =>
           {
             gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
+            // gl を非同期ファクトリーで作ると、R3F が初期サイズを確定させる時点で
+            // レンダラーがまだ無く setSize が呼ばれない。WebGPU では深度バッファが
+            // 300x150 のまま残り、描画先とのサイズ不一致で全フレームが無効になる
+            if (rendererMode === 'webgpu')
+            {
+              gl.setSize(size.width, size.height)
+            }
             setBackendLabel(getBackendLabel(gl))
             // 開発時のみ、ブラウザ自動操作から描画状態を調べられるよう公開する
             if (import.meta.env.DEV)
             {
-              (window as unknown as { __viewer?: unknown }).__viewer = { renderer: gl, scene, rendererMode }
+              (window as unknown as { __viewer?: unknown }).__viewer = { renderer: gl, scene, camera, rendererMode }
             }
             // Spector.js と WebGL デバッグツールは WebGL コンテキスト専用
             if (rendererMode === 'webgl')

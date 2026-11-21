@@ -39,7 +39,7 @@ pnpm -F debug-viewer run preview
 - WebGPU のアダプタが取得できない環境では three が WebGL2 バックエンドに自動でフォールバックします。実際のバックエンドはレンダラー選択の下に表示されます
 - Spector.js と「WebGL ツール」は WebGL のときのみ使えます
 - WebGPU での `Optimize` は `atlasMaterialType: MToonAtlasNodeMaterial` を指定して最適化します
-- 開発時は `window.__viewer`（`renderer` / `scene` / `rendererMode`）から描画状態を参照できます
+- 開発時は `window.__viewer`（`renderer` / `scene` / `camera` / `rendererMode`）から描画状態を参照できます
 - 開発時は `window.__viewerApp` から読み込み・最適化・表示を呼べます。WebGL 用マテリアルで読み込んで最適化した結果を WebGPU で表示する、といった比較に使えます
 
 ```javascript
