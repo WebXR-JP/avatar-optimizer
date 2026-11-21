@@ -20,6 +20,7 @@ export default defineConfig({
   },
   server: {
     host: true, // コンテナ外からのアクセスを許可
+    allowedHosts: ['.tail54a7c.ts.net'], // Tailscale Serve 経由の MagicDNS 名を許可
     fs: {
       allow: [
         path.resolve(__dirname),
