@@ -18,21 +18,36 @@ import {
   diffuseColor,
   float,
   mix,
-  nodeImmutable,
   normalView,
+  property,
 } from 'three/tsl'
-import { LightingModel, PropertyNode } from 'three/webgpu'
+import { LightingModel } from 'three/webgpu'
 import type { Node, NodeBuilder } from 'three/webgpu'
 import type { LightingModelDirectInput } from 'three/src/nodes/core/LightingModel.js'
 
+/**
+ * LightingModel に渡される反射光の出力先
+ *
+ * @types/three では型パラメータなしの Node として宣言されており、
+ * そのままでは addAssign / mul などの演算メソッドが型の上で使えない。
+ * three 側の実体は vec3 なので、型だけ付け直して扱う。
+ */
+interface ReflectedLight
+{
+  directDiffuse: Node<'vec3'>
+  directSpecular: Node<'vec3'>
+  indirectDiffuse: Node<'vec3'>
+  indirectSpecular: Node<'vec3'>
+}
+
 /** 影色（shadeColorFactor × shadeMultiplyTexture） */
-export const shadeColor = nodeImmutable(PropertyNode, 'vec3').toVar('MToonAtlasShadeColor')
+export const shadeColor = property('vec3').toVar('MToonAtlasShadeColor')
 /** シェーディングシフト（shadingShiftFactor + shadingShiftTexture × scale） */
-export const shadingShift = nodeImmutable(PropertyNode, 'float').toVar('MToonAtlasShadingShift')
+export const shadingShift = property('float').toVar('MToonAtlasShadingShift')
 /** トゥーン度（shadingToonyFactor） */
-export const shadingToony = nodeImmutable(PropertyNode, 'float').toVar('MToonAtlasShadingToony')
+export const shadingToony = property('float').toVar('MToonAtlasShadingToony')
 /** リム（パラメトリックリム + matcap）× rimMultiplyTexture */
-export const rim = nodeImmutable(PropertyNode, 'vec3').toVar('MToonAtlasRim')
+export const rim = property('vec3').toVar('MToonAtlasRim')
 
 /**
  * three のライトノードのうち、影の分離に使うプロパティ
@@ -54,14 +69,25 @@ interface ShadowedLightNode
  * 点光源・スポットライトは減衰も掛かった値しか渡されないため分離せず、
  * three 既定の「ライト色に影を掛ける」挙動のままにする。
  */
-function splitShadow(lightColor: Node, lightNode: Node): { color: Node, shadow: Node }
+function splitShadow(lightColor: Node, lightNode: Node): { color: Node<'vec3'>, shadow: Node<'float'> }
 {
   const node = lightNode as unknown as ShadowedLightNode
   if (node.light?.isDirectionalLight && node.shadowNode && node.baseColorNode)
   {
-    return { color: node.baseColorNode, shadow: node.shadowNode }
+    return { color: node.baseColorNode as Node<'vec3'>, shadow: node.shadowNode as Node<'float'> }
   }
-  return { color: lightColor, shadow: float(1) }
+  return { color: lightColor as Node<'vec3'>, shadow: float(1) }
+}
+
+/**
+ * Lambert BRDF（diffuseColor / PI）
+ *
+ * @types/three の BRDF_Lambert は戻り値が型パラメータなしの OperatorNode のため、
+ * vec3 として型を付け直す。
+ */
+function lambert(diffuse: Node<'vec3'>): Node<'vec3'>
+{
+  return BRDF_Lambert({ diffuseColor: diffuse }) as unknown as Node<'vec3'>
 }
 
 /**
@@ -72,27 +98,28 @@ export class MToonAtlasLightingModel extends LightingModel
   direct({ lightDirection, lightColor, lightNode, reflectedLight }: LightingModelDirectInput): void
   {
     const { color, shadow } = splitShadow(lightColor, lightNode)
+    const out = reflectedLight as ReflectedLight
 
-    const dotNL = normalView.dot(lightDirection).clamp(-1, 1)
+    const dotNL = normalView.dot(lightDirection as Node<'vec3'>).clamp(-1, 1)
     // linearstep( -1 + toony, 1 - toony, dotNL + shift ) × shadow
     const a = float(-1).add(shadingToony)
     const b = float(1).sub(shadingToony)
     const shading = dotNL.add(shadingShift).sub(a).div(b.sub(a)).clamp().mul(shadow)
 
     const feathered = mix(shadeColor, diffuseColor.rgb, shading)
-    reflectedLight.directDiffuse.addAssign(color.mul(BRDF_Lambert({ diffuseColor: feathered })))
+    out.directDiffuse.addAssign(color.mul(lambert(feathered)))
 
     // directSpecular はリムに使う（GLSL 版では Σライト色 / PI を rim に掛ける）
-    reflectedLight.directSpecular.addAssign(color.mul(BRDF_Lambert({ diffuseColor: rim })))
+    out.directSpecular.addAssign(color.mul(lambert(rim)))
   }
 
   indirect(builder: NodeBuilder): void
   {
-    const context = (builder as unknown as { context: { irradiance: Node, reflectedLight: LightingModelDirectInput['reflectedLight'] } }).context
+    const context = (builder as unknown as { context: { irradiance: Node<'vec3'>, reflectedLight: ReflectedLight } }).context
     const { irradiance, reflectedLight } = context
 
     // 環境光は shadeColor を使わず diffuseColor のみ
-    reflectedLight.indirectDiffuse.addAssign(irradiance.mul(BRDF_Lambert({ diffuseColor: diffuseColor.rgb })))
-    reflectedLight.indirectSpecular.addAssign(irradiance.mul(BRDF_Lambert({ diffuseColor: rim })))
+    reflectedLight.indirectDiffuse.addAssign(irradiance.mul(lambert(diffuseColor.rgb)))
+    reflectedLight.indirectSpecular.addAssign(irradiance.mul(lambert(rim)))
   }
 }

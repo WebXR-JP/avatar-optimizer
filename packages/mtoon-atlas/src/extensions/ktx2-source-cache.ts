@@ -10,18 +10,18 @@
  * エクスポート時に「再エンコードせず元バイナリをそのまま書き出す」
  * パススルーが可能になります。再エンコードによる画質劣化も避けられます。
  *
- * WeakMap のキーに `texture.source`（three.js の Source）を使う理由:
+ * WeakMap のキーに `texture.source`（three.js の TextureSource）を使う理由:
  * - `Texture.clone()` は userData を JSON でディープコピーするため、
  *   ArrayBuffer を userData に載せると空オブジェクトに潰れる
- * - `Source` はクローン間で共有されるため、clone 後も元バイナリを引ける
+ * - `TextureSource` はクローン間で共有されるため、clone 後も元バイナリを引ける
  *
  * メモリについて: テクスチャが生きている間、元 KTX2 バイナリを保持し続けます
  * （2048^2 の UASTC アトラス 1 枚でおよそ 1.7MB）。ロスレスな再エクスポートと
  * 引き換えのコストです。テクスチャが GC されれば WeakMap のエントリも解放されます。
  */
-import type { Source, Texture } from 'three'
+import type { Texture, TextureSource } from 'three'
 
-const ktx2SourceByTextureSource = new WeakMap<Source<unknown>, Uint8Array>()
+const ktx2SourceByTextureSource = new WeakMap<TextureSource<unknown>, Uint8Array>()
 
 /**
  * テクスチャの元 KTX2 バイナリを記録する
