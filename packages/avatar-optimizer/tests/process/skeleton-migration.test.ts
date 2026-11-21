@@ -459,6 +459,22 @@ describe('skeleton-migration', () => {
       expect(skeleton.boneInverses.length).toBe(2)
     })
 
+    it('should keep boneMatrices sized to the bone count (WebGPU skinning)', () => {
+      // WebGPURenderer の SkinningNode は bones.length 個の mat4 の
+      // uniform バッファを確保し、boneMatrices をそのまま書き込む。
+      // computeBoneTexture() で正方形テクスチャ用にパディングされると
+      // 書き込みが溢れて検証エラーになり、スキニングが更新されない
+      const { mesh, skeleton } = createSimpleSkinnedMesh()
+      const rootNode = new Object3D()
+      rootNode.add(mesh)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+
+      expect(result.isOk()).toBe(true)
+      expect(skeleton.boneMatrices.length).toBe(skeleton.bones.length * 16)
+      expect(skeleton.boneTexture).toBeNull()
+    })
+
     it('should return error when no SkinnedMesh found', () => {
       const rootNode = new Object3D()
 
