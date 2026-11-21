@@ -3,6 +3,42 @@ import react from '@vitejs/plugin-react'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import path from 'path'
+import fs from 'fs'
+import type { Plugin } from 'vite'
+
+/**
+ * 開発時のみ、ブラウザの PerfProbe から送られた計測結果を JSON Lines で保存する
+ * （手元で操作できないブラウザの描画性能を調べるため）
+ */
+function perfLogPlugin(): Plugin
+{
+  const logFile = path.resolve(__dirname, 'node_modules/.cache/perf-log.jsonl')
+  return {
+    name: 'debug-viewer-perf-log',
+    apply: 'serve',
+    configureServer(server)
+    {
+      server.middlewares.use('/__perf-log', (req, res) =>
+      {
+        if (req.method !== 'POST')
+        {
+          res.statusCode = 405
+          res.end()
+          return
+        }
+        let body = ''
+        req.on('data', (chunk) => { body += chunk })
+        req.on('end', () =>
+        {
+          fs.mkdirSync(path.dirname(logFile), { recursive: true })
+          fs.appendFileSync(logFile, body.replace(/\n/g, ' ') + '\n')
+          res.statusCode = 204
+          res.end()
+        })
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,6 +46,7 @@ export default defineConfig({
     react(),
     wasm(),
     topLevelAwait(),
+    perfLogPlugin(),
   ],
   resolve: {
     alias: {

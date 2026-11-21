@@ -51,6 +51,37 @@ const result = await app.loadVRM(buf.value) // 現在のレンダラーに合っ
 app.setVRM(result.value)
 ```
 
+### 描画性能の計測モード（`?perfprobe=1`）
+
+Safari・Quest など、手元で DevTools を開けないブラウザで描画の問題を調べるための開発用モードです。`pnpm dev` の開発サーバーでのみ動きます。
+
+```
+https://<dev サーバー>/?renderer=webgpu&perfprobe=1
+```
+
+VRM を読み込むと、次の順に計測します。
+
+1. 条件を変えながら描画時間を測る（そのまま / 影なし / VRM 非表示 / VRM の影なし / メッシュ 1 つずつの影）
+2. 測り終えたら、5 秒ごとに状態を送り続ける
+
+記録はページから開発サーバーの `/__perf-log` に送られ、`node_modules/.cache/perf-log.jsonl` に JSON Lines で追記されます。
+
+| kind | 内容 |
+|------|------|
+| `env` | UA、実際のバックエンド、dpr、キャンバスサイズ |
+| `meshes` | VRM の各メッシュ（頂点数・モーフ数・マテリアル） |
+| `stage` / `monitor` | フレーム間隔、`render()` の CPU 時間、GPU 完了待ち、ドローコール、パイプラインの生成回数（`pipelineCreations`） |
+| `gpu-error` | 捕捉されなかった WebGPU のエラー |
+| `shader-compile` | WGSL のコンパイルエラー（該当行付き） |
+| `console-error` / `console-warn` | console 出力。長いもの（Metal のコンパイルエラーなど）はエラー行と末尾だけ |
+| `ui-click` / `ui-change` | ボタン操作・入力の変更（何をした直後に壊れたかを追うため） |
+| `setSize` | レンダラーのリサイズ |
+
+```bash
+# 最新の記録を見る
+tail -f packages/debug-viewer/node_modules/.cache/perf-log.jsonl
+```
+
 ### 同梱モデル
 
 モデル選択のドロップダウンから読み込めます。

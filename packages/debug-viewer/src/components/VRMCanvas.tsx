@@ -11,6 +11,8 @@ import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
 import { LicenseSection } from './LicenseSection'
+import { PerfProbe } from './PerfProbe'
+import { perfProbeEnabled } from '../utils/perf-probe'
 import { rendererMode, rendererFallbackReason, switchRendererMode, type RendererMode } from '../renderer-mode'
 import './VRMCanvas.css'
 
@@ -743,6 +745,7 @@ function VRMCanvas({
           }}
         >
           <CameraAspectUpdater />
+          {perfProbeEnabled && <PerfProbe vrm={vrm} />}
           <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
         </Canvas>
 
