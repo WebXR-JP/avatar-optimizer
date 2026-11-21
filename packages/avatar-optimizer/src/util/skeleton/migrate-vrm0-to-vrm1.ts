@@ -576,6 +576,15 @@ export function compensateNonBoneChildren(
 
 /**
  * InverseBoneMatrix（skeleton.boneInverses）を再計算
+ *
+ * skeleton.computeBoneTexture() はここでは呼ばない。
+ * computeBoneTexture は WebGL 用の正方形 DataTexture に合わせて
+ * boneMatrices を「ボーン数より大きい長さ」に作り直す。WebGPURenderer の
+ * SkinningNode はボーン数ぶんの uniform バッファを確保して boneMatrices を
+ * そのまま書き込むため、長さが合わず書き込みが拒否されスキニングが止まる。
+ * WebGLRenderer は boneTexture が無ければ描画時に自分で生成し、
+ * 既にある場合も skeleton.update() が毎フレーム needsUpdate を立てるので、
+ * ここで生成・更新する必要はない。
  */
 export function recalculateBoneInverses(skeleton: Skeleton): void {
   // ワールド行列を更新
@@ -584,7 +593,4 @@ export function recalculateBoneInverses(skeleton: Skeleton): void {
   // calculateInversesを呼び出し
   // これは各bone.matrixWorldの逆行列をboneInversesに設定する
   skeleton.calculateInverses()
-
-  // 行列テクスチャを更新（使用している場合）
-  skeleton.computeBoneTexture()
 }
