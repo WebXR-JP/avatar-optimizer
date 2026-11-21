@@ -703,7 +703,9 @@ function VRMCanvas({
 
       <div className="vrm-canvas__viewport">
         <Canvas
-          shadows
+          // three r187 で PCFSoftShadowMap が WebGL / WebGPU とも削除され、指定すると
+          // 警告を出して PCFShadowMap に戻されるため、最初から PCFShadowMap を使う
+          shadows="percentage"
           camera={{
             position: [0, 1.5, 3],
             fov: 45,
@@ -713,7 +715,6 @@ function VRMCanvas({
           gl={CANVAS_GL_PROPS}
           onCreated={({ gl, scene, size, camera }) =>
           {
-            gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
             // gl を非同期ファクトリーで作ると、R3F が初期サイズを確定させる時点で
             // レンダラーがまだ無く setSize が呼ばれない。WebGPU では深度バッファが
             // 300x150 のまま残り、描画先とのサイズ不一致で全フレームが無効になる

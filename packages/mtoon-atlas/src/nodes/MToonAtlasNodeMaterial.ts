@@ -132,7 +132,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
 
   // シェーダー構築中に使うテクスチャノード（構築ごとに作り直す）
   private _textureNodes = new Map<TextureProperty, TextureNode>()
-  private _parameterTextureSizeNode: Node | null = null
+  private _parameterTextureSizeNode: Node<'vec2'> | null = null
 
   /**
    * コンストラクタ
@@ -324,7 +324,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
    * @param property - 読むテクスチャのプロパティ名（null でないこと）
    * @param uvNode - サンプリングする UV
    */
-  private _sample(property: TextureProperty, uvNode: Node): Node
+  private _sample(property: TextureProperty, uvNode: Node<'vec2'>): Node<'vec4'>
   {
     let base = this._textureNodes.get(property)
     if (!base)
@@ -336,7 +336,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   }
 
   /** 現在のフラグメント / 頂点のスロット番号 */
-  private _slot(): Node
+  private _slot(): Node<'float'>
   {
     return attribute(this._slotAttribute.name, 'float')
   }
@@ -349,7 +349,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
    *
    * @param texel - スロット内のテクセル番号
    */
-  private _param(texel: number): Node
+  private _param(texel: number): Node<'vec4'>
   {
     const size = this._parameterTextureSizeNode ?? uniform(this.parameterTextureSize)
     const texelUV = vec2(float(texel).add(0.5), this._slot().add(0.5)).div(size)
@@ -361,7 +361,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
    *
    * GLSL 版と同じく、マスクは B チャンネル、回転は (0.5, 0.5) 中心。
    */
-  private _animatedUV(): Node
+  private _animatedUV(): Node<'vec2'>
   {
     const p6 = this._param(6)
     const p7 = this._param(7)
@@ -389,7 +389,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   setupDiffuseColor(builder: NodeBuilder): void
   {
     const p0 = this._param(0)
-    let color: Node = vec4(p0.rgb, 1)
+    let color: Node<'vec4'> = vec4(p0.rgb, 1)
     if (this.map)
     {
       color = color.mul(this._sample('map', this._animatedUV()))
@@ -409,7 +409,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     const animatedUV = this._animatedUV()
 
     // 影色
-    let shade: Node = this._param(1).rgb
+    let shade: Node<'vec3'> = this._param(1).rgb
     if (this.shadeMultiplyTexture)
     {
       shade = shade.mul(this._sample('shadeMultiplyTexture', animatedUV).rgb)
@@ -417,7 +417,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     shadeColor.assign(shade)
 
     // シェーディングシフト（0〜1 で保存されているので -1〜1 に戻す）
-    let shift: Node = this._param(8).r.mul(2).sub(1)
+    let shift: Node<'float'> = this._param(8).r.mul(2).sub(1)
     if (this.shadingShiftTexture)
     {
       shift = shift.add(this._sample('shadingShiftTexture', animatedUV).r.mul(this._param(1).a))
@@ -434,7 +434,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
    *
    * @param animatedUV - UV アニメーション適用済みの UV
    */
-  private _rimNode(animatedUV: Node): Node
+  private _rimNode(animatedUV: Node<'vec2'>): Node<'vec3'>
   {
     const p3 = this._param(3)
     const p5 = this._param(5)
@@ -442,7 +442,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     const viewDir = positionViewDirection
 
     // parametricRimColor × pow( saturate( 1 - dot( viewDir, normal ) + lift ), fresnelPower )
-    let rimColor: Node = p5.rgb.mul(
+    let rimColor: Node<'vec3'> = p5.rgb.mul(
       float(1).sub(viewDir.dot(normalView)).add(p5.a).clamp().pow(p6.r),
     )
 
@@ -465,7 +465,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
 
   setupNormal(): Node
   {
-    let normal: Node = materialNormal
+    let normal: Node<'vec3'> = materialNormal
     if (this.normalMap)
     {
       const normalScale = this._param(7).xy
@@ -481,7 +481,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   setupLighting(builder: NodeBuilder): Node
   {
     const p2 = this._param(2)
-    let emissive: Node = p2.rgb.mul(p2.a)
+    let emissive: Node<'vec3'> = p2.rgb.mul(p2.a)
     if (this.emissiveMap)
     {
       emissive = emissive.mul(this._sample('emissiveMap', this._animatedUV()).rgb)
@@ -505,18 +505,20 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     const normalLocalNormalized = normalLocal.normalize()
     const width = this._param(3).a
     const worldNormalLength = length(modelNormalMatrix.mul(normalLocalNormalized))
-    let offset: Node = width.mul(worldNormalLength).mul(normalLocalNormalized)
+    let offset: Node<'vec3'> = width.mul(worldNormalLength).mul(normalLocalNormalized)
 
     if (this._outlineWidthMode === 'screenCoordinates')
     {
       // 画面上で一定幅にするため、視点距離 / 投影スケールを掛ける
-      const clipScale = cameraProjectionMatrix.element(int(1)).element(int(1))
+      // projectionMatrix[1][1]。@types/three は mat4 の element() を宣言していないため型を付け直す
+      const projection = cameraProjectionMatrix as unknown as { element: (index: Node) => Node<'vec4'> }
+      const clipScale = projection.element(int(1)).y
       const viewZ = modelViewMatrix.mul(vec4(positionLocal, 1)).z
       offset = offset.div(clipScale).mul(viewZ.negate())
     }
 
     const prevPosition = this.positionNode
-    this.positionNode = (prevPosition ?? positionLocal).add(offset)
+    this.positionNode = ((prevPosition as Node<'vec3'> | null) ?? positionLocal).add(offset)
     const result = super.setupPosition(builder)
     this.positionNode = prevPosition
     return result
@@ -529,7 +531,8 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     {
       // outlineColor × mix( 1, 陰影込みの色, outlineLightingMix )
       const p4 = this._param(4)
-      output = vec4(p4.rgb.mul(mix(vec3(1), outputNode.xyz, p4.a)), outputNode.w)
+      const color = outputNode as Node<'vec4'>
+      output = vec4(p4.rgb.mul(mix(vec3(1), color.xyz, p4.a)), color.w)
     }
     return super.setupOutput(builder, output)
   }
