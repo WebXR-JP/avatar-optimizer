@@ -189,18 +189,25 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions, atlasMaterialType })
-
-    if (result.isErr())
+    // optimizeModel が Err ではなく reject した場合もボタンを "Optimizing..." のまま
+    // 固めないよう、終了処理は finally で必ず行う
+    try
     {
-      const err = result.error
-      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
-      setIsOptimizing(false)
-      return
-    }
+      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions, atlasMaterialType })
 
-    reportOptimizationResult(result.value, 'Optimization successful')
-    setIsOptimizing(false)
+      if (result.isErr())
+      {
+        const err = result.error
+        setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
+        return
+      }
+
+      reportOptimizationResult(result.value, 'Optimization successful')
+    }
+    finally
+    {
+      setIsOptimizing(false)
+    }
   }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションなしの最適化のみ（デバッグ用）
@@ -212,21 +219,26 @@ function App()
     setError(null)
 
     // マイグレーションなしで最適化
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions, atlasMaterialType })
-
-    if (result.isErr())
+    try
     {
-      const err = result.error
-      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
-      setIsOptimizing(false)
-      return
-    }
+      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions, atlasMaterialType })
 
-    reportOptimizationResult(
-      result.value,
-      'Optimization (without migration) successful',
-    )
-    setIsOptimizing(false)
+      if (result.isErr())
+      {
+        const err = result.error
+        setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
+        return
+      }
+
+      reportOptimizationResult(
+        result.value,
+        'Optimization (without migration) successful',
+      )
+    }
+    finally
+    {
+      setIsOptimizing(false)
+    }
   }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションのみ（デバッグ用）

@@ -1,4 +1,4 @@
-import { fromSafePromise, ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 import { Texture } from 'three'
 import type { MToonLikeMaterial } from '../types'
 import {
@@ -25,7 +25,10 @@ import { packTextures } from '../util/texture/packing'
 export function pack(
   patternMappings: PatternMaterialMapping[],
 ): ResultAsync<PackingLayouts, OptimizationError> {
-  return fromSafePromise(
+  // packTextures は収まらないときや内部不具合で throw する。
+  // fromSafePromise だと throw が Err にならず reject として漏れ、
+  // 呼び出し側の Result 分岐を素通りしてしまうため fromPromise で Err に変換する
+  return ResultAsync.fromPromise(
     (async () => {
       // パターンごとのテクスチャディスクリプタを収集
       const textureDescriptors = patternMappings.map((m) => m.textureDescriptor)
@@ -38,6 +41,12 @@ export function pack(
       // テクスチャパッキングを実行（パターン数分）
       return await packTextures(texturesToPack)
     })(),
+    (error): OptimizationError => ({
+      type: 'INTERNAL_ERROR',
+      message: `テクスチャのパッキングに失敗しました: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    }),
   )
 }
 
