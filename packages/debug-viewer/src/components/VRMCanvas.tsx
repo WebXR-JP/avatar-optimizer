@@ -11,7 +11,7 @@ import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
 import { LicenseSection } from './LicenseSection'
-import { rendererMode, switchRendererMode, type RendererMode } from '../renderer-mode'
+import { rendererMode, rendererFallbackReason, switchRendererMode, type RendererMode } from '../renderer-mode'
 import './VRMCanvas.css'
 
 
@@ -41,16 +41,28 @@ const CANVAS_GL_PROPS: GLProps = rendererMode === 'webgpu'
     alpha: true,
   }
 
+/** レンダラーが実際に使っているバックエンドの表示情報 */
+interface BackendInfo
+{
+  label: 'WebGL' | 'WebGPU'
+  /** フォールバックが起きた理由。正常なら null */
+  note: string | null
+}
+
 /**
- * レンダラーが実際に使っているバックエンドの表示名を返す
+ * レンダラーが実際に使っているバックエンドと、フォールバック時の補足を返す
  *
  * @param gl - R3F が保持するレンダラー（WebGLRenderer または WebGPURenderer）
  */
-function getBackendLabel(gl: unknown): string
+function getBackendInfo(gl: unknown): BackendInfo
 {
   const renderer = gl as { isWebGPURenderer?: boolean; backend?: { isWebGPUBackend?: boolean } }
-  if (!renderer.isWebGPURenderer) return 'WebGL'
-  return renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL2 (WebGPU 非対応のためフォールバック)'
+  if (!renderer.isWebGPURenderer) return { label: 'WebGL', note: null }
+  if (renderer.backend?.isWebGPUBackend) return { label: 'WebGPU', note: null }
+  return {
+    label: 'WebGL',
+    note: 'WebGPU の初期化に失敗したため WebGL2 バックエンドで描画しています',
+  }
 }
 
 /**
@@ -347,7 +359,7 @@ function VRMCanvas({
   const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
   // 実際に使われている描画バックエンド。WebGPURenderer は WebGPU が使えないと
   // WebGL2 バックエンドに黙ってフォールバックするため、画面に明示する
-  const [backendLabel, setBackendLabel] = useState<string | null>(null)
+  const [backendInfo, setBackendInfo] = useState<BackendInfo | null>(null)
 
   // Spector.js WebGLデバッグ（開発環境のみ）
   const { captureFrame, displayUI: displaySpectorUI, isReady: isSpectorReady } = useSpector(canvasElement)
@@ -411,10 +423,20 @@ function VRMCanvas({
               <option value="webgpu">WebGPU</option>
             </select>
           </label>
-          {backendLabel && (
+          {backendInfo && (
             <div className="vrm-field__label" data-testid="renderer-backend">
-              Backend: {backendLabel}
+              Backend: {backendInfo.label}
             </div>
+          )}
+          {rendererFallbackReason && (
+            <p className="vrm-note" data-testid="renderer-fallback">
+              {rendererFallbackReason}
+            </p>
+          )}
+          {backendInfo?.note && (
+            <p className="vrm-note" data-testid="renderer-backend-note">
+              {backendInfo.note}
+            </p>
           )}
           <select
             className="vrm-field__select"
@@ -699,11 +721,17 @@ function VRMCanvas({
             {
               gl.setSize(size.width, size.height)
             }
-            setBackendLabel(getBackendLabel(gl))
+            setBackendInfo(getBackendInfo(gl))
             // 開発時のみ、ブラウザ自動操作から描画状態を調べられるよう公開する
             if (import.meta.env.DEV)
             {
-              (window as unknown as { __viewer?: unknown }).__viewer = { renderer: gl, scene, camera, rendererMode }
+              (window as unknown as { __viewer?: unknown }).__viewer = {
+                renderer: gl,
+                scene,
+                camera,
+                rendererMode,
+                rendererFallbackReason,
+              }
             }
             // Spector.js と WebGL デバッグツールは WebGL コンテキスト専用
             if (rendererMode === 'webgl')
