@@ -1,6 +1,6 @@
-import { MToonMaterial } from '@pixiv/three-vrm'
 import { fromSafePromise, ResultAsync } from 'neverthrow'
 import { Texture } from 'three'
+import type { MToonLikeMaterial } from '../types'
 import {
   AtlasTextureDescriptor,
   MTOON_TEXTURE_SLOTS,
@@ -49,7 +49,7 @@ export function pack(
  * @returns パターンとマテリアルのマッピング配列
  */
 export function buildPatternMaterialMappings(
-  materials: MToonMaterial[],
+  materials: MToonLikeMaterial[],
 ): PatternMaterialMapping[] {
   const mappings: PatternMaterialMapping[] = []
 
@@ -94,11 +94,11 @@ export function buildPatternMaterialMappings(
 /**
  * マテリアルからテクスチャ組み合わせパターンを抽出
  *
- * @param material - MToonMaterial
+ * @param material - MToonLikeMaterial
  * @returns テクスチャ組み合わせパターン
  */
 export function extractTexturePattern(
-  material: MToonMaterial,
+  material: MToonLikeMaterial,
 ): TextureCombinationPattern {
   const slots = new Map<MToonTextureSlot, ThreeImageType | null>()
 

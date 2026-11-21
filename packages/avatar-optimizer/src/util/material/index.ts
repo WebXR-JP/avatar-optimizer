@@ -5,11 +5,14 @@
  * そしてマテリアル単位の UV 変換行列を生成する責務を持つ。
  */
 
-import { MToonMaterial } from '@pixiv/three-vrm'
 import { getMToonRenderOrder } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result } from 'neverthrow'
 import { Mesh, Object3D } from 'three'
-import { AtlasImageMap, OptimizationError } from '../../types'
+import {
+  AtlasImageMap,
+  MToonLikeMaterial,
+  OptimizationError,
+} from '../../types'
 
 // マテリアル結合のエクスポート
 export { combineMToonMaterials } from './combine'
@@ -32,7 +35,7 @@ export type {
  * - それ以外 → 'opaque'
  */
 export function getRenderMode(
-  material: MToonMaterial,
+  material: MToonLikeMaterial,
 ): import('./types').RenderMode {
   if (material.transparent) {
     return material.depthWrite ? 'transparentZWrite' : 'transparent'
@@ -64,7 +67,7 @@ export function getRenderOrderForMode(
  * @param atlasMap
  */
 export function assignAtlasTexturesToMaterial(
-  material: MToonMaterial,
+  material: MToonLikeMaterial,
   atlasMap: AtlasImageMap,
 ): void {
   if (atlasMap.map) material.map = atlasMap.map
@@ -93,15 +96,34 @@ export function assignAtlasTexturesToMaterial(
  */
 export function getMToonMaterialsWithMeshesFromObject3D(
   rootNode: Object3D,
-): Result<Map<MToonMaterial, Mesh[]>, OptimizationError> {
+): Result<Map<MToonLikeMaterial, Mesh[]>, OptimizationError> {
   const result = getMToonMaterialInfoFromObject3D(rootNode)
   if (result.isErr()) return err(result.error)
 
-  const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+  const materialMeshMap = new Map<MToonLikeMaterial, Mesh[]>()
   for (const info of result.value) {
     materialMeshMap.set(info.material, info.meshes)
   }
   return ok(materialMeshMap)
+}
+
+/**
+ * MToon マテリアル（WebGL 用 MToonLikeMaterial / TSL 用 MToonNodeMaterial）かどうか
+ *
+ * instanceof ではなく three-vrm が持つ識別フラグで判定する。
+ * MToonNodeMaterial を実行時に import せずに済み、three-vrm が二重に
+ * 読み込まれた場合（dual package hazard）にも判定が外れない
+ *
+ * @param material - 判定するマテリアル
+ */
+export function isMToonLikeMaterial(
+  material: unknown,
+): material is MToonLikeMaterial {
+  const m = material as
+    | { isMToonMaterial?: boolean; isMToonNodeMaterial?: boolean }
+    | null
+    | undefined
+  return m?.isMToonMaterial === true || m?.isMToonNodeMaterial === true
 }
 
 /**
@@ -123,7 +145,7 @@ export function getMToonMaterialInfoFromObject3D(
 
   // マテリアルごとの情報を収集
   const materialInfoMap = new Map<
-    MToonMaterial,
+    MToonLikeMaterial,
     {
       meshes: Mesh[]
       hasOutline: boolean
@@ -137,9 +159,8 @@ export function getMToonMaterialInfoFromObject3D(
       // three-vrmで読み込んだモデルのMToonにおいてMaterialが配列になるのはOutlineMeshのみ
       // [0]が通常マテリアル、[1]がアウトライン用マテリアル（isOutline=true）
       if (mesh.material.length === 0) continue
-      if (!(mesh.material[0] instanceof MToonMaterial)) continue
-
-      const material = mesh.material[0] as MToonMaterial
+      const material = mesh.material[0]
+      if (!isMToonLikeMaterial(material)) continue
 
       // アウトライン情報を取得
       const hasOutline = material.outlineWidthMode !== 'none'
@@ -155,8 +176,8 @@ export function getMToonMaterialInfoFromObject3D(
         })
       }
       materialInfoMap.get(material)!.meshes.push(mesh)
-    } else if (mesh.material instanceof MToonMaterial) {
-      const material = mesh.material as MToonMaterial
+    } else if (isMToonLikeMaterial(mesh.material)) {
+      const material = mesh.material
 
       // アウトライン情報を取得
       const hasOutline = material.outlineWidthMode !== 'none'

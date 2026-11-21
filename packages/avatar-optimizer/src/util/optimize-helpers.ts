@@ -1,13 +1,14 @@
-import type { MToonMaterial, VRMExpressionManager } from '@pixiv/three-vrm'
+import type { VRMExpressionManager } from '@pixiv/three-vrm'
 import { Mesh, type Object3D, SkinnedMesh } from 'three'
 import type { SimplifyStatistics } from '../process/simplify'
+import type { MToonLikeMaterial } from '../types'
 import type { AtlasSkipped, CombinedMeshResult } from './material/types'
 
 /**
  * 既にアトラス化済みか（MToonAtlasMaterial を含むか）を判定する
  *
  * アトラス化するとマテリアルは MToonAtlasMaterial に置き換わるため、
- * 2 回目以降の実行では MToonMaterial が見つからない。
+ * 2 回目以降の実行では MToonLikeMaterial が見つからない。
  * 「元から MToon が無いモデル」と区別するために使う。
  *
  * instanceof を使わないのは、@webxr-jp/mtoon-atlas が
@@ -34,7 +35,7 @@ export function hasAtlasedMaterial(rootNode: Object3D): boolean {
  * ボーンペアレントを保持するため、メッシュ統合から除外する必要がある
  */
 export function collectNonSkinnedMeshes(
-  materialMeshMap: Map<MToonMaterial, Mesh[]>,
+  materialMeshMap: Map<MToonLikeMaterial, Mesh[]>,
 ): Set<Mesh> {
   const result = new Set<Mesh>()
   for (const meshes of materialMeshMap.values()) {
@@ -58,7 +59,7 @@ export function collectNonSkinnedMeshes(
  */
 export function collectExpressionMeshes(
   expressionManager: VRMExpressionManager | null,
-  materialMeshMap?: Map<MToonMaterial, Mesh[]>,
+  materialMeshMap?: Map<MToonLikeMaterial, Mesh[]>,
 ): Set<Mesh> {
   const result = new Set<Mesh>()
   if (!expressionManager) return result

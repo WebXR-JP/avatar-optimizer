@@ -156,6 +156,28 @@ void main() {
 }
 ```
 
+## WebGPURenderer で使う
+
+`MToonAtlasMaterial` は GLSL の `ShaderMaterial` なので WebGLRenderer 専用です。
+WebGPURenderer では、TSL で書いた `MToonAtlasNodeMaterial` を `@webxr-jp/mtoon-atlas/nodes` から読み込んで使います。
+WebGPU バックエンドと WebGL2 バックエンド（WebGPU 非対応環境での自動フォールバック）のどちらでも描画できます。
+
+```typescript
+import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
+import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
+
+loader.register(
+  (parser) => new MToonAtlasLoaderPlugin(parser, { materialType: MToonAtlasNodeMaterial }),
+)
+```
+
+- 必要な three のバージョンは他と同じ（r181 以上）です。`three/webgpu` と `three/tsl` を使います
+- コンストラクタ・`setParameterTexture()`・`isOutline`・`outlineWidthMode`・`createOutlineMaterial()` は `MToonAtlasMaterial` と同じです
+- 描画結果は `MToonAtlasMaterial` に合わせてあります。影は光の色ではなくシェーディング係数に掛かり、影の中は shadeColor になります。ただし点光源・スポットライトの影だけは three の既定どおり光の色に掛かります
+- `MToonAtlasExporterPlugin` はどちらのマテリアルも書き出せます
+- デバッグモード（`setDebugMode`）は未対応です
+- マテリアルごとにシェーダーを構築します（同じ構成のマテリアル間でもシェーダーを共有しません）
+
 ## KTX2 トランスコーダーの配信元
 
 KTX2 テクスチャの読み込みには Basis Universal のトランスコーダー
@@ -193,6 +215,23 @@ import { MToonAtlasLoaderPlugin } from '@webxr-jp/mtoon-atlas'
 
 loader.register((parser) => new MToonAtlasLoaderPlugin(parser, { ktx2Loader }))
 ```
+
+### WebGPURenderer で描画する場合
+
+対応する圧縮形式（ASTC / BC / ETC2 など）の判定は、既定では一時的に作る WebGLRenderer で行います。
+WebGPU と WebGL では使える形式が異なることがあるため、WebGPURenderer で描画するアプリでは描画に使うレンダラーで判定させてください。
+
+```typescript
+import { setKtx2Renderer } from '@webxr-jp/mtoon-atlas'
+import { WebGPURenderer } from 'three/webgpu'
+
+const renderer = new WebGPURenderer()
+await renderer.init() // init() 前のレンダラーでは判定できない
+setKtx2Renderer(renderer) // VRM を読み込む前に一度呼ぶ
+```
+
+プラグイン単位で指定する場合は `new MToonAtlasLoaderPlugin(parser, { ktx2Renderer: renderer })` とします。
+判定に失敗した場合（init() 前など）は警告を出し、従来どおり WebGL で判定します。
 
 ### プラグイン単位でパスを指定する
 

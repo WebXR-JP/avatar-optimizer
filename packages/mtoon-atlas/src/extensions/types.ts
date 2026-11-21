@@ -1,4 +1,4 @@
-import type { Texture, BufferAttribute, BufferGeometry, InterleavedBufferAttribute } from 'three'
+import type { Material, Texture, BufferAttribute, BufferGeometry, InterleavedBufferAttribute } from 'three'
 
 export const MTOON_ATLAS_EXTENSION_NAME = 'XRIFT_mtoon_atlas'
 
@@ -73,6 +73,8 @@ export interface GLTFWriter
   processAccessor: (attribute: BufferAttribute | InterleavedBufferAttribute, geometry?: BufferGeometry, start?: number, count?: number) => number
   processBuffer: (buffer: ArrayBuffer) => number
   processBufferViewImage: (blob: Blob) => Promise<number>
+  // GLTFExporter 標準のマテリアル変換（MeshStandardMaterial 前提）
+  processMaterialAsync: (material: Material) => Promise<number | null>
 
   // 内部キャッシュ（morphAttributes最適化に使用）
   cache: {

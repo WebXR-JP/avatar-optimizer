@@ -206,6 +206,13 @@ export class MToonAtlasMaterial extends THREE.ShaderMaterial
     // パラメータ適用
     if (parameters)
     {
+      // ローダーが glTF のマテリアル名を渡すので反映する
+      // （ShaderMaterial の setValues には渡していないため、ここで設定しないと失われる）
+      if (parameters.name !== undefined)
+      {
+        this.name = parameters.name
+      }
+
       // Uniform を設定
       if (parameters.color !== undefined)
       {

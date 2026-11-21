@@ -6,9 +6,14 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
+import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
+import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
+import { rendererMode } from './renderer-mode'
 import './App.css'
+
+// WebGPU のときは MToonNodeMaterial を TSL 版のアトラスマテリアルに統合する
+const atlasMaterialType = rendererMode === 'webgpu' ? MToonAtlasNodeMaterial : undefined
 
 function App()
 {
@@ -80,6 +85,19 @@ function App()
         navigate('/')
     }
   }
+
+  // 開発時のみ、ブラウザ自動操作から読み込み・最適化・表示を行えるよう公開する。
+  // WebGL 用マテリアルで読み込んだ結果との比較などの検証に使う
+  useEffect(() =>
+  {
+    if (!import.meta.env.DEV) return
+    const target = window as unknown as { __viewerApp?: unknown }
+    target.__viewerApp = { setVRM, loadVRM, loadVRMWithWebGLMaterials: loadVRMCore, optimizeModel, exportVRM }
+    return () =>
+    {
+      delete target.__viewerApp
+    }
+  }, [])
 
   // 利用可能なデフォルトモデル一覧
   const defaultModels = [
@@ -171,7 +189,7 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions })
+    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions, atlasMaterialType })
 
     if (result.isErr())
     {
@@ -194,7 +212,7 @@ function App()
     setError(null)
 
     // マイグレーションなしで最適化
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions })
+    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions, atlasMaterialType })
 
     if (result.isErr())
     {

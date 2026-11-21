@@ -88,10 +88,36 @@ const result = await simplifyMeshes(vrm, {
 
 | Function                       | Description                             |
 | ------------------------------ | --------------------------------------- |
-| `loadVRM(source)`              | Load VRM from File, URL, or ArrayBuffer |
+| `loadVRM(source, options?)`    | Load VRM from File, URL, or ArrayBuffer |
 | `optimizeModel(vrm, options)`  | Apply optimization pipeline             |
 | `exportVRM(vrm, options?)`     | Export VRM to GLB binary                |
 | `simplifyMeshes(vrm, options)` | Reduce polygon count                    |
+
+### WebGPURenderer で読み込む
+
+`loadVRM` に TSL 版のマテリアルを渡すと、WebGPURenderer で描画できる VRM として読み込みます。
+`mtoonMaterialType` は通常の MToon、`mtoonAtlasMaterialType` は最適化済み VRM（`XRIFT_mtoon_atlas`）に使われます。
+
+```typescript
+import { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
+import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
+
+const result = await loadVRM(file, {
+  mtoonMaterialType: MToonNodeMaterial,
+  mtoonAtlasMaterialType: MToonAtlasNodeMaterial,
+})
+```
+
+KTX2 テクスチャを含む場合は、圧縮形式の判定を描画に使う WebGPURenderer で行わせてください（`await renderer.init()` の後に `setKtx2Renderer(renderer)`、または `loadVRM` の `ktx2Renderer` オプション）。省略すると一時的な WebGLRenderer で判定するため、WebGPU で扱えない形式が選ばれることがあります。
+
+`MToonNodeMaterial` で読み込んだ VRM を最適化するときは、`atlasMaterialType` に `MToonAtlasNodeMaterial` を渡します。
+省略すると、WebGPURenderer で描画できない `MToonAtlasMaterial` を作らないよう `INVALID_PARAMETER` を返します（モデルは変更されません）。
+
+```typescript
+const result = await optimizeModel(vrm, {
+  atlasMaterialType: MToonAtlasNodeMaterial,
+})
+```
 
 ### Types
 

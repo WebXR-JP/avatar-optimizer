@@ -12,9 +12,22 @@
  * 1. `MToonAtlasLoaderPlugin` に `ktx2Loader` を渡す（設定済みインスタンスを共有）
  * 2. `MToonAtlasLoaderPlugin` に `ktx2TranscoderPath` を渡す（プラグイン単位）
  * 3. `setKtx2TranscoderPath()` でアプリ全体の既定値を変える（起動時に一度呼ぶ）
+ *
+ * 対応する圧縮形式の判定（detectSupport）は、既定では一時的に作る
+ * WebGLRenderer で行う。WebGPURenderer で描画するアプリでは WebGL と WebGPU で
+ * 使える形式が異なりうるため、`setKtx2Renderer()` などで描画に使う
+ * レンダラーを渡して判定させる。
  */
 import { WebGLRenderer } from 'three'
+import type { WebGPURenderer } from 'three/webgpu'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+
+/**
+ * KTX2 の対応形式の判定に使えるレンダラー
+ *
+ * WebGPURenderer は `await renderer.init()` 済みであること
+ */
+export type Ktx2SupportRenderer = WebGLRenderer | WebGPURenderer
 
 /**
  * トランスコーダーパスの既定値
@@ -57,6 +70,20 @@ let defaultTranscoderPath: string = DEFAULT_KTX2_TRANSCODER_PATH
 const loaderCache = new Map<string, KTX2Loader>()
 
 /**
+ * レンダラーごと・パスごとの KTX2Loader キャッシュ
+ *
+ * 判定結果はレンダラーに依存するため、一時 WebGLRenderer 用のキャッシュとは分ける。
+ * レンダラーが破棄されたら一緒に解放されるよう WeakMap にする
+ */
+let rendererLoaderCache = new WeakMap<object, Map<string, KTX2Loader>>()
+
+/** clearKtx2LoaderCache で破棄するため、レンダラー別に作ったローダーも保持する */
+const rendererLoaders = new Set<KTX2Loader>()
+
+/** setKtx2Renderer で設定された既定のレンダラー */
+let defaultRenderer: Ktx2SupportRenderer | null = null
+
+/**
  * KTX2 トランスコーダーの配信元をアプリ全体で切り替える
  *
  * アプリ起動時に一度呼ぶ想定。`MToonAtlasLoaderPlugin` を複数箇所で
@@ -85,18 +112,106 @@ export function getKtx2TranscoderPath(): string
 }
 
 /**
+ * KTX2 の対応形式の判定に使うレンダラーをアプリ全体で設定する
+ *
+ * WebGPURenderer で描画するアプリでは、`await renderer.init()` の後、
+ * VRM を読み込む前に一度呼ぶ。null を渡すと既定（一時 WebGLRenderer での判定）に戻す。
+ * 既に生成済みのローダーには影響しない。
+ *
+ * @param renderer - 描画に使うレンダラー
+ *
+ * @example
+ * ```typescript
+ * const renderer = new WebGPURenderer()
+ * await renderer.init()
+ * setKtx2Renderer(renderer)
+ * ```
+ */
+export function setKtx2Renderer(renderer: Ktx2SupportRenderer | null): void
+{
+  defaultRenderer = renderer
+}
+
+/**
+ * setKtx2Renderer で設定したレンダラーを取得する
+ */
+export function getKtx2Renderer(): Ktx2SupportRenderer | null
+{
+  return defaultRenderer
+}
+
+/**
+ * 指定レンダラーで対応形式を判定した KTX2Loader を取得または生成する
+ *
+ * WebGPURenderer が未初期化などで判定できない場合は null を返し、
+ * 呼び出し側は一時 WebGLRenderer での判定に切り替える。
+ */
+function resolveLoaderForRenderer(path: string, renderer: Ktx2SupportRenderer): KTX2Loader | null
+{
+  let byPath = rendererLoaderCache.get(renderer)
+  const cached = byPath?.get(path)
+  if (cached)
+  {
+    return cached
+  }
+
+  const loader = new KTX2Loader()
+  loader.setTranscoderPath(path)
+  try
+  {
+    loader.detectSupport(renderer)
+  } catch (error)
+  {
+    // WebGPURenderer は init() 前に hasFeature() を呼ぶと例外になる
+    console.warn(
+      'MToonAtlasLoaderPlugin: 指定されたレンダラーで KTX2 の対応形式を判定できないため、' +
+      'WebGL で判定します（WebGPURenderer は await renderer.init() 済みであること）:',
+      error,
+    )
+    loader.dispose()
+    return null
+  }
+
+  if (!byPath)
+  {
+    byPath = new Map()
+    rendererLoaderCache.set(renderer, byPath)
+  }
+  byPath.set(path, loader)
+  rendererLoaders.add(loader)
+  return loader
+}
+
+/**
  * KTX2Loader を取得または生成する
  * ブラウザ環境でのみ動作する（WebGL コンテキストが必要）
  *
+ * 対応形式の判定には、引数 renderer > setKtx2Renderer の既定 >
+ * 一時 WebGLRenderer の順で使うレンダラーを決める。
+ *
  * @param transcoderPath - 使用するパス。省略時は既定値
+ * @param renderer - 対応形式の判定に使うレンダラー。省略時は setKtx2Renderer の値
  * @returns KTX2Loader。ブラウザ環境でない場合や初期化に失敗した場合は null
  */
-export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
+export function resolveKtx2Loader(
+  transcoderPath?: string,
+  renderer?: Ktx2SupportRenderer | null,
+): KTX2Loader | null
 {
   const path =
     transcoderPath === undefined
       ? defaultTranscoderPath
       : normalizeTranscoderPath(transcoderPath)
+
+  const supportRenderer = renderer ?? defaultRenderer
+  if (supportRenderer)
+  {
+    const loader = resolveLoaderForRenderer(path, supportRenderer)
+    if (loader)
+    {
+      return loader
+    }
+  }
 
   const cached = loaderCache.get(path)
   if (cached)
@@ -116,7 +231,7 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
   // 失敗した場合はキャッシュに載らず、テクスチャごとに再試行される。
   // renderer を解放し損ねるとブラウザの WebGL コンテキスト上限に達して
   // 既存シーンの描画まで巻き込むため、finally で必ず破棄する
-  let renderer: WebGLRenderer | undefined
+  let tempRenderer: WebGLRenderer | undefined
 
   try
   {
@@ -131,11 +246,11 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
     }
 
     // detectSupport のために一時的な WebGLRenderer を作る
-    renderer = new WebGLRenderer({ canvas, context: gl })
+    tempRenderer = new WebGLRenderer({ canvas, context: gl })
 
     const loader = new KTX2Loader()
     loader.setTranscoderPath(path)
-    loader.detectSupport(renderer)
+    loader.detectSupport(tempRenderer)
 
     loaderCache.set(path, loader)
     return loader
@@ -145,13 +260,14 @@ export function resolveKtx2Loader(transcoderPath?: string): KTX2Loader | null
     return null
   } finally
   {
-    renderer?.dispose()
+    tempRenderer?.dispose()
   }
 }
 
 /**
  * キャッシュ済みの KTX2Loader を破棄する
  *
+ * レンダラー別に作ったローダーも含めて破棄する。
  * パスを変えて作り直したい場合に、古いローダーが抱えるワーカープールと
  * WebGL コンテキストを解放するために使う。
  *
@@ -166,4 +282,11 @@ export function clearKtx2LoaderCache(): void
     loader.dispose()
   }
   loaderCache.clear()
+
+  for (const loader of rendererLoaders)
+  {
+    loader.dispose()
+  }
+  rendererLoaders.clear()
+  rendererLoaderCache = new WeakMap()
 }

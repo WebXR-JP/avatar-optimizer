@@ -1,4 +1,3 @@
-import { MToonMaterial } from '@pixiv/three-vrm'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import {
   DataTexture,
@@ -8,6 +7,7 @@ import {
   UnsignedByteType,
 } from 'three'
 import { OptimizationError } from '..'
+import type { MToonLikeMaterial } from '../types'
 import {
   AtlasGenerationOptions,
   AtlasImageMap,
@@ -89,7 +89,7 @@ function getSlotResolution(
  * @param slot - 処理対象のテクスチャスロット
  */
 export function buildLayersForSlot(
-  materials: MToonMaterial[],
+  materials: MToonLikeMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[],
   slot: MToonTextureSlot,
@@ -135,7 +135,7 @@ export function buildLayersForSlot(
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
 export function generateAtlasImagesFromPatterns(
-  materials: MToonMaterial[],
+  materials: MToonLikeMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[],
   options?: AtlasGenerationOptions,

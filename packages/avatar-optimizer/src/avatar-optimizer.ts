@@ -1,17 +1,23 @@
-import { MToonMaterial, VRM } from '@pixiv/three-vrm'
-import { ok, ResultAsync, safeTry } from 'neverthrow'
+import type { VRM } from '@pixiv/three-vrm'
+import { err, ok, ResultAsync, safeTry } from 'neverthrow'
 import { Bone, BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { simplifyMeshes, SimplifyStatistics } from './process/simplify'
-import { OffsetScale, OptimizationError, OptimizeModelOptions } from './types'
+import {
+  MToonLikeMaterial,
+  OffsetScale,
+  OptimizationError,
+  OptimizeModelOptions,
+} from './types'
 import {
   assignAtlasTexturesToMaterial,
   CombinedMeshResult,
   combineMToonMaterials as combineMeshAndMaterial,
   getMToonMaterialInfoFromObject3D,
   getRenderOrderForMode,
+  isMToonLikeMaterial,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import {
@@ -55,8 +61,24 @@ export function optimizeModel(
       const materialInfos = materialInfoResult.value
       const materials = materialInfos.map((info) => info.material)
 
+      // TSL 版（MToonNodeMaterial）のモデルに WebGL 専用の MToonAtlasMaterial を
+      // 当てると WebGPURenderer で描画できなくなる。変更を加える前に止める
+      if (
+        !options.atlasMaterialType &&
+        materials.some(
+          (m) => 'isMToonNodeMaterial' in m && m.isMToonNodeMaterial,
+        )
+      ) {
+        return err({
+          type: 'INVALID_PARAMETER' as const,
+          message:
+            'MToonNodeMaterial を含むモデルを最適化するには atlasMaterialType に ' +
+            '@webxr-jp/mtoon-atlas/nodes の MToonAtlasNodeMaterial を指定してください',
+        })
+      }
+
       // 後方互換性のためのMap生成
-      const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+      const materialMeshMap = new Map<MToonLikeMaterial, Mesh[]>()
       for (const info of materialInfos) {
         materialMeshMap.set(info.material, info.meshes)
       }
@@ -76,7 +98,7 @@ export function optimizeModel(
       )
 
       // アトラス画像をマテリアルにそれぞれアサインする
-      const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
+      const materialPlacementMap = new Map<MToonLikeMaterial, OffsetScale>()
       patternMappings.forEach((mapping, index) => {
         const placement = packLayouts.packed[index]
         for (const materialIndex of mapping.materialIndices) {
@@ -120,7 +142,10 @@ export function optimizeModel(
       // レンダーモード（opaque/alphaTest/transparent）ごとに別メッシュとして結合
       combineResult = yield* combineMeshAndMaterial(
         materialInfos,
-        {},
+        // undefined を渡すと既定値（MToonAtlasMaterial）を上書きしてしまうため、指定時のみ渡す
+        options.atlasMaterialType
+          ? { materialType: options.atlasMaterialType }
+          : {},
         excludedMeshes,
       )
 
@@ -137,7 +162,7 @@ export function optimizeModel(
           ? mesh.material[0]
           : mesh.material
 
-        if (!(originalMaterial instanceof MToonMaterial)) continue
+        if (!isMToonLikeMaterial(originalMaterial)) continue
 
         // スロット情報を取得
         const slotInfo = combineResult.materialSlotIndex.get(originalMaterial)
@@ -246,7 +271,7 @@ export function optimizeModel(
           : {
               reason: 'NO_MTOON_MATERIAL',
               message:
-                'MToonMaterial が見つからないため、アトラス化とマテリアル統合を' +
+                'MToon マテリアル（MToonMaterial / MToonNodeMaterial）が見つからないため、アトラス化とマテリアル統合を' +
                 'スキップしました（簡略化とマイグレーションのみ実行）。',
             },
       )

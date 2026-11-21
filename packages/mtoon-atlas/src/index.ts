@@ -2,6 +2,7 @@
  * @webxr-jp/mtoon-atlas
  *
  * MToon shader atlas optimization material for three-vrm WebGL applications.
+ * WebGPURenderer 向けの TSL 版は `@webxr-jp/mtoon-atlas/nodes` から読み込む。
  *
  * Provides MToonAtlasMaterial that consumes atlas + packed parameter textures
  * produced by @webxr-jp/avatar-optimizer.
@@ -19,7 +20,11 @@ export type {
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
   MToonAtlasOptions,
+  MToonAtlasMaterialLike,
+  MToonAtlasMaterialConstructor,
 } from './types'
+// パラメータテクスチャの既定レイアウト（GLSL 版・TSL 版・avatar-optimizer で共通）
+export { DEFAULT_PARAMETER_LAYOUT } from './types'
 
 // GLTF拡張プラグイン
 export { MToonAtlasLoaderPlugin } from './extensions/MToonAtlasLoaderPlugin'
@@ -32,8 +37,11 @@ export {
   getKtx2TranscoderPath,
   resolveKtx2Loader,
   clearKtx2LoaderCache,
+  setKtx2Renderer,
+  getKtx2Renderer,
   DEFAULT_KTX2_TRANSCODER_PATH,
 } from './extensions/ktx2-loader'
+export type { Ktx2SupportRenderer } from './extensions/ktx2-loader'
 export { MToonAtlasExporterPlugin } from './extensions/MToonAtlasExporterPlugin'
 // 半透明メッシュの renderOrder（three-vrm と同じ規則。最適化側と読み込み側で共有）
 export {

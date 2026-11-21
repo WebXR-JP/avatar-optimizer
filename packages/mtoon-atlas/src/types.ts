@@ -52,6 +52,39 @@ export interface ParameterSemantic {
 }
 
 /**
+ * 既定のパラメータテクスチャレイアウト
+ *
+ * スロット（行）ごとに 9 テクセル（列）を持ち、各テクセルの RGBA に
+ * 下表のパラメータを詰める。avatar-optimizer の PARAMETER_LAYOUT と同一で、
+ * GLSL 版（shaders/mtoon.frag）のテクセル割り当てとも一致させること。
+ *
+ * shadingShift は -1〜1 を 0〜1 に詰めて保存しているため、
+ * 読み出し側で `value * 2 - 1` して復元する。
+ */
+export const DEFAULT_PARAMETER_LAYOUT: readonly ParameterSemantic[] = [
+  { id: 'baseColor', texel: 0, channels: ['r', 'g', 'b'] },
+  { id: 'opacity', texel: 0, channels: ['a'] },
+  { id: 'shadeColor', texel: 1, channels: ['r', 'g', 'b'] },
+  { id: 'shadingShiftTextureScale', texel: 1, channels: ['a'] },
+  { id: 'emissiveColor', texel: 2, channels: ['r', 'g', 'b'] },
+  { id: 'emissiveIntensity', texel: 2, channels: ['a'] },
+  { id: 'matcapColor', texel: 3, channels: ['r', 'g', 'b'] },
+  { id: 'outlineWidth', texel: 3, channels: ['a'] },
+  { id: 'outlineColor', texel: 4, channels: ['r', 'g', 'b'] },
+  { id: 'outlineLightingMix', texel: 4, channels: ['a'] },
+  { id: 'parametricRimColor', texel: 5, channels: ['r', 'g', 'b'] },
+  { id: 'parametricRimLift', texel: 5, channels: ['a'] },
+  { id: 'parametricRimFresnelPower', texel: 6, channels: ['r'] },
+  { id: 'shadingToony', texel: 6, channels: ['g'] },
+  { id: 'rimLightingMix', texel: 6, channels: ['b'] },
+  { id: 'uvAnimationRotation', texel: 6, channels: ['a'] },
+  { id: 'normalScale', texel: 7, channels: ['r', 'g'] },
+  { id: 'uvAnimationScrollX', texel: 7, channels: ['b'] },
+  { id: 'uvAnimationScrollY', texel: 7, channels: ['a'] },
+  { id: 'shadingShift', texel: 8, channels: ['r'] },
+] as const
+
+/**
  * パラメータテクスチャディスクリプタ
  *
  * avatar-optimizer で生成されたパラメータテクスチャの情報
@@ -146,3 +179,42 @@ export interface MToonAtlasOptions extends THREE.ShaderMaterialParameters {
   /** スロット属性設定 */
   slotAttribute?: MaterialSlotAttributeConfig
 }
+
+/**
+ * GLSL 版（MToonAtlasMaterial）と TSL 版（MToonAtlasNodeMaterial）に共通する
+ * インターフェース
+ *
+ * ローダーとエクスポーターはこの範囲だけを使うことで、どちらのマテリアルも扱える
+ */
+export interface MToonAtlasMaterialLike extends THREE.Material
+{
+  /** 識別フラグ */
+  readonly isMToonAtlasMaterial: true
+
+  /** パラメータテクスチャディスクリプタ */
+  readonly parameterTexture: ParameterTextureDescriptor | undefined
+
+  /** スロット属性設定 */
+  readonly slotAttribute: MaterialSlotAttributeConfig
+
+  /** アウトライン用マテリアルかどうか */
+  isOutline: boolean
+
+  /** アウトライン幅の計算方式 */
+  outlineWidthMode: OutlineWidthMode
+
+  /** このマテリアルを元にアウトライン用マテリアルを作る */
+  createOutlineMaterial(widthMode?: Exclude<OutlineWidthMode, 'none'>): MToonAtlasMaterialLike
+}
+
+/**
+ * MToonAtlasLoaderPlugin が生成するマテリアルのコンストラクタ
+ *
+ * WebGLRenderer では MToonAtlasMaterial（既定）、WebGPURenderer では
+ * `@webxr-jp/mtoon-atlas/nodes` の MToonAtlasNodeMaterial を渡す
+ */
+export type MToonAtlasMaterialConstructor = new (parameters: {
+  parameterTexture?: ParameterTextureDescriptor
+  slotAttribute?: MaterialSlotAttributeConfig
+  name?: string
+}) => MToonAtlasMaterialLike

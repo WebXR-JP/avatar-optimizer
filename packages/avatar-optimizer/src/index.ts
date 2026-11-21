@@ -15,7 +15,9 @@ export { exportVRM, loadVRM, type LoadVRMOptions, type VRMSource } from './io'
 export {
   clearKtx2LoaderCache,
   DEFAULT_KTX2_TRANSCODER_PATH,
+  getKtx2Renderer,
   getKtx2TranscoderPath,
+  setKtx2Renderer,
   setKtx2TranscoderPath,
 } from '@webxr-jp/mtoon-atlas'
 

@@ -1,17 +1,57 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, type GLProps } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera, WebGLRenderer, Texture } from 'three'
+import { WebGPURenderer } from 'three/webgpu'
 import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
-import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
+import { setKtx2Renderer, type AtlasGenerationOptions, type SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
 import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
 import { LicenseSection } from './LicenseSection'
+import { rendererMode, switchRendererMode, type RendererMode } from '../renderer-mode'
 import './VRMCanvas.css'
 
+
+/**
+ * R3F の Canvas に渡すレンダラー設定
+ *
+ * WebGPU のときは WebGPURenderer を生成して init() 完了を待ってから返す。
+ * WebGL のときは R3F 既定の WebGLRenderer に渡すパラメータのみ指定する
+ */
+const CANVAS_GL_PROPS: GLProps = rendererMode === 'webgpu'
+  ? async (props) =>
+  {
+    const renderer = new WebGPURenderer({
+      // R3F の型は WebGL 前提で lib.dom と別定義の OffscreenCanvas を含むためキャストする
+      canvas: props.canvas as HTMLCanvasElement,
+      antialias: true,
+      alpha: true,
+    })
+    await renderer.init()
+    // KTX2 の対応形式を、一時 WebGLRenderer ではなく描画に使う WebGPURenderer で判定させる
+    setKtx2Renderer(renderer)
+    // R3F の Renderer 型は render() を持つことだけを要求する
+    return renderer as unknown as WebGLRenderer
+  }
+  : {
+    antialias: true,
+    alpha: true,
+  }
+
+/**
+ * レンダラーが実際に使っているバックエンドの表示名を返す
+ *
+ * @param gl - R3F が保持するレンダラー（WebGLRenderer または WebGPURenderer）
+ */
+function getBackendLabel(gl: unknown): string
+{
+  const renderer = gl as { isWebGPURenderer?: boolean; backend?: { isWebGPUBackend?: boolean } }
+  if (!renderer.isWebGPURenderer) return 'WebGL'
+  return renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL2 (WebGPU 非対応のためフォールバック)'
+}
 
 /**
  * Debug Mode ごとの説明文
@@ -305,6 +345,9 @@ function VRMCanvas({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null)
   const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
+  // 実際に使われている描画バックエンド。WebGPURenderer は WebGPU が使えないと
+  // WebGL2 バックエンドに黙ってフォールバックするため、画面に明示する
+  const [backendLabel, setBackendLabel] = useState<string | null>(null)
 
   // Spector.js WebGLデバッグ（開発環境のみ）
   const { captureFrame, displayUI: displaySpectorUI, isReady: isSpectorReady } = useSpector(canvasElement)
@@ -356,6 +399,23 @@ function VRMCanvas({
         <h1 className="vrm-sidebar__title">VRM Debug Viewer</h1>
 
         <Section title="モデル" defaultOpen>
+          <label className="vrm-field">
+            <span className="vrm-field__label">レンダラー</span>
+            <select
+              className="vrm-field__select"
+              value={rendererMode}
+              onChange={(e) => switchRendererMode(e.target.value as RendererMode)}
+              title="切り替えるとページを再読み込みします"
+            >
+              <option value="webgl">WebGL</option>
+              <option value="webgpu">WebGPU</option>
+            </select>
+          </label>
+          {backendLabel && (
+            <div className="vrm-field__label" data-testid="renderer-backend">
+              Backend: {backendLabel}
+            </div>
+          )}
           <select
             className="vrm-field__select"
             value={selectedModel}
@@ -628,15 +688,22 @@ function VRMCanvas({
             near: 0.1,
             far: 100,
           }}
-          gl={{
-            antialias: true,
-            alpha: true,
-          }}
-          onCreated={({ gl }) =>
+          gl={CANVAS_GL_PROPS}
+          onCreated={({ gl, scene }) =>
           {
             gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
-            setCanvasElement(gl.domElement)
-            setGlRenderer(gl)
+            setBackendLabel(getBackendLabel(gl))
+            // 開発時のみ、ブラウザ自動操作から描画状態を調べられるよう公開する
+            if (import.meta.env.DEV)
+            {
+              (window as unknown as { __viewer?: unknown }).__viewer = { renderer: gl, scene, rendererMode }
+            }
+            // Spector.js と WebGL デバッグツールは WebGL コンテキスト専用
+            if (rendererMode === 'webgl')
+            {
+              setCanvasElement(gl.domElement)
+              setGlRenderer(gl)
+            }
           }}
         >
           <CameraAspectUpdater />

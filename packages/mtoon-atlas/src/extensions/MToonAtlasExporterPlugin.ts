@@ -2,7 +2,7 @@ import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Obje
 import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
-import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
+import type { MToonAtlasMaterialLike } from '../types'
 import { getKtx2Source, isCompressedTexture } from './ktx2-source-cache'
 import
 {
@@ -46,8 +46,9 @@ interface PendingTextureIndexInfo
 /**
  * GLTFExporter用のMToonAtlasエクスポートプラグイン
  *
- * GLTFExporterはShaderMaterialをサポートしないため、
- * beforeParseでテクスチャを処理し、afterParseでマテリアル定義をJSONに追加します。
+ * GLSL 版（MToonAtlasMaterial）と TSL 版（MToonAtlasNodeMaterial）の両方を扱う。
+ * GLTFExporter 標準のマテリアル変換は通さず、beforeParseでテクスチャを処理し、
+ * afterParseでマテリアル定義をJSONに追加します。
  */
 export class MToonAtlasExporterPlugin
 {
@@ -55,13 +56,13 @@ export class MToonAtlasExporterPlugin
   private writer: GLTFWriter
 
   // MToonAtlasMaterialを持つメッシュのマップ（SkinnedMeshと通常のMesh両方対応）
-  private mtoonAtlasMeshes: Map<Mesh, MToonAtlasMaterial[]> = new Map()
+  private mtoonAtlasMeshes: Map<Mesh, MToonAtlasMaterialLike[]> = new Map()
 
   // beforeParseで処理されたテクスチャインデックス（解決済み）
-  private textureIndices: Map<MToonAtlasMaterial, TextureIndexInfo> = new Map()
+  private textureIndices: Map<MToonAtlasMaterialLike, TextureIndexInfo> = new Map()
 
   // beforeParseで処理中のテクスチャインデックス（Promise）
-  private pendingTextureIndices: Map<MToonAtlasMaterial, PendingTextureIndexInfo> = new Map()
+  private pendingTextureIndices: Map<MToonAtlasMaterialLike, PendingTextureIndexInfo> = new Map()
 
   // 画像ソースのUUIDからインデックスへのキャッシュ（重複登録防止）
   // Three.jsのShaderMaterial.copyがuniformsをディープクローンするため、
@@ -75,6 +76,27 @@ export class MToonAtlasExporterPlugin
   constructor(writer: GLTFWriter)
   {
     this.writer = writer
+    this.skipStandardMaterialProcessing()
+  }
+
+  /**
+   * アトラスマテリアルを GLTFExporter 標準のマテリアル変換から外す
+   *
+   * 標準の変換は MeshStandardMaterial 前提で `material.color` などを読む。
+   * GLSL 版は ShaderMaterial として警告付きで null になるだけだが、
+   * TSL 版（NodeMaterial）は color を持たないため例外で書き出しが止まる。
+   * どちらも afterParse で自前のマテリアル定義に差し替えるので、ここで null を返す
+   */
+  private skipStandardMaterialProcessing(): void
+  {
+    const original = this.writer.processMaterialAsync?.bind(this.writer)
+    if (!original) return
+
+    this.writer.processMaterialAsync = async (material) =>
+    {
+      if (material && 'isMToonAtlasMaterial' in material) return null
+      return original(material)
+    }
   }
 
   /**
@@ -108,13 +130,13 @@ export class MToonAtlasExporterPlugin
         if (obj instanceof Mesh)
         {
           const materials = Array.isArray(obj.material) ? obj.material : [obj.material]
-          const mtoonMaterials: MToonAtlasMaterial[] = []
+          const mtoonMaterials: MToonAtlasMaterialLike[] = []
 
           for (const material of materials)
           {
             if (material && 'isMToonAtlasMaterial' in material)
             {
-              mtoonMaterials.push(material as MToonAtlasMaterial)
+              mtoonMaterials.push(material as MToonAtlasMaterialLike)
             }
           }
 
@@ -257,7 +279,7 @@ export class MToonAtlasExporterPlugin
    * マテリアルのテクスチャを処理してインデックスを保存
    * 非同期でBINチャンクに書き込み、完了後にtextureIndicesに格納
    */
-  private processTexturesForMaterial(material: MToonAtlasMaterial)
+  private processTexturesForMaterial(material: MToonAtlasMaterialLike)
   {
     const pendingIndices: PendingTextureIndexInfo = {
       parameterTextureIndex: null,
@@ -997,9 +1019,9 @@ export class MToonAtlasExporterPlugin
 
     // マテリアルの処理
     // マテリアルごとにインデックスを記録
-    const materialIndexMap = new Map<MToonAtlasMaterial, number>()
+    const materialIndexMap = new Map<MToonAtlasMaterialLike, number>()
     // マテリアル定義とマテリアルの対応を保存（後でテクスチャインデックスを更新するため）
-    const materialDefMap = new Map<MToonAtlasMaterial, any>()
+    const materialDefMap = new Map<MToonAtlasMaterialLike, any>()
 
     for (const [mesh, materials] of this.mtoonAtlasMeshes)
     {
@@ -1072,7 +1094,7 @@ export class MToonAtlasExporterPlugin
   /**
    * MToonAtlasMaterialからGLTFマテリアル定義を作成
    */
-  private createMaterialDef(material: MToonAtlasMaterial): any
+  private createMaterialDef(material: MToonAtlasMaterialLike): any
   {
     const indices = this.textureIndices.get(material)
 
@@ -1144,8 +1166,8 @@ export class MToonAtlasExporterPlugin
    */
   private updateMeshPrimitive(
     mesh: Mesh,
-    materials: MToonAtlasMaterial[],
-    materialIndexMap: Map<MToonAtlasMaterial, number>
+    materials: MToonAtlasMaterialLike[],
+    materialIndexMap: Map<MToonAtlasMaterialLike, number>
   )
   {
     const json = this.writer.json

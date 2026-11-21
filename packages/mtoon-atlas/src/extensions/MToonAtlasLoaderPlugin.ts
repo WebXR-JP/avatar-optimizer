@@ -5,7 +5,8 @@ import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MToonAtlasMaterial } from '../MToonAtlasMaterial'
 import { getMToonRenderOrder } from '../render-order'
 import { rememberKtx2Source } from './ktx2-source-cache'
-import { resolveKtx2Loader } from './ktx2-loader'
+import { resolveKtx2Loader, type Ktx2SupportRenderer } from './ktx2-loader'
+import type { MToonAtlasMaterialConstructor } from '../types'
 import
 {
   GLTFParser,
@@ -70,6 +71,20 @@ export interface MToonAtlasLoaderPluginOptions
    * `ktx2Loader` を渡した場合は無視される
    */
   ktx2TranscoderPath?: string
+
+  /**
+   * KTX2 の対応形式の判定に使うレンダラー。`ktx2Loader` を渡した場合は無視される。
+   * 省略時は setKtx2Renderer() の値、それも無ければ一時 WebGLRenderer で判定する。
+   * WebGPURenderer で描画する場合は init() 済みのものを渡す
+   */
+  ktx2Renderer?: Ktx2SupportRenderer
+
+  /**
+   * 生成するマテリアルのクラス。省略時は MToonAtlasMaterial（WebGL 専用）。
+   * WebGPURenderer で描画する場合は `@webxr-jp/mtoon-atlas/nodes` の
+   * MToonAtlasNodeMaterial を渡す
+   */
+  materialType?: MToonAtlasMaterialConstructor
 }
 
 export class MToonAtlasLoaderPlugin
@@ -87,11 +102,19 @@ export class MToonAtlasLoaderPlugin
   // 呼び出し側から渡されたトランスコーダーパス
   private ktx2TranscoderPath?: string
 
+  // 生成するマテリアルのクラス
+  private materialType: MToonAtlasMaterialConstructor
+
+  // KTX2 の対応形式の判定に使うレンダラー
+  private ktx2Renderer?: Ktx2SupportRenderer
+
   constructor(parser: GLTFParser, options: MToonAtlasLoaderPluginOptions = {})
   {
     this.parser = parser
     this.injectedKtx2Loader = options.ktx2Loader
     this.ktx2TranscoderPath = options.ktx2TranscoderPath
+    this.materialType = options.materialType ?? MToonAtlasMaterial
+    this.ktx2Renderer = options.ktx2Renderer
   }
 
   /**
@@ -100,7 +123,7 @@ export class MToonAtlasLoaderPlugin
    */
   private getKtx2Loader(): KTX2Loader | null
   {
-    return this.injectedKtx2Loader ?? resolveKtx2Loader(this.ktx2TranscoderPath)
+    return this.injectedKtx2Loader ?? resolveKtx2Loader(this.ktx2TranscoderPath, this.ktx2Renderer)
   }
 
   /**
@@ -168,7 +191,7 @@ export class MToonAtlasLoaderPlugin
       const material = Array.isArray(object.material)
         ? object.material[0]
         : object.material
-      if (!(material instanceof MToonAtlasMaterial)) return
+      if (!material || !('isMToonAtlasMaterial' in material)) return
       if (!material.transparent) return
       object.renderOrder = getMToonRenderOrder(material)
     })
@@ -509,7 +532,7 @@ export class MToonAtlasLoaderPlugin
     // GLTFLoader converts custom attributes to lowercase
     const slotAttributeName = extension.slotAttributeName.toLowerCase()
 
-    const material = new MToonAtlasMaterial({
+    const material = new this.materialType({
       parameterTexture: {
         texture: parameterTexture,
         slotCount: extension.parameterTexture.slotCount,

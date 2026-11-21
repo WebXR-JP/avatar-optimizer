@@ -31,6 +31,26 @@ pnpm -F debug-viewer run build
 pnpm -F debug-viewer run preview
 ```
 
+### レンダラーの切り替え（WebGL / WebGPU）
+
+サイドバー「モデル」のレンダラー選択で切り替えます（URL の `?renderer=webgpu` でも指定可能）。切り替えるとページを再読み込みします。
+
+- WebGPU では MToon を three-vrm の `MToonNodeMaterial`、最適化済み VRM を mtoon-atlas の `MToonAtlasNodeMaterial` で読み込み、`WebGPURenderer` で描画します
+- WebGPU のアダプタが取得できない環境では three が WebGL2 バックエンドに自動でフォールバックします。実際のバックエンドはレンダラー選択の下に表示されます
+- Spector.js と「WebGL ツール」は WebGL のときのみ使えます
+- WebGPU での `Optimize` は `atlasMaterialType: MToonAtlasNodeMaterial` を指定して最適化します
+- 開発時は `window.__viewer`（`renderer` / `scene` / `rendererMode`）から描画状態を参照できます
+- 開発時は `window.__viewerApp` から読み込み・最適化・表示を呼べます。WebGL 用マテリアルで読み込んで最適化した結果を WebGPU で表示する、といった比較に使えます
+
+```javascript
+const app = window.__viewerApp
+const src = await app.loadVRMWithWebGLMaterials('/AliciaSolid.vrm')
+await app.optimizeModel(src.value, { migrateVRM0ToVRM1: true })
+const buf = await app.exportVRM(src.value)
+const result = await app.loadVRM(buf.value) // 現在のレンダラーに合ったマテリアルで読み込む
+app.setVRM(result.value)
+```
+
 ### 同梱モデル
 
 モデル選択のドロップダウンから読み込めます。
