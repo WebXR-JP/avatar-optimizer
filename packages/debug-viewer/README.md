@@ -126,10 +126,19 @@ AliciaSolid（VRM 0.x）の場合は次のように変わります。
 
 ### サンプルモーション
 
-開発時の動作確認用モーションとして、以下のページから VRMA ファイルをダウンロードし、`public/vrma/` に配置してください（ディレクトリがない場合は作成してください）。
-今はVRMA_03.vrmaだけ使ってます
+動作確認用の VRMA は `public/samples/test.vrma` に同梱しています。
+これは [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) のサンプルモーションをそのまま置いたもので、
+`Play Animation` を押すと再生されます。追加のダウンロードは不要です。
 
-https://booth.pm/ja/items/5512385?srsltid=AfmBOop7sRKuMxeJwy_4IiEbqh4LKRcvTrI3b2AlYSh2IAC-48yIXH0Q
+```bash
+# 同梱ファイルを three-vrm の最新サンプルで更新する場合
+curl -sL -o packages/debug-viewer/public/samples/test.vrma \
+  https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm-animation/examples/models/test.vrma
+```
+
+自前のモーションで確認したい場合は `public/vrma/` に VRMA を置き、
+`src/App.tsx` の `SAMPLE_VRMA_PATH` をそのパスに変更してください
+（`public/vrma/` はリポジトリに含めないよう `.gitignore` 済みです）。
 
 ## 依存関係
 

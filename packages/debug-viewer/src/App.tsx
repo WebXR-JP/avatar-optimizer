@@ -15,6 +15,11 @@ import './App.css'
 // WebGPU のときは MToonNodeMaterial を TSL 版のアトラスマテリアルに統合する
 const atlasMaterialType = rendererMode === 'webgpu' ? MToonAtlasNodeMaterial : undefined
 
+// 動作確認用のサンプルモーション。@pixiv/three-vrm のサンプル (test.vrma) を
+// public/samples/ に同梱している。差し替える場合は public/vrma/ に置いてパスを変える。
+// 取得元: https://github.com/pixiv/three-vrm/blob/dev/packages/three-vrm-animation/examples/models/test.vrma
+const SAMPLE_VRMA_PATH = '/samples/test.vrma'
+
 function App()
 {
   const navigate = useNavigate()
@@ -500,7 +505,7 @@ function App()
     setIsLoading(true)
     setError(null)
 
-    const result = await loadVRMAnimation('/vrma/VRMA_03.vrma')
+    const result = await loadVRMAnimation(SAMPLE_VRMA_PATH)
 
     if (result.isErr())
     {
