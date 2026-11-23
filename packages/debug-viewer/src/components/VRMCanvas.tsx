@@ -249,6 +249,7 @@ function ExpressionSection({ vrm }: { vrm: VRM })
 interface VRMCanvasProps
 {
   vrm: VRM | null
+  vrmRevision: number
   currentTab: number
   isLoading: boolean
   error: string | null
@@ -321,6 +322,7 @@ function CameraAspectUpdater()
  */
 function VRMCanvas({
   vrm,
+  vrmRevision,
   currentTab,
   isLoading,
   error,
@@ -483,7 +485,7 @@ function VRMCanvas({
 
         {vrm && (
           <Section title="ライセンス">
-            <LicenseSection key={vrm.scene.uuid} vrm={vrm} />
+            <LicenseSection key={`${vrm.scene.uuid}-${vrmRevision}`} vrm={vrm} />
           </Section>
         )}
 
@@ -777,7 +779,7 @@ function VRMCanvas({
         >
           <CameraAspectUpdater />
           {perfProbeEnabled && <PerfProbe vrm={vrm} />}
-          <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
+          <VRMScene vrm={vrm} vrmRevision={vrmRevision} isOptimizing={isOptimizing} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
         </Canvas>
 
         {currentTab === 0 && error && (

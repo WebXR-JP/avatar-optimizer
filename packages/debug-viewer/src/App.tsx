@@ -6,7 +6,7 @@ import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
 import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation, loadVRMAnimationFromFile } from './hooks'
-import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
+import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateVRM0ToVRM1, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
 import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
 import { rendererMode } from './renderer-mode'
@@ -25,6 +25,8 @@ function App()
   const navigate = useNavigate()
   const location = useLocation()
   const [vrm, setVRM] = useState<VRM | null>(null)
+  // VRM のインプレース変更（最適化・マイグレーション）を子コンポーネントへ通知するカウンタ
+  const [vrmRevision, setVrmRevision] = useState(0)
   const [vrmAnimation, setVRMAnimation] = useState<VRMAnimation | null>(null)
   // 再生中のモーションの表示名（同梱サンプル or 読み込んだファイル名）
   const [animationName, setAnimationName] = useState<string | null>(null)
@@ -210,6 +212,7 @@ function App()
       }
 
       reportOptimizationResult(result.value, 'Optimization successful')
+      setVrmRevision((r) => r + 1)
     }
     finally
     {
@@ -241,6 +244,7 @@ function App()
         result.value,
         'Optimization (without migration) successful',
       )
+      setVrmRevision((r) => r + 1)
     }
     finally
     {
@@ -262,31 +266,16 @@ function App()
       return
     }
 
-    // SpringBoneManagerを一時的に退避（useFrameでのupdate呼び出しを防ぐ）
-    const springBoneManager = vrm.springBoneManager
-    ;(vrm as any).springBoneManager = null
-
-    // SpringBoneを初期姿勢にリセット
-    springBoneManager?.reset()
-
-    // マイグレーション実行
-    const result = migrateSkeletonVRM0ToVRM1(vrm.scene)
+    const result = migrateVRM0ToVRM1(vrm)
 
     if (result.isErr())
     {
       const err = result.error
       setErrorWithLog(`Migration failed (${err.type}): ${err.message}`)
-      // SpringBoneManagerを復元
-      ;(vrm as any).springBoneManager = springBoneManager
       return
     }
 
-    // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
-    ;(vrm as any).springBoneManager = springBoneManager
-
-    // SpringBone関連の調整を一括で実行
-    migrateSpringBone(vrm)
-
+    setVrmRevision((r) => r + 1)
     console.log('Migration successful')
   }, [vrm, setErrorWithLog])
 
@@ -618,6 +607,7 @@ function App()
         {/* Canvas は常にレンダリング（コンテキスト保持） */}
         <VRMCanvas
           vrm={vrm}
+          vrmRevision={vrmRevision}
           currentTab={currentTab}
           isLoading={isLoading}
           error={error}
