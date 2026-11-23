@@ -62,7 +62,8 @@ export { simplifyMeshes, type SimplifyStatistics } from './process/simplify'
 // Exporter
 export { VRMExporterPlugin } from './exporter'
 
-// Skeleton migration utilities (for debugging)
+// Skeleton & VRM migration utilities
+export { migrateVRM0ToVRM1 } from './process/migrate-vrm'
 export { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
 export {
   createVirtualTailNodes,

@@ -1,7 +1,8 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { err, ok, ResultAsync, safeTry } from 'neverthrow'
-import { Bone, BufferAttribute, Mesh } from 'three'
+import { BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
+import { migrateVRM0ToVRM1 } from './process/migrate-vrm'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { simplifyMeshes, SimplifyStatistics } from './process/simplify'
@@ -26,8 +27,6 @@ import {
   createEmptyCombinedMeshResult,
   hasAtlasedMaterial,
 } from './util/optimize-helpers'
-import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
-import { migrateSpringBone } from './util/springbone'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -47,8 +46,12 @@ export function optimizeModel(
   return safeTry(async function* () {
     const rootNode = vrm.scene
 
-    // SpringBoneを初期姿勢にリセット（マイグレーション前に物理演算の影響を排除）
+    // SpringBone・Humanoid を初期姿勢（バインドポーズ）にリセット
+    // アニメーション再生中や物理演算による変形がメッシュ統合・マイグレーションに混入しないようにする
     vrm.springBoneManager?.reset()
+    vrm.humanoid?.resetNormalizedPose?.()
+    vrm.humanoid?.resetRawPose?.()
+    rootNode.updateMatrixWorld(true)
 
     // モデルのマテリアル集計（アウトライン情報を含む）
     const materialInfoResult = getMToonMaterialInfoFromObject3D(rootNode)
@@ -137,6 +140,13 @@ export function optimizeModel(
           options.simplify,
         )
       }
+
+      // 非同期処理（パッキング・簡略化）の間にアニメーションや物理演算がボーンを
+      // 動かしている可能性があるため、メッシュ統合直前にもバインドポーズへ戻す
+      vrm.springBoneManager?.reset()
+      vrm.humanoid?.resetNormalizedPose?.()
+      vrm.humanoid?.resetRawPose?.()
+      rootNode.updateMatrixWorld(true)
 
       // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
       // レンダーモード（opaque/alphaTest/transparent）ごとに別メッシュとして結合
@@ -277,55 +287,16 @@ export function optimizeModel(
       )
     }
 
-    // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
-    // VRM1.0の場合はスキップ（metaVersion === '1'）
+    // VRM0.x -> VRM1.0 マイグレーション（メッシュ統合後に実行）
+    // VRM1.0 の場合はスキップ（metaVersion === '1'）。
+    // 既に最適化済みのモデル（マイグレーション無しで最適化した場合など）でも
+    // 重複実行による劣化・破壊を防ぐためスキップする。
     const isVRM1 = vrm.meta?.metaVersion === '1'
-
-    // 既に最適化済みのモデルではマイグレーションもスキップする。
-    // migrateSkeletonVRM0ToVRM1 は Y軸180度回転と頂点/bindMatrix の焼き込みを
-    // 行うが vrm.meta.metaVersion は更新されないため、同じ VRM に対して
-    // 二重に適用され、アバターが後ろ向きになる（実機で再現確認済み）。
     const skipAsAlreadyOptimized =
       combineResult.atlasSkipped?.reason === 'ALREADY_OPTIMIZED'
 
     if (options.migrateVRM0ToVRM1 && !isVRM1 && !skipAsAlreadyOptimized) {
-      // SpringBoneManagerを一時的に退避
-      // マイグレーション中に外部からvrm.update()が呼ばれても
-      // SpringBoneが動かないようにする
-      const springBoneManager = vrm.springBoneManager
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(vrm as any).springBoneManager = null
-
-      // SpringBoneを初期姿勢にリセット（物理演算による変形を排除）
-      // マイグレーションはボーンのワールド座標を記録するため、
-      // 物理演算で変形した状態だと正しい座標が記録されない
-      springBoneManager?.reset()
-
-      // Humanoid Boneのセットを構築
-      // VRM1.0仕様ではHumanoid Boneのみ回転がidentityである必要がある
-      // 非Humanoid Bone（髪、服、SpringBone制御のボーンなど）は回転を保持
-      const humanoidBones = new Set<Bone>()
-      if (vrm.humanoid) {
-        Object.values(vrm.humanoid.humanBones).forEach((humanBone) => {
-          const node = humanBone.node
-          if (node instanceof Bone) {
-            humanoidBones.add(node)
-          }
-        })
-      }
-
-      yield* migrateSkeletonVRM0ToVRM1(rootNode, { humanoidBones })
-
-      // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(vrm as any).springBoneManager = springBoneManager
-
-      // SpringBone関連の調整を一括で実行
-      // - 末端ジョイントに仮想tailノードを作成
-      // - 重力方向（gravityDir）をY軸180度回転
-      // - コライダーオフセットをY軸180度回転
-      // - SpringBoneの初期状態を再設定
-      migrateSpringBone(vrm)
+      yield* migrateVRM0ToVRM1(vrm)
     }
 
     return ok(combineResult)

@@ -1,6 +1,10 @@
 import type { VRM0Meta, VRM1Meta } from '@pixiv/three-vrm'
+import { Texture } from 'three'
 import { describe, expect, it } from 'vitest'
-import { buildVRM1MetaDef } from '../../src/exporter/meta'
+import {
+  buildVRM1MetaDef,
+  migrateVRM0MetaToVRM1,
+} from '../../src/exporter/meta'
 
 /**
  * VRM 0.x -> 1.0 のメタ変換のテスト
@@ -232,5 +236,44 @@ describe('buildVRM1MetaDef: VRM 1.0 はそのまま写す', () => {
     expect(def.commercialUsage).toBe('personalNonProfit')
     expect(def.modification).toBe('prohibited')
     expect(def.licenseUrl).toBe('https://vrm.dev/licenses/1.0/')
+  })
+})
+
+describe('migrateVRM0MetaToVRM1', () => {
+  it('VRM 0.x メタを metaVersion: "1" の VRM1Meta に変換しサムネイル画像を移す', () => {
+    const fakeImage = {} as HTMLImageElement
+    const texture = new Texture(fakeImage)
+    const migrated = migrateVRM0MetaToVRM1(
+      vrm0({
+        title: 'Alicia',
+        author: 'DWANGO',
+        allowedUserName: 'Everyone',
+        commercialUssageName: 'Allow',
+        violentUssageName: 'Disallow',
+        sexualUssageName: 'Disallow',
+        otherLicenseUrl: 'https://example.test/rule',
+        texture,
+      }),
+    )
+
+    expect(migrated.metaVersion).toBe('1')
+    expect(migrated.name).toBe('Alicia')
+    expect(migrated.authors).toEqual(['DWANGO'])
+    expect(migrated.avatarPermission).toBe('everyone')
+    expect(migrated.commercialUsage).toBe('personalProfit')
+    expect(migrated.otherLicenseUrl).toBe('https://example.test/rule')
+    expect(migrated.thumbnailImage).toBe(fakeImage)
+  })
+
+  it('既に VRM 1.0 のメタはそのまま返す', () => {
+    const meta: VRM1Meta = {
+      metaVersion: '1',
+      name: 'VRM1',
+      authors: ['Author'],
+      licenseUrl: 'https://vrm.dev/licenses/1.0/',
+      avatarPermission: 'everyone',
+      commercialUsage: 'corporation',
+    }
+    expect(migrateVRM0MetaToVRM1(meta)).toBe(meta)
   })
 })
