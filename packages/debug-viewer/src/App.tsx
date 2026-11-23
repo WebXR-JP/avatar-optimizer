@@ -107,7 +107,6 @@ function App()
     { name: 'AliciaSolid (COLOR_0)', path: '/AliciaSolid_COLOR0.vrm' },
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
-    { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
     { name: 'seedsan', path: '/seedsan.vrm' },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
