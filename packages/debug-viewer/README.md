@@ -136,9 +136,12 @@ curl -sL -o packages/debug-viewer/public/samples/test.vrma \
   https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm-animation/examples/models/test.vrma
 ```
 
-自前のモーションで確認したい場合は `public/vrma/` に VRMA を置き、
-`src/App.tsx` の `SAMPLE_VRMA_PATH` をそのパスに変更してください
-（`public/vrma/` はリポジトリに含めないよう `.gitignore` 済みです）。
+自前のモーションで確認したい場合は、サイドバー「その他」セクションの **Upload VRMA** から
+`.vrma` ファイルを選択すると、そのモーションに差し替えて再生します（リポジトリには保存されません）。
+再生中のモーション名はボタンの下に表示されます。
+
+`public/vrma/` に置いて起動時から使いたい場合は、`src/App.tsx` の `SAMPLE_VRMA_PATH` を
+そのパスに変更してください（`public/vrma/` はリポジトリに含めないよう `.gitignore` 済みです）。
 
 ## 依存関係
 

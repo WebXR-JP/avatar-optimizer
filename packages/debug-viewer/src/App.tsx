@@ -5,7 +5,7 @@ import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
-import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
+import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation, loadVRMAnimationFromFile } from './hooks'
 import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
 import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
@@ -26,6 +26,9 @@ function App()
   const location = useLocation()
   const [vrm, setVRM] = useState<VRM | null>(null)
   const [vrmAnimation, setVRMAnimation] = useState<VRMAnimation | null>(null)
+  // 再生中のモーションの表示名（同梱サンプル or 読み込んだファイル名）
+  const [animationName, setAnimationName] = useState<string | null>(null)
+  const [isLoadingAnimation, setIsLoadingAnimation] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
@@ -502,7 +505,7 @@ function App()
 
   const handlePlayAnimation = useCallback(async () =>
   {
-    setIsLoading(true)
+    setIsLoadingAnimation(true)
     setError(null)
 
     const result = await loadVRMAnimation(SAMPLE_VRMA_PATH)
@@ -510,13 +513,42 @@ function App()
     if (result.isErr())
     {
       setErrorWithLog(result.error.message)
-      setIsLoading(false)
+      setIsLoadingAnimation(false)
       return
     }
 
     setVRMAnimation(result.value)
-    setIsLoading(false)
+    setAnimationName('test.vrma (three-vrm sample)')
+    setIsLoadingAnimation(false)
   }, [setErrorWithLog])
+
+  // 手元の VRMA ファイルでモーションを差し替える
+  const handleAnimationFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) =>
+    {
+      const file = event.target.files?.[0]
+      // 同じファイルを選び直しても change が発火するようにリセットする
+      event.target.value = ''
+      if (!file) return
+
+      setIsLoadingAnimation(true)
+      setError(null)
+
+      const result = await loadVRMAnimationFromFile(file)
+
+      if (result.isErr())
+      {
+        setErrorWithLog(result.error.message)
+        setIsLoadingAnimation(false)
+        return
+      }
+
+      setVRMAnimation(result.value)
+      setAnimationName(file.name)
+      setIsLoadingAnimation(false)
+    },
+    [setErrorWithLog],
+  )
 
   // Export VRM後にそのまま再読み込みする（エクスポート結果の確認用）
   const handleReloadExport = useCallback(async () =>
@@ -568,6 +600,7 @@ function App()
 
     setVRM(loadResult.value)
     setVRMAnimation(null)
+    setAnimationName(null)
     setIsReloading(false)
     restoreSpringBone()
   }, [vrm, springBoneEnabled, setErrorWithLog])
@@ -599,6 +632,9 @@ function App()
           isReplacingTextures={isReplacingTextures}
           vrmAnimation={vrmAnimation}
           onPlayAnimation={handlePlayAnimation}
+          animationName={animationName}
+          isLoadingAnimation={isLoadingAnimation}
+          onAnimationFileChange={handleAnimationFileChange}
           debugMode={debugMode}
           onDebugModeChange={setDebugMode}
           springBoneEnabled={springBoneEnabled}

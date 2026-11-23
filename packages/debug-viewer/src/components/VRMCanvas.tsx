@@ -263,6 +263,10 @@ interface VRMCanvasProps
   isReplacingTextures: boolean
   vrmAnimation: VRMAnimation | null
   onPlayAnimation: () => Promise<void>
+  /** 読み込み済みモーションの表示名（同梱サンプル名 or ファイル名） */
+  animationName: string | null
+  isLoadingAnimation: boolean
+  onAnimationFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   debugMode: DebugMode
   onDebugModeChange: (mode: DebugMode) => void
   springBoneEnabled: boolean
@@ -331,6 +335,9 @@ function VRMCanvas({
   isReplacingTextures,
   vrmAnimation,
   onPlayAnimation,
+  animationName,
+  isLoadingAnimation,
+  onAnimationFileChange,
   debugMode,
   onDebugModeChange,
   springBoneEnabled,
@@ -357,6 +364,7 @@ function VRMCanvas({
 }: VRMCanvasProps)
 {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const animationInputRef = useRef<HTMLInputElement>(null)
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null)
   const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
   // 実際に使われている描画バックエンド。WebGPURenderer は WebGPU が使えないと
@@ -403,6 +411,11 @@ function VRMCanvas({
   const handleButtonClick = useCallback(() =>
   {
     fileInputRef.current?.click()
+  }, [])
+
+  const handleAnimationButtonClick = useCallback(() =>
+  {
+    animationInputRef.current?.click()
   }, [])
 
   return (
@@ -665,10 +678,28 @@ function VRMCanvas({
           <button
             className="vrm-btn"
             onClick={onPlayAnimation}
-            disabled={!vrm || !!vrmAnimation}
+            disabled={!vrm || !!vrmAnimation || isLoadingAnimation}
           >
-            {vrmAnimation ? 'Playing Animation' : 'Play Animation'}
+            {vrmAnimation ? 'Playing Animation' : isLoadingAnimation ? 'Loading...' : 'Play Animation'}
           </button>
+          <button
+            className="vrm-btn"
+            onClick={handleAnimationButtonClick}
+            disabled={isLoadingAnimation}
+            title="手元の VRMA ファイルでモーションを差し替える"
+          >
+            Upload VRMA
+          </button>
+          <input
+            ref={animationInputRef}
+            type="file"
+            accept=".vrma"
+            onChange={onAnimationFileChange}
+            style={{ display: 'none' }}
+          />
+          {animationName && (
+            <p className="vrm-note" data-testid="animation-name">Animation: {animationName}</p>
+          )}
         </Section>
 
         {(isSpectorReady || glRenderer) && (
