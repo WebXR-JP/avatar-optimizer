@@ -37,12 +37,10 @@ describe('packTextures', () => {
 
   describe('Safari (JavaScriptCore) のエラーメッセージ環境', () => {
     beforeEach(() => {
-      // eslint-disable-next-line no-extend-native
       Array.prototype.reduce = jscLikeReduce as typeof Array.prototype.reduce
     })
 
     afterEach(() => {
-      // eslint-disable-next-line no-extend-native
       Array.prototype.reduce = originalReduce
     })
 
