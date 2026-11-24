@@ -1,5 +1,16 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.5.0
+
+### Minor Changes
+
+- 8261855: Skeleton の統合・未使用ボーンの除外と、エクスポート時の skin 重複排除を実装しました。あわせて `optimizeSkeletons` と `SkeletonOptimizationStatistics` を公開します。
+
+### Patch Changes
+
+- Updated dependencies [8261855]
+  - @webxr-jp/mtoon-atlas@0.5.1
+
 ## 0.4.1
 
 ### Patch Changes

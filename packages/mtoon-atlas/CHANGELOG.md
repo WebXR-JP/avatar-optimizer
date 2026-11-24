@@ -1,5 +1,11 @@
 # @webxr-jp/mtoon-atlas
 
+## 0.5.1
+
+### Patch Changes
+
+- 8261855: MToonAtlasLoaderPlugin でアトラステクスチャとパラメータをキャッシュ共有するようにしました。
+
 ## 0.5.0
 
 ### Minor Changes
