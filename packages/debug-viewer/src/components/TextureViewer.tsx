@@ -180,6 +180,8 @@ function TextureViewer({ vrm }: TextureViewerProps)
             {/* Three.js Canvas でテクスチャ表示 */}
             <Box sx={{ flex: 1, overflow: 'hidden' }}>
               <Canvas
+                // テクスチャ本来の発色をそのまま確認するため NoToneMapping を使う
+                flat
                 style={{ width: '100%', height: '100%' }}
                 orthographic
                 camera={{ position: [0, 0, 5] }}

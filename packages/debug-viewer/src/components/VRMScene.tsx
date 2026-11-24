@@ -7,6 +7,7 @@ import { VRMSpringBoneColliderHelper } from '@pixiv/three-vrm'
 import { createVRMAnimationClip, type VRMAnimation } from '@pixiv/three-vrm-animation'
 import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
 import { createBonePointsHelper, updateBonePointsHelper } from '../utils/skeleton-helper'
+import { SCENE_LIGHTING } from '../scene-lighting'
 
 interface VRMSceneProps
 {
@@ -304,22 +305,28 @@ function VRMScene({ vrm, vrmRevision = 0, isOptimizing = false, vrmAnimation, de
     scene.add(cube)
 
     // 主光（太陽光）
-    const directionalLight = new DirectionalLight(0xffffff, 1.5)
-    directionalLight.position.set(2, 4, 2)
+    const directionalLight = new DirectionalLight(
+      SCENE_LIGHTING.directional.color,
+      SCENE_LIGHTING.directional.intensity,
+    )
+    directionalLight.position.set(...SCENE_LIGHTING.directional.position)
     directionalLight.castShadow = true
-    directionalLight.shadow.mapSize.width = 2048
-    directionalLight.shadow.mapSize.height = 2048
+    directionalLight.shadow.mapSize.width = SCENE_LIGHTING.directional.shadowMapSize
+    directionalLight.shadow.mapSize.height = SCENE_LIGHTING.directional.shadowMapSize
     directionalLight.shadow.camera.near = 0.1
-    directionalLight.shadow.camera.far = 20
+    directionalLight.shadow.camera.far = 25
     directionalLight.shadow.camera.left = -5
     directionalLight.shadow.camera.right = 5
     directionalLight.shadow.camera.top = 5
     directionalLight.shadow.camera.bottom = -5
-    directionalLight.shadow.bias = -0.0005
+    directionalLight.shadow.bias = SCENE_LIGHTING.directional.shadowBias
     scene.add(directionalLight)
 
     // 環境光（柔らかい全方向光）
-    const ambientLight = new AmbientLight(0xffffff, 0.3)
+    const ambientLight = new AmbientLight(
+      SCENE_LIGHTING.ambient.color,
+      SCENE_LIGHTING.ambient.intensity,
+    )
     scene.add(ambientLight)
 
     return () =>

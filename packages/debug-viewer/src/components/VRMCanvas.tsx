@@ -671,6 +671,8 @@ function VRMCanvas({
 
       <div className="vrm-canvas__viewport">
         <Canvas
+          // MToon 本来の発色をそのまま確認するため NoToneMapping を使う
+          flat
           // three r187 で PCFSoftShadowMap が WebGL / WebGPU とも削除され、指定すると
           // 警告を出して PCFShadowMap に戻されるため、最初から PCFShadowMap を使う
           shadows="percentage"

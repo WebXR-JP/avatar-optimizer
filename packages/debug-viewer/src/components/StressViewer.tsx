@@ -47,6 +47,7 @@ import { CANVAS_GL_PROPS, getBackendInfo, type BackendInfo } from '../canvas-gl-
 import { CameraAspectUpdater } from './CameraAspectUpdater'
 import { rendererMode, switchRendererMode, type RendererMode } from '../renderer-mode'
 import { clearCustomVRM, loadCustomVRM, saveCustomVRM, type StoredCustomVRM } from '../utils/custom-vrm-store'
+import { SCENE_LIGHTING } from '../scene-lighting'
 import './StressViewer.css'
 
 const MODEL_OPTIONS = [
@@ -274,20 +275,24 @@ function StressScene({
 
   return (
     <>
-      <ambientLight intensity={0.6} />
+      <ambientLight
+        color={SCENE_LIGHTING.ambient.color}
+        intensity={SCENE_LIGHTING.ambient.intensity}
+      />
       <directionalLight
-        position={[5, 8, 6]}
-        intensity={2.2}
+        color={SCENE_LIGHTING.directional.color}
+        position={[...SCENE_LIGHTING.directional.position]}
+        intensity={SCENE_LIGHTING.directional.intensity}
         castShadow={shadowsEnabled}
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={SCENE_LIGHTING.directional.shadowMapSize}
+        shadow-mapSize-height={SCENE_LIGHTING.directional.shadowMapSize}
         shadow-camera-near={0.1}
         shadow-camera-far={extent * 2 + 20}
         shadow-camera-left={-shadowExtent}
         shadow-camera-right={shadowExtent}
         shadow-camera-top={shadowExtent}
         shadow-camera-bottom={-shadowExtent}
-        shadow-bias={-0.0005}
+        shadow-bias={SCENE_LIGHTING.directional.shadowBias}
       />
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[floorSize, floorSize]} />
@@ -772,6 +777,8 @@ export function StressViewer()
   return (
     <div className="stress-root">
       <Canvas
+        // MToon 本来の発色をそのまま確認するため NoToneMapping を使う
+        flat
         shadows={shadowsEnabled ? 'percentage' : false}
         dpr={dpr}
         camera={{
