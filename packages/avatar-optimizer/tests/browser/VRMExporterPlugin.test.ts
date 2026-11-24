@@ -1,6 +1,19 @@
 import { VRM, VRMExpression, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { Bone, BoxGeometry, Group, Mesh, MeshBasicMaterial, Scene } from 'three'
+import {
+  Bone,
+  BoxGeometry,
+  Float32BufferAttribute,
+  Group,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  Scene,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
+} from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { describe, expect, it } from 'vitest'
 import { VRMExporterPlugin } from '../../src/exporter/VRMExporterPlugin'
 
@@ -204,5 +217,122 @@ describe('VRMExporterPlugin', () => {
     expect(json.extensions.VRMC_vrm).toBeDefined()
     expect(json.extensions.VRMC_vrm.specVersion).toBe('1.0')
     expect(json.extensions.VRMC_vrm.meta.name).toBe('TestAvatar')
+  })
+
+  it('deduplicates glTF skins for SkinnedMeshes sharing the same Skeleton and preserves sharing on reload', async () => {
+    const { scene, vrm, vrmRoot, hips, head } = createTestVRM()
+    scene.updateMatrixWorld(true)
+
+    const createSkinned = (name: string, skeleton: Skeleton) => {
+      const geo = new BoxGeometry(0.1, 0.1, 0.1)
+      const count = geo.getAttribute('position').count
+      const indices = new Uint16Array(count * 4)
+      const weights = new Float32Array(count * 4)
+      for (let i = 0; i < count; i++) {
+        weights[i * 4] = 1
+      }
+      geo.setAttribute('skinIndex', new Uint16BufferAttribute(indices, 4))
+      geo.setAttribute('skinWeight', new Float32BufferAttribute(weights, 4))
+      const mesh = new SkinnedMesh(geo, new MeshBasicMaterial())
+      mesh.name = name
+      mesh.bind(skeleton, new Matrix4())
+      return mesh
+    }
+
+    const sharedSkeleton = new Skeleton([hips, head])
+    const meshA = createSkinned('MeshA', sharedSkeleton)
+    const meshB = createSkinned('MeshB', sharedSkeleton)
+    vrmRoot.add(meshA, meshB)
+
+    const exporter = new GLTFExporter()
+    exporter.register((writer) => {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
+
+    const glbBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      exporter.parse(
+        scene,
+        (result) => {
+          if (result instanceof ArrayBuffer) resolve(result)
+          else reject(new Error('Expected ArrayBuffer'))
+        },
+        (error) => reject(error),
+        { binary: true },
+      )
+    })
+
+    const dataView = new DataView(glbBuffer)
+    const jsonChunkLength = dataView.getUint32(12, true)
+    const json = JSON.parse(
+      new TextDecoder().decode(new Uint8Array(glbBuffer, 20, jsonChunkLength)),
+    )
+
+    expect(json.skins).toHaveLength(1)
+    const skinnedNodes = (json.nodes as Array<{ skin?: number }>).filter(
+      (n) => n.skin !== undefined,
+    )
+    expect(skinnedNodes).toHaveLength(2)
+    expect(skinnedNodes[0].skin).toBe(0)
+    expect(skinnedNodes[1].skin).toBe(0)
+
+    const loader = new GLTFLoader()
+    const reloadedGltf = await loader.parseAsync(glbBuffer, '')
+    const reloadedMeshes: SkinnedMesh[] = []
+    reloadedGltf.scene.traverse((obj) => {
+      if (obj instanceof SkinnedMesh) reloadedMeshes.push(obj)
+    })
+    expect(reloadedMeshes).toHaveLength(2)
+    expect(reloadedMeshes[0].skeleton).toBe(reloadedMeshes[1].skeleton)
+  })
+
+  it('keeps separate glTF skins when bindMatrix differs', async () => {
+    const { scene, vrm, vrmRoot, hips, head } = createTestVRM()
+    scene.updateMatrixWorld(true)
+
+    const createSkinned = (
+      name: string,
+      skeleton: Skeleton,
+      bindOffsetX: number,
+    ) => {
+      const geo = new BoxGeometry(0.1, 0.1, 0.1)
+      const count = geo.getAttribute('position').count
+      const indices = new Uint16Array(count * 4)
+      const weights = new Float32Array(count * 4)
+      for (let i = 0; i < count; i++) {
+        weights[i * 4] = 1
+      }
+      geo.setAttribute('skinIndex', new Uint16BufferAttribute(indices, 4))
+      geo.setAttribute('skinWeight', new Float32BufferAttribute(weights, 4))
+      const mesh = new SkinnedMesh(geo, new MeshBasicMaterial())
+      mesh.name = name
+      mesh.bind(skeleton, new Matrix4().makeTranslation(bindOffsetX, 0, 0))
+      return mesh
+    }
+
+    const sharedSkeleton = new Skeleton([hips, head])
+    const meshA = createSkinned('MeshA', sharedSkeleton, 0)
+    const meshB = createSkinned('MeshB', sharedSkeleton, 2)
+    vrmRoot.add(meshA, meshB)
+
+    const exporter = new GLTFExporter()
+    exporter.register((writer) => {
+      const plugin = new VRMExporterPlugin(writer)
+      plugin.setVRM(vrm)
+      return plugin
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json = await new Promise<any>((resolve, reject) => {
+      exporter.parse(
+        scene,
+        (result) => resolve(result),
+        (error) => reject(error),
+        { binary: false },
+      )
+    })
+
+    expect(json.skins).toHaveLength(2)
   })
 })

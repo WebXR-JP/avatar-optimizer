@@ -285,6 +285,20 @@ export interface AtlasGenerationOptions {
 }
 
 /**
+ * スケルトン最適化の統計情報
+ */
+export interface SkeletonOptimizationStatistics {
+  /** 最適化前のユニークな Skeleton 数 */
+  originalSkeletonCount: number
+  /** 最適化後のユニークな Skeleton 数 */
+  optimizedSkeletonCount: number
+  /** 最適化前の全ユニーク Skeleton の合計ボーン数 */
+  originalTotalBones: number
+  /** 最適化後の全ユニーク Skeleton の合計ボーン数 */
+  optimizedTotalBones: number
+}
+
+/**
  * エラー型 (全体)
  */
 export type OptimizationError =

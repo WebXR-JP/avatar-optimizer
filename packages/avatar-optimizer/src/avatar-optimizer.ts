@@ -27,6 +27,7 @@ import {
   createEmptyCombinedMeshResult,
   hasAtlasedMaterial,
 } from './util/optimize-helpers'
+import { optimizeSkeletons } from './util/skeleton'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -297,6 +298,12 @@ export function optimizeModel(
 
     if (options.migrateVRM0ToVRM1 && !isVRM1 && !skipAsAlreadyOptimized) {
       yield* migrateVRM0ToVRM1(vrm)
+    }
+
+    // Skeleton 統合・未使用ボーン除外（マイグレーション後に実行）
+    if (!skipAsAlreadyOptimized) {
+      const skeletonStats = yield* optimizeSkeletons(rootNode)
+      combineResult.statistics.skeleton = skeletonStats
     }
 
     return ok(combineResult)
