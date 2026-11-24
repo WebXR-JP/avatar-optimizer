@@ -1,25 +1,53 @@
 /**
- * MToonAtlasNodeMaterial（TSL 版）のテスト
+ * MToonAtlasNodeMaterial（TSL / 個別 UBO 版）のテスト
  *
- * GPU を使わずに確認できる範囲（プロパティ・キャッシュキー・複製・
- * パラメータレイアウト）を検証する。描画結果は debug-viewer で確認する。
+ * GPU を使わずに確認できる範囲（パラメータバッファ・バケット化・上限エラー・
+ * キャッシュキー共有・複製・後方互換の parameterTexture・パラメータレイアウト）を検証する。
  */
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { BackSide, DataTexture, FloatType, FrontSide, RGBAFormat, Texture } from 'three'
+import {
+  DEFAULT_PARAMETER_LAYOUT,
+  getMaxParameterUBOSlots,
+  resolveParameterBucketSlots,
+} from '../src'
+import type { ParameterBufferDescriptor, ParameterTextureDescriptor } from '../src/types'
 import { MToonAtlasNodeMaterial } from '../src/nodes'
-import { DEFAULT_PARAMETER_LAYOUT } from '../src/types'
-import type { ParameterTextureDescriptor } from '../src/types'
 
-function createDescriptor(): ParameterTextureDescriptor
+function createBufferDescriptor(slotCount = 3, texelsPerSlot = 9): ParameterBufferDescriptor
 {
-  const texture = new DataTexture(new Float32Array(9 * 3 * 4), 9, 3, RGBAFormat, FloatType)
+  const data = new Float32Array(slotCount * texelsPerSlot * 4)
+  for (let i = 0; i < data.length; i++)
+  {
+    data[i] = (i % 10) / 10
+  }
+  return {
+    data,
+    slotCount,
+    texelsPerSlot,
+    atlasedTextures: {
+      baseColor: new Texture(),
+      normal: new Texture(),
+      shade: new Texture(),
+    },
+  }
+}
+
+function createTextureDescriptor(slotCount = 3, texelsPerSlot = 9): ParameterTextureDescriptor
+{
+  const data = new Float32Array(slotCount * texelsPerSlot * 4)
+  data[0] = 0.25
+  data[1] = 0.5
+  data[2] = 0.75
+  data[3] = 1.0
+  const texture = new DataTexture(data, texelsPerSlot, slotCount, RGBAFormat, FloatType)
   return {
     texture,
-    slotCount: 3,
-    texelsPerSlot: 9,
+    slotCount,
+    texelsPerSlot,
     atlasedTextures: {
       baseColor: new Texture(),
       normal: new Texture(),
@@ -30,8 +58,9 @@ function createDescriptor(): ParameterTextureDescriptor
 
 describe('MToonAtlasNodeMaterial', () =>
 {
-  it('GLSL 版と共通の識別フラグを持つ', () =>
+  it('GLSL 版と共通の識別フラグと prefersParameterBuffer を持つ', () =>
   {
+    expect(MToonAtlasNodeMaterial.prefersParameterBuffer).toBe(true)
     const material = new MToonAtlasNodeMaterial()
     expect(material.isMToonAtlasMaterial).toBe(true)
     expect(material.isMToonAtlasNodeMaterial).toBe(true)
@@ -39,27 +68,85 @@ describe('MToonAtlasNodeMaterial', () =>
     expect(material.lights).toBe(true)
   })
 
-  it('パラメータテクスチャとアトラスを設定できる', () =>
+  it('parameterBuffer とアトラスをテクスチャ生成なしで設定できる', () =>
   {
-    const descriptor = createDescriptor()
-    const material = new MToonAtlasNodeMaterial({ parameterTexture: descriptor })
+    const descriptor = createBufferDescriptor(3)
+    const material = new MToonAtlasNodeMaterial({ parameterBuffer: descriptor })
 
-    expect(material.parameterTexture).toBe(descriptor)
-    expect(material.parameterTextureMap).toBe(descriptor.texture)
-    expect(material.parameterTextureSize.toArray()).toEqual([9, 3])
+    expect(material.parameterBuffer).toBe(descriptor)
+    expect(material.parameterTexture).toBeUndefined()
+    expect(material.parameterBucketSlots).toBe(8)
+    expect(material.parameterBufferData.length).toBe(8 * 9 * 4)
+    expect(material.parameterBufferData.subarray(0, descriptor.data.length)).toEqual(descriptor.data)
+    // パディング領域は 0 埋め
+    expect(material.parameterBufferData[descriptor.data.length]).toBe(0)
     expect(material.map).toBe(descriptor.atlasedTextures?.baseColor)
     expect(material.normalMap).toBe(descriptor.atlasedTextures?.normal)
     expect(material.shadeMultiplyTexture).toBe(descriptor.atlasedTextures?.shade)
     expect(material.emissiveMap).toBeNull()
   })
 
-  it('パラメータテクスチャを解除できる', () =>
+  it('後方互換の parameterTexture からも UBO バッファへ抽出して設定できる', () =>
   {
-    const material = new MToonAtlasNodeMaterial({ parameterTexture: createDescriptor() })
-    material.setParameterTexture(null)
+    const descriptor = createTextureDescriptor(3)
+    const material = new MToonAtlasNodeMaterial({ parameterTexture: descriptor })
+
+    expect(material.parameterTexture).toBe(descriptor)
+    expect(material.parameterBuffer?.slotCount).toBe(3)
+    expect(material.parameterBuffer?.texelsPerSlot).toBe(9)
+    expect(material.parameterBucketSlots).toBe(8)
+    expect(material.parameterBufferData[0]).toBeCloseTo(0.25)
+    expect(material.parameterBufferData[1]).toBeCloseTo(0.5)
+    expect(material.parameterBufferData[2]).toBeCloseTo(0.75)
+    expect(material.parameterBufferData[3]).toBeCloseTo(1.0)
+    expect(material.map).toBe(descriptor.atlasedTextures?.baseColor)
+  })
+
+  it('パラメータを解除できる', () =>
+  {
+    const material = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor(12) })
+    expect(material.parameterBucketSlots).toBe(16)
+
+    material.setParameterBuffer(null)
+    expect(material.parameterBuffer).toBeUndefined()
     expect(material.parameterTexture).toBeUndefined()
-    expect(material.parameterTextureMap).toBeNull()
-    expect(material.parameterTextureSize.toArray()).toEqual([1, 1])
+    expect(material.parameterBucketSlots).toBe(8)
+    expect(material.parameterBufferData.length).toBe(8 * 9 * 4)
+    expect(material.parameterBufferData.every((v) => v === 0)).toBe(true)
+  })
+
+  it('スロット数に応じて適切な UBO バケットに丸められる', () =>
+  {
+    expect(resolveParameterBucketSlots(0)).toBe(8)
+    expect(resolveParameterBucketSlots(1)).toBe(8)
+    expect(resolveParameterBucketSlots(8)).toBe(8)
+    expect(resolveParameterBucketSlots(9)).toBe(16)
+    expect(resolveParameterBucketSlots(16)).toBe(16)
+    expect(resolveParameterBucketSlots(17)).toBe(32)
+    expect(resolveParameterBucketSlots(32)).toBe(32)
+    expect(resolveParameterBucketSlots(33)).toBe(64)
+    expect(resolveParameterBucketSlots(64)).toBe(64)
+    expect(resolveParameterBucketSlots(65)).toBe(112)
+    expect(resolveParameterBucketSlots(112)).toBe(112)
+    // WebGL2 最小 UBO 上限（16KB）に収まること
+    expect(112 * 9 * 16).toBeLessThanOrEqual(16384)
+  })
+
+  it('UBO 上限（既定 113 スロット以上）を超えると RangeError を投げる', () =>
+  {
+    expect(getMaxParameterUBOSlots(9)).toBe(113)
+    expect(() => resolveParameterBucketSlots(114, 9)).toThrow(RangeError)
+
+    // 113 スロットは 113 * 9 * 16 = 16,272 <= 16,384 で収まる、114 は超過
+    expect(resolveParameterBucketSlots(113, 9)).toBe(113)
+
+    const tooMany = createBufferDescriptor(114, 9)
+    expect(() => new MToonAtlasNodeMaterial({ parameterBuffer: tooMany })).toThrow(RangeError)
+
+    // カスタム texelsPerSlot（16 vec4/slot = 256 bytes/slot -> 最大 64 スロット）
+    expect(getMaxParameterUBOSlots(16)).toBe(64)
+    expect(resolveParameterBucketSlots(64, 16)).toBe(64)
+    expect(() => resolveParameterBucketSlots(65, 16)).toThrow(RangeError)
   })
 
   it('スロット属性名を設定できる（既定は mtoonMaterialSlot）', () =>
@@ -79,12 +166,14 @@ describe('MToonAtlasNodeMaterial', () =>
     expect(material.side).toBe(FrontSide)
   })
 
-  it('アウトライン設定とスロット属性名を変えるとキャッシュキーが変わる', () =>
+  it('アウトライン設定・スロット属性名・バケットサイズが変わるとキャッシュキーが変わる', () =>
   {
     // is〜 / _〜 のプロパティは three の自動キャッシュキーに含まれないため、
     // customProgramCacheKey に入れないと構成を変えてもシェーダーが作り直されない
-    const material = new MToonAtlasNodeMaterial()
+    const material = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor(3) })
     const keys = [material.customProgramCacheKey()]
+    material.setParameterBuffer(createBufferDescriptor(12)) // バケット 8 -> 16
+    keys.push(material.customProgramCacheKey())
     material.isOutline = true
     material.outlineWidthMode = 'worldCoordinates'
     keys.push(material.customProgramCacheKey())
@@ -93,23 +182,25 @@ describe('MToonAtlasNodeMaterial', () =>
     material.setSlotAttribute({ name: 'other' })
     keys.push(material.customProgramCacheKey())
 
-    expect(new Set(keys).size).toBe(4)
+    expect(new Set(keys).size).toBe(5)
   })
 
-  it('別のマテリアルとはキャッシュキーを共有しない', () =>
+  it('同じバケット・同じ構成の別マテリアルとはシェーダーキャッシュキーを共有する', () =>
   {
-    // テクスチャをノードに直接持たせているため、共有すると
-    // 後から描画したマテリアルが先のマテリアルのテクスチャで描かれてしまう
-    const a = new MToonAtlasNodeMaterial()
-    const b = new MToonAtlasNodeMaterial()
-    expect(a.customProgramCacheKey()).not.toBe(b.customProgramCacheKey())
-    expect(a.clone().customProgramCacheKey()).not.toBe(a.customProgramCacheKey())
+    // パラメータは UBO、アトラスは materialReference 経由で参照するため、
+    // 別インスタンス間（別アバター間）でも同じシェーダーを再利用できる
+    const a = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor(3) })
+    const b = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor(7) })
+    expect(a.parameterBucketSlots).toBe(8)
+    expect(b.parameterBucketSlots).toBe(8)
+    expect(a.customProgramCacheKey()).toBe(b.customProgramCacheKey())
+    expect(a.clone().customProgramCacheKey()).toBe(a.customProgramCacheKey())
   })
 
-  it('clone でパラメータ・アトラス・アウトライン設定が引き継がれる', () =>
+  it('clone でパラメータバッファ・アトラス・アウトライン設定が引き継がれる', () =>
   {
     const material = new MToonAtlasNodeMaterial({
-      parameterTexture: createDescriptor(),
+      parameterBuffer: createBufferDescriptor(10),
       slotAttribute: { name: 'slot' },
       transparent: true,
       alphaTest: 0.5,
@@ -119,9 +210,10 @@ describe('MToonAtlasNodeMaterial', () =>
 
     const cloned = material.clone()
     expect(cloned).toBeInstanceOf(MToonAtlasNodeMaterial)
-    expect(cloned.parameterTextureMap).toBe(material.parameterTextureMap)
-    expect(cloned.parameterTextureSize.toArray()).toEqual([9, 3])
-    expect(cloned.parameterTextureSize).not.toBe(material.parameterTextureSize)
+    expect(cloned.parameterBucketSlots).toBe(16)
+    expect(cloned.parameterBufferData).toEqual(material.parameterBufferData)
+    expect(cloned.parameterBufferData).not.toBe(material.parameterBufferData)
+    expect(cloned.parameterBuffer?.data).toBe(material.parameterBuffer?.data)
     expect(cloned.map).toBe(material.map)
     expect(cloned.normalMap).toBe(material.normalMap)
     expect(cloned.slotAttribute).toEqual({ name: 'slot' })
@@ -135,7 +227,7 @@ describe('MToonAtlasNodeMaterial', () =>
 
   it('createOutlineMaterial は元を変えずにアウトライン用を作る', () =>
   {
-    const material = new MToonAtlasNodeMaterial({ parameterTexture: createDescriptor() })
+    const material = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor() })
     const outline = material.createOutlineMaterial('screenCoordinates')
 
     expect(material.isOutline).toBe(false)
@@ -144,6 +236,7 @@ describe('MToonAtlasNodeMaterial', () =>
     expect(outline.side).toBe(BackSide)
     expect(outline.polygonOffset).toBe(true)
     expect(outline.map).toBe(material.map)
+    expect(outline.parameterBufferData).toEqual(material.parameterBufferData)
   })
 })
 

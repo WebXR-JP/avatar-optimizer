@@ -199,11 +199,11 @@ export class MToonAtlasLoaderPlugin
   }
 
   /**
-   * パラメータテクスチャを16bit精度で読み込む
+   * パラメータ画像を16bit精度でデコードして生 Float32Array として読み込む
    * GLTFLoaderのloadTextureはImageBitmap経由で8bitに変換されるため、
    * 直接PNGデータを取得してfast-pngでデコードする
    */
-  private async _loadParameterTexture16bit(textureIndex: number): Promise<DataTexture>
+  private async _loadParameterData16bit(textureIndex: number): Promise<{ data: Float32Array, width: number, height: number }>
   {
     const json = this.parser.json
 
@@ -312,8 +312,18 @@ export class MToonAtlasLoaderPlugin
       }
     }
 
+    return { data: floatData, width, height }
+  }
+
+  /**
+   * パラメータテクスチャを16bit精度で読み込む（GLSL 版向け）
+   */
+  private async _loadParameterTexture16bit(textureIndex: number): Promise<DataTexture>
+  {
+    const { data, width, height } = await this._loadParameterData16bit(textureIndex)
+
     // DataTexture を作成
-    const texture = new DataTexture(floatData, width, height, RGBAFormat, FloatType)
+    const texture = new DataTexture(data, width, height, RGBAFormat, FloatType)
     texture.flipY = false
     texture.colorSpace = NoColorSpace
     texture.minFilter = NearestFilter
@@ -492,16 +502,30 @@ export class MToonAtlasLoaderPlugin
       }
     }
 
-    // Load parameter texture (16bit対応)
+    // Load parameter data / texture (16bit対応)
+    const prefersBuffer = this.materialType.prefersParameterBuffer === true
+    let parameterData: Float32Array | null = null
     let parameterTexture: Texture | null = null
+
     if (extension.parameterTexture && extension.parameterTexture.index >= 0)
     {
-      pending.push(
-        this._loadParameterTexture16bit(extension.parameterTexture.index).then((tex) =>
-        {
-          parameterTexture = tex
-        })
-      )
+      if (prefersBuffer)
+      {
+        pending.push(
+          this._loadParameterData16bit(extension.parameterTexture.index).then(({ data }) =>
+          {
+            parameterData = data
+          })
+        )
+      } else
+      {
+        pending.push(
+          this._loadParameterTexture16bit(extension.parameterTexture.index).then((tex) =>
+          {
+            parameterTexture = tex
+          })
+        )
+      }
     }
 
     // Load atlased textures
@@ -515,35 +539,56 @@ export class MToonAtlasLoaderPlugin
 
     await Promise.all(pending)
 
-    // parameterTextureがない場合はダミーのDataTextureを作成
-    if (!parameterTexture)
-    {
-      // 1x1のダミーテクスチャを作成
-      const dummyData = new Float32Array(4).fill(0)
-      parameterTexture = new DataTexture(dummyData, 1, 1, RGBAFormat, FloatType)
-      parameterTexture.flipY = false
-      parameterTexture.colorSpace = NoColorSpace
-      parameterTexture.minFilter = NearestFilter
-      parameterTexture.magFilter = NearestFilter
-      parameterTexture.needsUpdate = true
-    }
-
     // Determine slot attribute name
     // GLTFLoader converts custom attributes to lowercase
     const slotAttributeName = extension.slotAttributeName.toLowerCase()
+    const slotCount = extension.parameterTexture?.slotCount ?? 0
+    const texelsPerSlot = extension.parameterTexture?.texelsPerSlot ?? 9
 
-    const material = new this.materialType({
-      parameterTexture: {
-        texture: parameterTexture,
-        slotCount: extension.parameterTexture.slotCount,
-        texelsPerSlot: extension.parameterTexture.texelsPerSlot,
-        atlasedTextures: atlasedTextures,
-      },
-      slotAttribute: {
-        name: slotAttributeName,
-      },
-      name: materialDef.name,
-    })
+    let material
+    if (prefersBuffer)
+    {
+      const data = parameterData ?? new Float32Array(Math.max(1, slotCount) * texelsPerSlot * 4)
+      material = new this.materialType({
+        parameterBuffer: {
+          data,
+          slotCount,
+          texelsPerSlot,
+          atlasedTextures,
+        },
+        slotAttribute: {
+          name: slotAttributeName,
+        },
+        name: materialDef.name,
+      })
+    } else
+    {
+      // parameterTextureがない場合はダミーのDataTextureを作成
+      if (!parameterTexture)
+      {
+        // 1x1のダミーテクスチャを作成
+        const dummyData = new Float32Array(4).fill(0)
+        parameterTexture = new DataTexture(dummyData, 1, 1, RGBAFormat, FloatType)
+        parameterTexture.flipY = false
+        parameterTexture.colorSpace = NoColorSpace
+        parameterTexture.minFilter = NearestFilter
+        parameterTexture.magFilter = NearestFilter
+        parameterTexture.needsUpdate = true
+      }
+
+      material = new this.materialType({
+        parameterTexture: {
+          texture: parameterTexture,
+          slotCount,
+          texelsPerSlot,
+          atlasedTextures,
+        },
+        slotAttribute: {
+          name: slotAttributeName,
+        },
+        name: materialDef.name,
+      })
+    }
 
     // Apply standard material properties
     if (materialDef.doubleSided)

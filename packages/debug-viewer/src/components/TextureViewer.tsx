@@ -219,8 +219,8 @@ function extractTexturesFromMaterial(
   textureMap: Map<string, Texture>,
 ): void
 {
-  // MToonAtlasMaterial の場合
-  if ('isMToonAtlasMaterial' in material && material.isMToonAtlasMaterial)
+  // MToonAtlasMaterial（GLSL 版、uniforms 経由）の場合
+  if ('isMToonAtlasMaterial' in material && material.isMToonAtlasMaterial && 'uniforms' in material && material.uniforms)
   {
     const atlasMaterial = material as MToonAtlasMaterial
     const uniforms = atlasMaterial.uniforms

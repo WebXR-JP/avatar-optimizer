@@ -121,7 +121,32 @@ describe('combineMToonMaterials with materialType', () => {
     expect(group.outlineMaterial).toBeInstanceOf(MToonAtlasNodeMaterial)
     expect(group.outlineMaterial!.isOutline).toBe(true)
     expect(group.outlineMaterial!.outlineWidthMode).toBe('screenCoordinates')
-    expect(group.material.parameterTexture?.slotCount).toBe(1)
+    // TSL 版は DataTexture を作らず parameterBuffer を直接受け取る
+    expect(group.material.parameterTexture).toBeUndefined()
+    expect(group.material.parameterBuffer?.slotCount).toBe(1)
+    expect(group.material.parameterBuffer?.texelsPerSlot).toBe(9)
+    expect(group.material.parameterBuffer?.data).toBeInstanceOf(Float32Array)
+  })
+
+  it('MToonAtlasNodeMaterial で UBO 上限を超えるマテリアル数はエラーを返す', () => {
+    const materialInfos = Array.from({ length: 114 }, (_, i) => {
+      const mat = new MToonNodeMaterial({ name: `mat_${i}` })
+      return {
+        material: mat,
+        meshes: [new Mesh(createGeometry(i), mat)],
+        hasOutline: false,
+        outlineWidthMode: 'none' as const,
+        renderMode: 'opaque' as const,
+      }
+    })
+
+    const result = combineMToonMaterials(materialInfos, {
+      materialType: MToonAtlasNodeMaterial,
+    })
+
+    expect(result.isErr()).toBe(true)
+    expect(result._unsafeUnwrapErr().type).toBe('PARAMETER_TEXTURE_FAILED')
+    expect(result._unsafeUnwrapErr().message).toContain('UBO 上限')
   })
 
   it('alphaTest グループでも TSL 版を作れる（GLSL 版専用の updateDefines を呼ばない）', () => {

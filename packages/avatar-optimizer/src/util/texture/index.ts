@@ -20,7 +20,9 @@ import {
   ParameterLayout,
 } from '../../types'
 import { composeImagesToAtlas } from './composite'
-import { ImageMatrixPair } from './types'
+import { ImageMatrixPair, PackedMaterialParameters } from './types'
+
+export type { PackedMaterialParameters } from './types'
 
 /**
  * null 要素を有効なテクスチャの平均寸法で埋める
@@ -125,19 +127,20 @@ export function generateAtlasImages(
 }
 
 /**
- * マテリアル配列からパラメータテクスチャを生成
+ * マテリアル配列からレンダラー非依存の生パラメータ配列（Float32Array）を生成
  *
- * DEFAULT_PARAMETER_LAYOUTに従って19種のパラメータをRGBAテクセルにパック
- * テクスチャフォーマット: slotCount x texelsPerSlot (RGBA32F)
+ * DEFAULT_PARAMETER_LAYOUT に従って 20 種のパラメータを RGBA 相当の vec4 配列にパックする。
+ * WebGL 版（MToonAtlasMaterial）は createParameterTextureFromData で DataTexture 化し、
+ * WebGPU / TSL 版（MToonAtlasNodeMaterial）はテクスチャ化せず直接 UBO バッファとして消費する。
  *
- * @param materials - MToonNodeMaterial配列
- * @param texelsPerSlot - スロットあたりのテクセル数（デフォルト: 8）
- * @returns DataTexture
+ * @param materials - MToonLikeMaterial 配列
+ * @param texelsPerSlot - スロットあたりの vec4 数（デフォルト: 9）
+ * @returns パック済みパラメータデータ
  */
-export function createParameterTexture(
+export function packMaterialParameters(
   materials: MToonLikeMaterial[],
   texelsPerSlot: number = 9,
-): Result<DataTexture, OptimizationError> {
+): Result<PackedMaterialParameters, OptimizationError> {
   if (materials.length === 0) {
     return err({
       type: 'PARAMETER_TEXTURE_FAILED',
@@ -146,11 +149,7 @@ export function createParameterTexture(
   }
 
   const slotCount = materials.length
-  const width = texelsPerSlot
-  const height = slotCount
-
-  // RGBA32F テクスチャデータ（Float32Array）
-  const data = new Float32Array(width * height * 4)
+  const data = new Float32Array(texelsPerSlot * slotCount * 4)
 
   // 各マテリアル（スロット）について処理
   for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
@@ -163,14 +162,53 @@ export function createParameterTexture(
     }
   }
 
-  // DataTextureを作成
+  return ok({
+    data,
+    slotCount,
+    texelsPerSlot,
+  })
+}
+
+/**
+ * パック済みパラメータデータから RGBA32F の DataTexture を作成する（GLSL / WebGL 版向け）
+ *
+ * @param packed - packMaterialParameters で生成したパック済みパラメータデータ
+ * @returns DataTexture
+ */
+export function createParameterTextureFromData(
+  packed: PackedMaterialParameters,
+): DataTexture {
   // パラメータテクスチャは数値データなのでバイリニア補間を無効化
-  const texture = new DataTexture(data, width, height, RGBAFormat, FloatType)
+  const texture = new DataTexture(
+    packed.data,
+    packed.texelsPerSlot,
+    packed.slotCount,
+    RGBAFormat,
+    FloatType,
+  )
   texture.minFilter = NearestFilter
   texture.magFilter = NearestFilter
   texture.needsUpdate = true
+  return texture
+}
 
-  return ok(texture)
+/**
+ * マテリアル配列からパラメータテクスチャを生成
+ *
+ * DEFAULT_PARAMETER_LAYOUTに従ってパラメータをRGBAテクセルにパック
+ * テクスチャフォーマット: texelsPerSlot x slotCount (RGBA32F)
+ *
+ * @param materials - MToonLikeMaterial 配列
+ * @param texelsPerSlot - スロットあたりのテクセル数（デフォルト: 9）
+ * @returns DataTexture
+ */
+export function createParameterTexture(
+  materials: MToonLikeMaterial[],
+  texelsPerSlot: number = 9,
+): Result<DataTexture, OptimizationError> {
+  return packMaterialParameters(materials, texelsPerSlot).map(
+    createParameterTextureFromData,
+  )
 }
 
 /**

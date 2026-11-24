@@ -2,7 +2,7 @@ import { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Mesh, Obje
 import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
-import type { MToonAtlasMaterialLike } from '../types'
+import type { MToonAtlasMaterialLike, ParameterBufferDescriptor } from '../types'
 import { getKtx2Source, isCompressedTexture } from './ktx2-source-cache'
 import
 {
@@ -70,6 +70,10 @@ export class MToonAtlasExporterPlugin
   // キーの選び方は processTextureWithCache のコメントを参照
   private textureCache: Map<string, Promise<number>> = new Map()
 
+  // パラメータバッファ（Float32Array参照）からインデックスへのキャッシュ（重複登録防止）
+  // 本体とアウトライン（clone）は同一の parameterBuffer.data を参照するため、1回だけ書き出す
+  private parameterBufferCache: Map<Float32Array, Promise<number>> = new Map()
+
   // テクスチャ圧縮オプション（設定されている場合、アトラステクスチャをKTX2で圧縮）
   private textureCompressionOptions?: TextureCompressionOptions
 
@@ -120,6 +124,7 @@ export class MToonAtlasExporterPlugin
     this.textureIndices.clear()
     this.pendingTextureIndices.clear()
     this.textureCache.clear()
+    this.parameterBufferCache.clear()
     const roots = Array.isArray(input) ? input : [input]
 
     for (const root of roots)
@@ -286,10 +291,15 @@ export class MToonAtlasExporterPlugin
       atlasedTextureIndices: {},
     }
 
-    // パラメータテクスチャを処理
-    // パラメータテクスチャはRGBA全チャンネルにパラメータデータが格納されているため
-    // Canvas 2D経由ではなくfast-pngで直接PNGエンコードする（Premultiplied Alpha問題回避）
-    if (material.parameterTexture?.texture)
+    // パラメータデータ / テクスチャを処理
+    // パラメータはRGBA全チャンネルに数値が格納されているため
+    // Canvas 2D経由ではなくfast-pngで直接16bit PNGエンコードする（Premultiplied Alpha問題回避）
+    if (material.parameterBuffer)
+    {
+      pendingIndices.parameterTextureIndex = this.processParameterBufferWithCache(
+        material.parameterBuffer
+      )
+    } else if (material.parameterTexture?.texture)
     {
       pendingIndices.parameterTextureIndex = this.processParameterTextureWithCache(
         material.parameterTexture.texture
@@ -297,7 +307,9 @@ export class MToonAtlasExporterPlugin
     }
 
     // アトラス化テクスチャを処理
-    const atlasedTextures = material.parameterTexture?.atlasedTextures
+    const atlasedTextures =
+      material.parameterBuffer?.atlasedTextures ??
+      material.parameterTexture?.atlasedTextures
     if (atlasedTextures)
     {
       for (const [key, texture] of Object.entries(atlasedTextures))
@@ -348,6 +360,28 @@ export class MToonAtlasExporterPlugin
     ; (pendingIndices as any).resolvePromise = resolveAllPromise
 
     this.writer.pending.push(resolveAllPromise)
+  }
+
+  /**
+   * パラメータバッファをキャッシュ付きで処理
+   * 同じ Float32Array 参照は 1 回だけ処理される
+   */
+  private processParameterBufferWithCache(descriptor: ParameterBufferDescriptor): Promise<number>
+  {
+    const cached = this.parameterBufferCache.get(descriptor.data)
+    if (cached)
+    {
+      return cached
+    }
+
+    const promise = this.processParameterData(
+      descriptor.data,
+      descriptor.texelsPerSlot,
+      descriptor.slotCount,
+      'parameterTexture',
+    )
+    this.parameterBufferCache.set(descriptor.data, promise)
+    return promise
   }
 
   /**
@@ -402,6 +436,26 @@ export class MToonAtlasExporterPlugin
    */
   private processParameterTexture(texture: Texture): Promise<number>
   {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const image = texture.image as any
+    return this.processParameterData(
+      image?.data,
+      image?.width ?? 0,
+      image?.height ?? 0,
+      texture.name || 'parameterTexture',
+    )
+  }
+
+  /**
+   * パラメータ配列（Float32Array / Uint8Array 等）を 16bit PNG として BIN チャンクへ書き込む
+   */
+  private processParameterData(
+    srcData: ArrayLike<number> | undefined,
+    width: number,
+    height: number,
+    name: string,
+  ): Promise<number>
+  {
     const json = this.writer.json
     json.textures = json.textures || []
     json.images = json.images || []
@@ -424,7 +478,7 @@ export class MToonAtlasExporterPlugin
 
     const imageIndex = json.images.length
     const imageDef: any = {
-      name: texture.name || 'parameterTexture',
+      name,
       mimeType: 'image/png',
     }
     json.images.push(imageDef)
@@ -434,24 +488,21 @@ export class MToonAtlasExporterPlugin
     json.textures.push({
       sampler: nearestSamplerIndex,
       source: imageIndex,
-      name: texture.name || 'parameterTexture',
+      name,
     })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const image = texture.image as any
-    if (image?.data && image.width && image.height)
+    if (srcData && width > 0 && height > 0)
     {
-      // DataTextureの生データから16bit PNGをエンコード（精度向上）
-      const srcData = image.data
+      // 生データから16bit PNGをエンコード（精度向上）
       const isFloatData = srcData instanceof Float32Array ||
         srcData.constructor?.name === 'Float32Array'
-      const pixelCount = image.width * image.height * 4
+      const pixelCount = width * height * 4
       // 16bit PNG用にUint16Arrayを使用
       const uint16Data = new Uint16Array(pixelCount)
 
       for (let i = 0; i < pixelCount; i++)
       {
-        const value = srcData[i]
+        const value = srcData[i] ?? 0
         // Float32Array (0.0-1.0) の場合は 65535 を掛ける（16bit精度）
         // Uint8Array (0-255) の場合は 257 を掛けて16bitに変換
         uint16Data[i] = isFloatData
@@ -461,8 +512,8 @@ export class MToonAtlasExporterPlugin
 
       // fast-pngで16bit PNGエンコード（Premultiplied Alpha問題を回避、精度向上）
       const pngData = encodePng16({
-        width: image.width,
-        height: image.height,
+        width,
+        height,
         depth: 16,
         channels: 4,
         data: uint16Data,
@@ -1097,13 +1148,14 @@ export class MToonAtlasExporterPlugin
   private createMaterialDef(material: MToonAtlasMaterialLike): any
   {
     const indices = this.textureIndices.get(material)
+    const parameterMeta = material.parameterBuffer ?? material.parameterTexture
 
     const extension: MToonAtlasExtensionSchema = {
       version: '1.0',
       parameterTexture: {
         index: indices?.parameterTextureIndex ?? -1,
-        texelsPerSlot: material.parameterTexture?.texelsPerSlot ?? 9,
-        slotCount: material.parameterTexture?.slotCount ?? 0,
+        texelsPerSlot: parameterMeta?.texelsPerSlot ?? 9,
+        slotCount: parameterMeta?.slotCount ?? 0,
       },
       slotAttributeName: '_MTOON_MATERIAL_SLOT',
       atlasedTextures: {},

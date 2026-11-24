@@ -85,9 +85,33 @@ export const DEFAULT_PARAMETER_LAYOUT: readonly ParameterSemantic[] = [
 ] as const
 
 /**
+ * パラメータバッファディスクリプタ
+ *
+ * avatar-optimizer 等でパックされた MToon パラメータの生 Float32Array 表現。
+ * WebGPURenderer 向けの MToonAtlasNodeMaterial はテクスチャを介さず
+ * このバッファを直接 UBO として消費する。
+ */
+export interface ParameterBufferDescriptor {
+  /** パック済みパラメータデータ（slotCount × texelsPerSlot × 4 要素） */
+  data: Float32Array
+
+  /** スロット数（= 元のマテリアル数） */
+  slotCount: number
+
+  /** スロットあたりの vec4 数（通常 9） */
+  texelsPerSlot: number
+
+  /** カスタムレイアウト定義（省略時はデフォルト） */
+  semantics?: ParameterSemantic[]
+
+  /** アトラス化されたテクスチャセット */
+  atlasedTextures?: AtlasedTextureSet
+}
+
+/**
  * パラメータテクスチャディスクリプタ
  *
- * avatar-optimizer で生成されたパラメータテクスチャの情報
+ * avatar-optimizer で生成されたパラメータテクスチャの情報（WebGL / GLSL 版向け）
  */
 export interface ParameterTextureDescriptor {
   /** パック済みパラメータテクスチャ */
@@ -96,7 +120,7 @@ export interface ParameterTextureDescriptor {
   /** スロット数（= 元のマテリアル数） */
   slotCount: number
 
-  /** スロットあたりのテクセル数（通常8） */
+  /** スロットあたりのテクセル数（通常9） */
   texelsPerSlot: number
 
   /** カスタムレイアウト定義（省略時はデフォルト） */
@@ -191,7 +215,10 @@ export interface MToonAtlasMaterialLike extends THREE.Material
   /** 識別フラグ */
   readonly isMToonAtlasMaterial: true
 
-  /** パラメータテクスチャディスクリプタ */
+  /** パラメータバッファディスクリプタ（TSL 版などで生 Float32Array を直接持つ場合） */
+  readonly parameterBuffer?: ParameterBufferDescriptor | undefined
+
+  /** パラメータテクスチャディスクリプタ（GLSL 版、またはテクスチャ経由で渡された場合） */
   readonly parameterTexture: ParameterTextureDescriptor | undefined
 
   /** スロット属性設定 */
@@ -208,13 +235,22 @@ export interface MToonAtlasMaterialLike extends THREE.Material
 }
 
 /**
- * MToonAtlasLoaderPlugin が生成するマテリアルのコンストラクタ
+ * MToonAtlasLoaderPlugin や avatar-optimizer が生成するマテリアルのコンストラクタ
  *
  * WebGLRenderer では MToonAtlasMaterial（既定）、WebGPURenderer では
  * `@webxr-jp/mtoon-atlas/nodes` の MToonAtlasNodeMaterial を渡す
  */
-export type MToonAtlasMaterialConstructor = new (parameters: {
-  parameterTexture?: ParameterTextureDescriptor
-  slotAttribute?: MaterialSlotAttributeConfig
-  name?: string
-}) => MToonAtlasMaterialLike
+export interface MToonAtlasMaterialConstructor {
+  new (parameters: {
+    parameterBuffer?: ParameterBufferDescriptor
+    parameterTexture?: ParameterTextureDescriptor
+    slotAttribute?: MaterialSlotAttributeConfig
+    name?: string
+  }): MToonAtlasMaterialLike
+
+  /**
+   * true の場合、呼び出し側（avatar-optimizer / Loader）は DataTexture を作らず
+   * parameterBuffer（生 Float32Array）を直接渡す
+   */
+  readonly prefersParameterBuffer?: boolean
+}

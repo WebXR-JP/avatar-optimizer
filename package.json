@@ -7,6 +7,7 @@
     "build": "pnpm -r run build",
     "dev": "pnpm -r run dev",
     "test": "pnpm -r run test",
+    "test:webgpu": "pnpm -F @webxr-jp/avatar-optimizer run test:webgpu",
     "lint": "pnpm -r run lint",
     "lint:fix": "pnpm -r run lint:fix",
     "format": "pnpm -r run format",
