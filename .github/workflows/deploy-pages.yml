@@ -1,0 +1,75 @@
+name: Deploy Debug Viewer
+
+# debug-viewer を GitHub Pages (https://webxr-jp.github.io/avatar-optimizer/) へ公開する。
+# 初回だけリポジトリ設定の Pages > Source を "GitHub Actions" にしておく必要がある。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/debug-viewer/**'
+      - 'packages/avatar-optimizer/**'
+      - 'packages/mtoon-atlas/**'
+      - 'packages/texture-compression/**'
+      - 'patches/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ライブラリの dist (型定義) を参照して debug-viewer をビルドするため、
+      # ワークスペース全体をビルドする。Vite の base は GITHUB_REPOSITORY から
+      # /avatar-optimizer/ に決まり、SPA フォールバック用の 404.html も生成される
+      - name: Build
+        run: pnpm build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/debug-viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

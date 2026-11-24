@@ -48,13 +48,14 @@ import { CameraAspectUpdater } from './CameraAspectUpdater'
 import { rendererMode, switchRendererMode, type RendererMode } from '../renderer-mode'
 import { clearCustomVRM, loadCustomVRM, saveCustomVRM, type StoredCustomVRM } from '../utils/custom-vrm-store'
 import { SCENE_LIGHTING } from '../scene-lighting'
+import { publicUrl } from '../public-url'
 import './StressViewer.css'
 
 const MODEL_OPTIONS = [
-  { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
-  { name: 'AliciaSolid (COLOR_0)', path: '/AliciaSolid_COLOR0.vrm' },
-  { name: 'Vivi', path: '/Vivi.vrm' },
-  { name: 'Vita', path: '/Vita.vrm' },
+  { name: 'AliciaSolid', path: publicUrl('/AliciaSolid.vrm') },
+  { name: 'AliciaSolid (COLOR_0)', path: publicUrl('/AliciaSolid_COLOR0.vrm') },
+  { name: 'Vivi', path: publicUrl('/Vivi.vrm') },
+  { name: 'Vita', path: publicUrl('/Vita.vrm') },
 ]
 
 /** モデル select でアップロード済みファイルを表す値 */
@@ -939,7 +940,7 @@ export function StressViewer()
           <button type="button" onClick={() => setResetToken((value) => value + 1)}>
             Reset Camera
           </button>
-          <a href="/">Back to viewer</a>
+          <a href={publicUrl('/')}>Back to viewer</a>
         </div>
 
         <div className="stress-panel__progress">

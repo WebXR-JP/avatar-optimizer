@@ -15,11 +15,18 @@ export const STRESS_PATH = '/stress'
 /**
  * 指定されたパスがストレステストかどうかを返す
  *
- * 末尾スラッシュの有無はどちらも許可する。
+ * 末尾スラッシュの有無はどちらも許可する。GitHub Pages のプロジェクトページ
+ * のようにサブパス配信される場合は `baseUrl` に Vite の base を渡す。
  *
  * @param pathname - `window.location.pathname`
+ * @param baseUrl - `import.meta.env.BASE_URL`（既定は `/`）
  */
-export function isStressRoute(pathname: string): boolean
+export function isStressRoute(pathname: string, baseUrl: string = '/'): boolean
 {
-  return /^\/stress\/?$/.test(pathname)
+  // pathname は base を含むため、base を除いてからアプリ内パスとして判定する
+  const base = baseUrl.replace(/\/$/, '')
+  const appPath = base && pathname.startsWith(base)
+    ? pathname.slice(base.length)
+    : pathname
+  return /^\/stress\/?$/.test(appPath)
 }

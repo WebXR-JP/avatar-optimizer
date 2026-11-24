@@ -16,6 +16,7 @@ import { perfProbeEnabled } from '../utils/perf-probe'
 import { rendererMode, rendererFallbackReason, switchRendererMode, type RendererMode } from '../renderer-mode'
 import { CANVAS_GL_PROPS, getBackendInfo, type BackendInfo } from '../canvas-gl-props'
 import { STRESS_PATH } from '../stress-route'
+import { publicUrl } from '../public-url'
 import './VRMCanvas.css'
 
 /**
@@ -600,7 +601,7 @@ function VRMCanvas({
         )}
 
         <Section title="その他">
-          <a className="vrm-btn vrm-btn--link" href={STRESS_PATH} target="_blank" rel="noreferrer">
+          <a className="vrm-btn vrm-btn--link" href={publicUrl(STRESS_PATH)} target="_blank" rel="noreferrer">
             Multi-VRM Stress Test
           </a>
           <button

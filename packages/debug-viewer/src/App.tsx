@@ -10,6 +10,7 @@ import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateVRM0ToVRM1, si
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
 import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
 import { rendererMode } from './renderer-mode'
+import { publicUrl } from './public-url'
 import './App.css'
 
 // WebGPU のときは MToonNodeMaterial を TSL 版のアトラスマテリアルに統合する
@@ -18,7 +19,7 @@ const atlasMaterialType = rendererMode === 'webgpu' ? MToonAtlasNodeMaterial : u
 // 動作確認用のサンプルモーション。@pixiv/three-vrm のサンプル (test.vrma) を
 // public/samples/ に同梱している。差し替える場合は public/vrma/ に置いてパスを変える。
 // 取得元: https://github.com/pixiv/three-vrm/blob/dev/packages/three-vrm-animation/examples/models/test.vrma
-const SAMPLE_VRMA_PATH = '/samples/test.vrma'
+const SAMPLE_VRMA_PATH = publicUrl('/samples/test.vrma')
 
 function App()
 {
@@ -111,13 +112,13 @@ function App()
 
   // 利用可能なデフォルトモデル一覧
   const defaultModels = [
-    { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
+    { name: 'AliciaSolid', path: publicUrl('/AliciaSolid.vrm') },
     // COLOR_0(頂点カラー)を持つモデルの回帰確認用。生成方法は
     // packages/avatar-optimizer/tools/inject-color0.js を参照
-    { name: 'AliciaSolid (COLOR_0)', path: '/AliciaSolid_COLOR0.vrm' },
-    { name: 'Vivi', path: '/Vivi.vrm' },
-    { name: 'Vita', path: '/Vita.vrm' },
-    { name: 'seedsan', path: '/seedsan.vrm' },
+    { name: 'AliciaSolid (COLOR_0)', path: publicUrl('/AliciaSolid_COLOR0.vrm') },
+    { name: 'Vivi', path: publicUrl('/Vivi.vrm') },
+    { name: 'Vita', path: publicUrl('/Vita.vrm') },
+    { name: 'seedsan', path: publicUrl('/seedsan.vrm') },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
 
@@ -428,7 +429,7 @@ function App()
     setIsReplacingTextures(true)
     setError(null)
 
-    const result = await replaceVRMTextures(vrm, '/uv.png')
+    const result = await replaceVRMTextures(vrm, publicUrl('/uv.png'))
 
     if (result.isErr())
     {

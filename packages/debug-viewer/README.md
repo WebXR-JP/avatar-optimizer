@@ -32,6 +32,22 @@ pnpm -F debug-viewer run build
 pnpm -F debug-viewer run preview
 ```
 
+### GitHub Pages での公開
+
+`main` に push すると `.github/workflows/deploy-pages.yml` がビルドして
+GitHub Pages へ公開します。
+
+https://webxr-jp.github.io/avatar-optimizer/
+
+- 初回のみ、リポジトリの **Settings > Pages > Source** を **GitHub Actions** にしておく
+- プロジェクトページは `/avatar-optimizer/` のサブパス配信になるため、CI では
+  Vite の `base` をリポジトリ名から決めている（ローカル開発は `/` のまま）。
+  独自ドメインなどで配信する場合は `PAGES_BASE=/ pnpm -F debug-viewer run build` のように上書きする
+- `public/` 配下のファイルは `publicUrl()`（`src/public-url.ts`）で参照する。
+  ルート絶対パス（`/AliciaSolid.vrm` など）を直接書くとサブパス配信で 404 になる
+- `/textures` や `/stress` を直接開いた場合は `dist/404.html`（index.html のコピー）で
+  SPA を起動して復帰する。このとき HTTP ステータスは 404 になる
+
 ### レンダラーの切り替え（WebGL / WebGPU）
 
 サイドバー「モデル」のレンダラー選択で切り替えます（URL の `?renderer=webgpu` でも指定可能）。切り替えるとページを再読み込みします。

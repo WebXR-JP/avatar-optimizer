@@ -40,8 +40,18 @@ function perfLogPlugin(): Plugin
   }
 }
 
+// GitHub Pages のプロジェクトページ (https://<org>.github.io/<repo>/) は
+// リポジトリ名のサブパスで配信される。CI ではリポジトリ名を base にして、
+// ローカル開発では '/' のまま動かす。独自ドメインなどで配信する場合は
+// PAGES_BASE で明示的に上書きする（例: PAGES_BASE=/ pnpm build）。
+const base = process.env.PAGES_BASE
+  ?? (process.env.GITHUB_ACTIONS
+    ? `/${process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'avatar-optimizer'}/`
+    : '/')
+
 // https://vite.dev/config/
 export default defineConfig({
+  base,
   plugins: [
     react(),
     wasm(),
