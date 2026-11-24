@@ -18,6 +18,14 @@ import
 const SRGB_ATLAS_SLOTS = ['baseColor', 'shade', 'emissive', 'matcap', 'rim']
 
 /**
+ * アトラススロット名から colorSpace を解決する（PNG 等の非 KTX2 テクスチャ向け）
+ */
+function resolveAtlasTextureColorSpace(slot: string): typeof SRGBColorSpace | typeof NoColorSpace
+{
+  return SRGB_ATLAS_SLOTS.includes(slot) ? SRGBColorSpace : NoColorSpace
+}
+
+/**
  * アトラステクスチャの colorSpace を決める
  *
  * KTX2 由来のテクスチャは KTX2Loader が DFD の transferFunction から
@@ -49,9 +57,7 @@ export function applyAtlasTextureColorSpace(
     return
   }
 
-  texture.colorSpace = SRGB_ATLAS_SLOTS.includes(slot)
-    ? SRGBColorSpace
-    : NoColorSpace
+  texture.colorSpace = resolveAtlasTextureColorSpace(slot)
 }
 
 /**
@@ -95,6 +101,14 @@ export class MToonAtlasLoaderPlugin
   // 画像インデックス -> 元 KTX2 バイナリの複製（再エクスポート用、issue #39）
   // 同じアトラス画像が複数マテリアルから参照されるため、画像単位でメモ化する
   private ktx2SourceByImageIndex: Map<number, Uint8Array> = new Map()
+
+  // WebGPURenderer は THREE.Texture インスタンス単位で GPU リソースを管理するため、
+  // マテリアルごとに clone() すると同一アトラステクスチャがマテリアル数倍に増殖する。
+  // ロード単位で Promise をキャッシュし、同一条件のテクスチャ／パラメータを全マテリアルで共有する
+  private atlasTextureCache: Map<string, Promise<Texture | null>> = new Map()
+  private ktx2TextureCache: Map<number, Promise<CompressedTexture | null>> = new Map()
+  private parameterDataCache: Map<number, Promise<{ data: Float32Array, width: number, height: number }>> = new Map()
+  private parameterTextureCache: Map<number, Promise<DataTexture>> = new Map()
 
   // 呼び出し側から渡された KTX2Loader（あればこれを優先して使う）
   private injectedKtx2Loader?: KTX2Loader
@@ -316,11 +330,27 @@ export class MToonAtlasLoaderPlugin
   }
 
   /**
+   * パラメータ画像をキャッシュ付きで16bit精度デコードする（TSL / UBO 版向け）
+   */
+  private _getParameterData16bit(
+    textureIndex: number
+  ): Promise<{ data: Float32Array, width: number, height: number }>
+  {
+    let cached = this.parameterDataCache.get(textureIndex)
+    if (!cached)
+    {
+      cached = this._loadParameterData16bit(textureIndex)
+      this.parameterDataCache.set(textureIndex, cached)
+    }
+    return cached
+  }
+
+  /**
    * パラメータテクスチャを16bit精度で読み込む（GLSL 版向け）
    */
   private async _loadParameterTexture16bit(textureIndex: number): Promise<DataTexture>
   {
-    const { data, width, height } = await this._loadParameterData16bit(textureIndex)
+    const { data, width, height } = await this._getParameterData16bit(textureIndex)
 
     // DataTexture を作成
     const texture = new DataTexture(data, width, height, RGBAFormat, FloatType)
@@ -331,6 +361,20 @@ export class MToonAtlasLoaderPlugin
     texture.needsUpdate = true
 
     return texture
+  }
+
+  /**
+   * パラメータテクスチャをキャッシュ付きで取得する（GLSL 版向け）
+   */
+  private _getParameterTexture16bit(textureIndex: number): Promise<DataTexture>
+  {
+    let cached = this.parameterTextureCache.get(textureIndex)
+    if (!cached)
+    {
+      cached = this._loadParameterTexture16bit(textureIndex)
+      this.parameterTextureCache.set(textureIndex, cached)
+    }
+    return cached
   }
 
   /**
@@ -442,6 +486,81 @@ export class MToonAtlasLoaderPlugin
     }
   }
 
+  /**
+   * アトラステクスチャをキャッシュ付きで取得する
+   *
+   * WebGPURenderer は THREE.Texture インスタンスごとに GPU テクスチャを作成・アップロードするため、
+   * 同一 textureIndex に対してマテリアル数分だけ clone() すると GPU メモリとアップロードが増殖する。
+   * そのためロード単位で Promise をメモ化し、全マテリアルで同一インスタンスを共有する。
+   *
+   * - KTX2: DFD 由来の colorSpace をそのまま尊重し、自前生成の CompressedTexture を clone() せず共有する。
+   * - 非 KTX2 (PNG 等): GLTFLoader の内部キャッシュを汚さないよう初回のみ clone() し、
+   *   `textureIndex:colorSpace` 単位で共有する（別スロットでの sRGB / NoColorSpace 衝突を防ぐ）。
+   */
+  private _getAtlasedTexture(
+    key: string,
+    textureIndex: number
+  ): Promise<Texture | null>
+  {
+    const textureDef = this.parser.json.textures?.[textureIndex]
+    const isKtx2 = textureDef?.extensions?.KHR_texture_basisu !== undefined
+
+    if (isKtx2)
+    {
+      let cached = this.ktx2TextureCache.get(textureIndex)
+      if (!cached)
+      {
+        cached = this._loadKtx2Texture(textureIndex).then((texture) =>
+        {
+          if (!texture)
+          {
+            console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureIndex}) の読み込みに失敗しました`)
+          }
+          return texture
+        })
+        this.ktx2TextureCache.set(textureIndex, cached)
+      }
+      return cached
+    }
+
+    const colorSpace = resolveAtlasTextureColorSpace(key)
+    const cacheKey = `${textureIndex}:${colorSpace}`
+    let cached = this.atlasTextureCache.get(cacheKey)
+    if (!cached)
+    {
+      cached = (async () =>
+      {
+        try
+        {
+          const loadedTexture = await this.parser.loadTexture(textureIndex)
+          if (!loadedTexture)
+          {
+            console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureIndex}) の読み込みに失敗しました`)
+            return null
+          }
+
+          // GLTFLoader キャッシュを汚さないよう初回のみ clone() し、以降は全マテリアルで共有する
+          const texture = loadedTexture.clone()
+          if ('source' in loadedTexture && loadedTexture.source)
+          {
+            texture.source = loadedTexture.source // image ソースを共有
+          }
+          texture.flipY = false
+
+          applyAtlasTextureColorSpace(texture, key, false)
+
+          return texture
+        } catch (error)
+        {
+          console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureIndex}) の読み込み中にエラーが発生しました:`, error)
+          return null
+        }
+      })()
+      this.atlasTextureCache.set(cacheKey, cached)
+    }
+    return cached
+  }
+
   private async _loadMaterialAsync(materialIndex: number): Promise<Material>
   {
     const materialDef = this.parser.json.materials[materialIndex]
@@ -451,56 +570,6 @@ export class MToonAtlasLoaderPlugin
 
     const pending: Promise<void>[] = []
     const atlasedTextures: any = {}
-
-    const loadTexture = async (
-      key: string,
-      textureInfo: { index: number } | undefined
-    ) =>
-    {
-      if (textureInfo)
-      {
-        try
-        {
-          // テクスチャがKTX2かどうかを確認
-          const textureDef = this.parser.json.textures?.[textureInfo.index]
-          const isKtx2 = textureDef?.extensions?.KHR_texture_basisu !== undefined
-
-          let loadedTexture: Texture | CompressedTexture | null = null
-
-          if (isKtx2)
-          {
-            // KTX2テクスチャを直接読み込む
-            loadedTexture = await this._loadKtx2Texture(textureInfo.index)
-          } else
-          {
-            // 通常のテクスチャはparser.loadTextureを使用
-            loadedTexture = await this.parser.loadTexture(textureInfo.index)
-          }
-
-          // テクスチャが正しく読み込まれたかチェック
-          if (!loadedTexture)
-          {
-            console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureInfo.index}) の読み込みに失敗しました`)
-            return
-          }
-
-          // GLTFLoader がテクスチャをキャッシュするため、clone() して独立したオブジェクトを使用
-          const texture = loadedTexture.clone()
-          if ('source' in loadedTexture && loadedTexture.source)
-          {
-            texture.source = loadedTexture.source // image ソースを共有
-          }
-          texture.flipY = false
-
-          applyAtlasTextureColorSpace(texture, key, isKtx2)
-
-          atlasedTextures[key] = texture
-        } catch (error)
-        {
-          console.warn(`MToonAtlasLoaderPlugin: テクスチャ ${key} (index: ${textureInfo.index}) の読み込み中にエラーが発生しました:`, error)
-        }
-      }
-    }
 
     // Load parameter data / texture (16bit対応)
     const prefersBuffer = this.materialType.prefersParameterBuffer === true
@@ -512,7 +581,7 @@ export class MToonAtlasLoaderPlugin
       if (prefersBuffer)
       {
         pending.push(
-          this._loadParameterData16bit(extension.parameterTexture.index).then(({ data }) =>
+          this._getParameterData16bit(extension.parameterTexture.index).then(({ data }) =>
           {
             parameterData = data
           })
@@ -520,7 +589,7 @@ export class MToonAtlasLoaderPlugin
       } else
       {
         pending.push(
-          this._loadParameterTexture16bit(extension.parameterTexture.index).then((tex) =>
+          this._getParameterTexture16bit(extension.parameterTexture.index).then((tex) =>
           {
             parameterTexture = tex
           })
@@ -533,7 +602,18 @@ export class MToonAtlasLoaderPlugin
     {
       for (const [key, value] of Object.entries(extension.atlasedTextures))
       {
-        pending.push(loadTexture(key, value))
+        if (value)
+        {
+          pending.push(
+            this._getAtlasedTexture(key, value.index).then((texture) =>
+            {
+              if (texture)
+              {
+                atlasedTextures[key] = texture
+              }
+            })
+          )
+        }
       }
     }
 

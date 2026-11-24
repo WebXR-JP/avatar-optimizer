@@ -11,5 +11,6 @@
  * 他のモジュールより先に評価されることを保証している。
  */
 import { setKtx2TranscoderPath } from '@webxr-jp/avatar-optimizer'
+import { publicUrl } from './public-url'
 
-setKtx2TranscoderPath('/basis/')
+setKtx2TranscoderPath(publicUrl('/basis/'))

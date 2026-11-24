@@ -46,6 +46,7 @@ export type {
   OptimizationOptions,
   OptimizeModelOptions,
   SimplifyOptions,
+  SkeletonOptimizationStatistics,
   SlotAtlasResolution,
   TextureCompressionOptions,
   TextureSlotInfo,
@@ -64,7 +65,7 @@ export { VRMExporterPlugin } from './exporter'
 
 // Skeleton & VRM migration utilities
 export { migrateVRM0ToVRM1 } from './process/migrate-vrm'
-export { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
+export { migrateSkeletonVRM0ToVRM1, optimizeSkeletons } from './util/skeleton'
 export {
   createVirtualTailNodes,
   migrateSpringBone,

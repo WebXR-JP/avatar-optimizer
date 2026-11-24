@@ -4,7 +4,15 @@ import type {
   VRMAimConstraint,
   VRMRollConstraint,
 } from '@pixiv/three-vrm-node-constraint'
-import { Bone, Object3D, RGBAFormat, type Texture, Vector3 } from 'three'
+import {
+  Bone,
+  BufferAttribute,
+  Matrix4,
+  Object3D,
+  RGBAFormat,
+  type Texture,
+  Vector3,
+} from 'three'
 import type { VRM1MetaDef } from '../types'
 import { buildVRM1MetaDef } from './meta'
 
@@ -20,6 +28,13 @@ export class VRMExporterPlugin {
     key: string
     value: unknown
   }> = []
+  // GLTFExporter.processSkin の元の実装（重複排除ラッパー解除時に復元）
+  private originalProcessSkin: ((object: any) => number | null) | null = null
+  // エクスポート中の glTF skins 重複排除キャッシュ
+  private skinDeduplicationCache = new Map<
+    string,
+    Array<{ ibm: Float32Array; skinIndex: number }>
+  >()
 
   constructor(writer: any) {
     this.writer = writer
@@ -53,6 +68,10 @@ export class VRMExporterPlugin {
     // 「既にプロキシがある」と誤認して本物を設置せず、SpringBoneの初期化が
     // クラッシュする（userData.inverseCacheProxy.inverseがundefined）
     this.stashRuntimeUserData(root)
+
+    // GLTFExporter.processSkin はキャッシュを持たず SkinnedMesh ごとに別の skin を
+    // 書き出すため、同一 joints / IBM を持つ skin を再利用するように差し替える
+    this.installSkinDeduplication()
   }
 
   /**
@@ -83,10 +102,119 @@ export class VRMExporterPlugin {
    * 明示的に呼び出すこと（呼ばないとメモリ上のVRMのSpringBoneが壊れる）
    */
   public restoreRuntimeUserData(): void {
+    this.restoreProcessSkin()
     for (const { obj, key, value } of this.stashedRuntimeUserData) {
       obj.userData[key] = value
     }
     this.stashedRuntimeUserData = []
+  }
+
+  /**
+   * GLTFExporter.processSkin をラップして同一 joints / IBM の skin を重複排除する
+   */
+  private installSkinDeduplication(): void {
+    if (
+      this.originalProcessSkin ||
+      typeof this.writer?.processSkin !== 'function'
+    ) {
+      return
+    }
+
+    const writer = this.writer
+    const originalProcessSkin = writer.processSkin as (
+      object: any,
+    ) => number | null
+    this.originalProcessSkin = originalProcessSkin
+    this.skinDeduplicationCache.clear()
+    const cache = this.skinDeduplicationCache
+    const IBM_EPSILON = 1e-6
+
+    writer.processSkin = function (object: any): number | null {
+      const json = writer.json
+      const nodeMap = writer.nodeMap
+      const nodeIndex = nodeMap?.get(object)
+      const skeleton = object?.skeleton
+      const rootJoint = skeleton?.bones?.[0]
+
+      if (
+        nodeIndex === undefined ||
+        !skeleton ||
+        !rootJoint ||
+        !json?.nodes?.[nodeIndex]
+      ) {
+        return originalProcessSkin.call(writer, object)
+      }
+
+      const rootJointIndex = nodeMap.get(rootJoint)
+      if (rootJointIndex === undefined) {
+        return originalProcessSkin.call(writer, object)
+      }
+
+      const joints: number[] = []
+      const inverseBindMatrices = new Float32Array(skeleton.bones.length * 16)
+      const temporaryBoneInverse = new Matrix4()
+
+      for (let i = 0; i < skeleton.bones.length; ++i) {
+        const boneIndex = nodeMap.get(skeleton.bones[i])
+        const boneInverse = skeleton.boneInverses[i]
+        if (boneIndex === undefined || !boneInverse) {
+          return originalProcessSkin.call(writer, object)
+        }
+        joints.push(boneIndex)
+        temporaryBoneInverse.copy(boneInverse)
+        temporaryBoneInverse
+          .multiply(object.bindMatrix)
+          .toArray(inverseBindMatrices, i * 16)
+      }
+
+      const jointsKey = `${rootJointIndex}:${joints.join(',')}`
+      let bucket = cache.get(jointsKey)
+      if (!bucket) {
+        bucket = []
+        cache.set(jointsKey, bucket)
+      }
+
+      for (const entry of bucket) {
+        if (entry.ibm.length !== inverseBindMatrices.length) continue
+        let matched = true
+        for (let i = 0; i < inverseBindMatrices.length; i++) {
+          if (Math.abs(entry.ibm[i] - inverseBindMatrices[i]) > IBM_EPSILON) {
+            matched = false
+            break
+          }
+        }
+        if (matched) {
+          json.nodes[nodeIndex].skin = entry.skinIndex
+          return entry.skinIndex
+        }
+      }
+
+      if (json.skins === undefined) json.skins = []
+
+      json.skins.push({
+        inverseBindMatrices: writer.processAccessor(
+          new BufferAttribute(inverseBindMatrices, 16),
+        ),
+        joints,
+        skeleton: rootJointIndex,
+      })
+
+      const skinIndex = json.skins.length - 1
+      json.nodes[nodeIndex].skin = skinIndex
+      bucket.push({ ibm: inverseBindMatrices, skinIndex })
+      return skinIndex
+    }
+  }
+
+  /**
+   * 差し替えた GLTFExporter.processSkin を元の実装に戻す
+   */
+  private restoreProcessSkin(): void {
+    if (this.originalProcessSkin && this.writer) {
+      this.writer.processSkin = this.originalProcessSkin
+      this.originalProcessSkin = null
+    }
+    this.skinDeduplicationCache.clear()
   }
 
   /**

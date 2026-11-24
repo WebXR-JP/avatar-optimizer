@@ -9,7 +9,11 @@ import type {
 } from '@webxr-jp/mtoon-atlas'
 import { Matrix3, Mesh } from 'three'
 import type { SimplifyStatistics } from '../../process/simplify'
-import { MToonLikeMaterial, OffsetScale } from '../../types'
+import type {
+  MToonLikeMaterial,
+  OffsetScale,
+  SkeletonOptimizationStatistics,
+} from '../../types'
 
 /**
  * テクスチャパッキングの結果
@@ -219,5 +223,7 @@ export interface CombinedMeshResult {
     reducedDrawCalls: number
     /** メッシュ簡略化の統計（簡略化を実行した場合のみ） */
     simplify?: SimplifyStatistics
+    /** スケルトン最適化の統計（実行した場合のみ） */
+    skeleton?: SkeletonOptimizationStatistics
   }
 }

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
-import { Canvas, useThree, type GLProps } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
-import type { PerspectiveCamera, WebGLRenderer, Texture } from 'three'
-import { WebGPURenderer } from 'three/webgpu'
+import type { WebGLRenderer, Texture } from 'three'
 import VRMScene from './VRMScene'
+import { CameraAspectUpdater } from './CameraAspectUpdater'
 import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
-import { setKtx2Renderer, type AtlasGenerationOptions, type SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
+import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
 import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
@@ -14,58 +14,10 @@ import { LicenseSection } from './LicenseSection'
 import { PerfProbe } from './PerfProbe'
 import { perfProbeEnabled } from '../utils/perf-probe'
 import { rendererMode, rendererFallbackReason, switchRendererMode, type RendererMode } from '../renderer-mode'
+import { CANVAS_GL_PROPS, getBackendInfo, type BackendInfo } from '../canvas-gl-props'
+import { STRESS_PATH } from '../stress-route'
+import { publicUrl } from '../public-url'
 import './VRMCanvas.css'
-
-
-/**
- * R3F の Canvas に渡すレンダラー設定
- *
- * WebGPU のときは WebGPURenderer を生成して init() 完了を待ってから返す。
- * WebGL のときは R3F 既定の WebGLRenderer に渡すパラメータのみ指定する
- */
-const CANVAS_GL_PROPS: GLProps = rendererMode === 'webgpu'
-  ? async (props) =>
-  {
-    const renderer = new WebGPURenderer({
-      // R3F の型は WebGL 前提で lib.dom と別定義の OffscreenCanvas を含むためキャストする
-      canvas: props.canvas as HTMLCanvasElement,
-      antialias: true,
-      alpha: true,
-    })
-    await renderer.init()
-    // KTX2 の対応形式を、一時 WebGLRenderer ではなく描画に使う WebGPURenderer で判定させる
-    setKtx2Renderer(renderer)
-    // R3F の Renderer 型は render() を持つことだけを要求する
-    return renderer as unknown as WebGLRenderer
-  }
-  : {
-    antialias: true,
-    alpha: true,
-  }
-
-/** レンダラーが実際に使っているバックエンドの表示情報 */
-interface BackendInfo
-{
-  label: 'WebGL' | 'WebGPU'
-  /** フォールバックが起きた理由。正常なら null */
-  note: string | null
-}
-
-/**
- * レンダラーが実際に使っているバックエンドと、フォールバック時の補足を返す
- *
- * @param gl - R3F が保持するレンダラー（WebGLRenderer または WebGPURenderer）
- */
-function getBackendInfo(gl: unknown): BackendInfo
-{
-  const renderer = gl as { isWebGPURenderer?: boolean; backend?: { isWebGPUBackend?: boolean } }
-  if (!renderer.isWebGPURenderer) return { label: 'WebGL', note: null }
-  if (renderer.backend?.isWebGPUBackend) return { label: 'WebGPU', note: null }
-  return {
-    label: 'WebGL',
-    note: 'WebGPU の初期化に失敗したため WebGL2 バックエンドで描画しています',
-  }
-}
 
 /**
  * Debug Mode ごとの説明文
@@ -291,27 +243,6 @@ interface VRMCanvasProps
   defaultModels: { name: string; path: string }[]
   selectedModel: string
   onSelectModel: (path: string) => void
-}
-
-/**
- * カメラアスペクト比を容器の実際のサイズに動的に調整するコンポーネント
- */
-function CameraAspectUpdater()
-{
-  const { camera, size } = useThree()
-  const perspectiveCamera = camera as PerspectiveCamera
-
-  useEffect(() =>
-  {
-    if (perspectiveCamera.type === 'PerspectiveCamera')
-    {
-      const aspect = size.width / size.height
-      perspectiveCamera.aspect = aspect
-      perspectiveCamera.updateProjectionMatrix()
-    }
-  }, [size, perspectiveCamera])
-
-  return null
 }
 
 /**
@@ -670,6 +601,9 @@ function VRMCanvas({
         )}
 
         <Section title="その他">
+          <a className="vrm-btn vrm-btn--link" href={publicUrl(STRESS_PATH)} target="_blank" rel="noreferrer">
+            Multi-VRM Stress Test
+          </a>
           <button
             className="vrm-btn"
             onClick={onReplaceTextures}
@@ -738,6 +672,8 @@ function VRMCanvas({
 
       <div className="vrm-canvas__viewport">
         <Canvas
+          // MToon 本来の発色をそのまま確認するため NoToneMapping を使う
+          flat
           // three r187 で PCFSoftShadowMap が WebGL / WebGPU とも削除され、指定すると
           // 警告を出して PCFShadowMap に戻されるため、最初から PCFShadowMap を使う
           shadows="percentage"

@@ -9,3 +9,4 @@ export {
   recordBoneWorldPositions,
   rotateBonePositions,
 } from './migrate-vrm0-to-vrm1'
+export { optimizeSkeletons } from './optimize-skeleton'

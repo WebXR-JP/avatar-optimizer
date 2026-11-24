@@ -114,3 +114,17 @@ browser_console_messages({ level: "debug" })
 - `src/hooks/useSpector.ts` - Spector.js統合フック（window.__spector 公開）
 - `src/hooks/useWebGLDebug.ts` - WebGLデバッグユーティリティ
 - `src/types/spectorjs.d.ts` - Spector.js型定義
+
+## マルチ VRM ストレステスト（`/stress`）
+
+数十体の VRM を同時描画して WebGL / WebGPU の性能を比べるページ。
+通常ビューアとは独立したページで、条件は URL クエリだけで指定する。
+
+- 実装: `src/components/StressViewer.tsx`（ページ本体と計測 HUD）、
+  `src/components/StressViewer.css`、`src/stress-route.ts`（ルート判定）
+- 入口: `src/main.tsx` が `/stress` のときだけ StrictMode の外で `StressViewer` を描画する
+  （StrictMode の二重マウントで VRM を 2 倍読み込み、計測条件が崩れるため）
+- カスタム VRM: `src/utils/custom-vrm-store.ts`（IndexedDB に直近 1 件保存）
+- レンダラー共通設定: `src/canvas-gl-props.ts`、カメラ補正: `src/components/CameraAspectUpdater.tsx`
+- 使い方と計測値の読み方は `README.md` の「マルチ VRM ストレステスト」を参照
+- 開発時は `window.__stressViewer`（`renderer` / `scene` / `camera` / `count()`）で状態を取れる
