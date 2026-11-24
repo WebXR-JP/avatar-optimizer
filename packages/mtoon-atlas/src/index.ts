@@ -16,6 +16,7 @@ export type { DebugMode } from './MToonAtlasMaterial'
 export type {
   ParameterSemanticId,
   ParameterSemantic,
+  ParameterBufferDescriptor,
   ParameterTextureDescriptor,
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
@@ -25,6 +26,16 @@ export type {
 } from './types'
 // パラメータテクスチャの既定レイアウト（GLSL 版・TSL 版・avatar-optimizer で共通）
 export { DEFAULT_PARAMETER_LAYOUT } from './types'
+// UBO パラメータバッファユーティリティ（TSL 版・avatar-optimizer で共通）
+export {
+  MAX_PARAMETER_UBO_BYTES,
+  DEFAULT_TEXELS_PER_SLOT,
+  PARAMETER_UBO_BUCKET_SLOTS,
+  getMaxParameterUBOSlots,
+  resolveParameterBucketSlots,
+  createPaddedParameterBuffer,
+  extractParameterBufferFromTexture,
+} from './parameter-buffer'
 
 // GLTF拡張プラグイン
 export { MToonAtlasLoaderPlugin } from './extensions/MToonAtlasLoaderPlugin'

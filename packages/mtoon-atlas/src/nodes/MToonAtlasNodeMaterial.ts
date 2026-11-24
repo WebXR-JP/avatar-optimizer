@@ -4,17 +4,16 @@
  * MToonAtlasMaterial（GLSL / WebGLRenderer 専用）の TSL 版。
  * WebGPURenderer（WebGPU / WebGL2 バックエンドの両方）で描画できる。
  *
- * avatar-optimizer が生成したアトラステクスチャとパラメータテクスチャを読み、
+ * avatar-optimizer が生成したアトラステクスチャとパック済みパラメータバッファを読み、
  * 頂点属性（既定 `mtoonMaterialSlot`）で指定されたスロットの MToon パラメータを
- * フラグメントごとに復元する。計算内容は GLSL 版と同じにしてある
+ * 頂点 / フラグメントごとに復元する。計算内容は GLSL 版と同じにしてある
  * （ライティングは MToonAtlasLightingModel を参照）。
  *
- * テクスチャノードはマテリアルごとに作り、同じテクスチャを複数回読む場合は
- * `texture().sample(uv)` で 1 つのバインディングを共有する。
- * （materialReference を UV コンテキストだけ変えて複数回使うと、TSL が
- * 最初のサンプリング結果を使い回してしまい、パラメータが全てテクセル 0 になる）
- * テクスチャをノードに直接持たせるため、マテリアル間でシェーダーを共有しない
- * よう customProgramCacheKey にマテリアル ID を含めている。
+ * パラメータはテクスチャではなくマテリアル個別の Uniform Buffer（UBO）として
+ * バケット化（8 / 16 / 32 / 64 / 112 スロット）して保持し、
+ * `materialReference('parameterBufferData', 'vec4')` で参照する。
+ * アトラステクスチャも同様に `materialReference` 経由で参照するため、
+ * 同じバケットサイズ・構成のマテリアル間でシェーダーキャッシュを共有できる。
  */
 
 import {
@@ -25,6 +24,7 @@ import {
   int,
   length,
   materialNormal,
+  materialReference,
   mix,
   modelNormalMatrix,
   modelViewMatrix,
@@ -34,19 +34,24 @@ import {
   positionLocal,
   positionViewDirection,
   sin,
-  texture,
-  uniform,
   uv,
   vec2,
   vec3,
   vec4,
 } from 'three/tsl'
-import { BackSide, FrontSide, NodeMaterial, Vector2 } from 'three/webgpu'
-import type { Node, NodeBuilder, NodeMaterialParameters, Texture, TextureNode } from 'three/webgpu'
+import { BackSide, FrontSide, NodeMaterial } from 'three/webgpu'
+import type { Node, NodeBuilder, NodeMaterialParameters, Texture } from 'three/webgpu'
+import {
+  createPaddedParameterBuffer,
+  DEFAULT_TEXELS_PER_SLOT,
+  extractParameterBufferFromTexture,
+  PARAMETER_UBO_BUCKET_SLOTS,
+} from '../parameter-buffer'
 import type {
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
   OutlineWidthMode,
+  ParameterBufferDescriptor,
   ParameterTextureDescriptor,
 } from '../types'
 import {
@@ -62,7 +67,17 @@ import {
  */
 export interface MToonAtlasNodeOptions extends NodeMaterialParameters
 {
-  /** パラメータテクスチャディスクリプタ（アトラステクスチャを含む） */
+  /**
+   * パック済みパラメータバッファディスクリプタ（推奨）
+   * DataTexture を介さず直接 UBO として消費する
+   */
+  parameterBuffer?: ParameterBufferDescriptor
+
+  /**
+   * パラメータテクスチャディスクリプタ（後方互換用）
+   * 渡された場合は内部で Float32Array を抽出して UBO に載せる。
+   * `parameterBuffer` と両方指定された場合は `parameterBuffer` を優先する
+   */
   parameterTexture?: ParameterTextureDescriptor
 
   /** スロット属性設定 */
@@ -70,10 +85,10 @@ export interface MToonAtlasNodeOptions extends NodeMaterialParameters
 }
 
 const DEFAULT_SLOT_ATTRIBUTE_NAME = 'mtoonMaterialSlot'
+const MIN_BUCKET_SLOTS = PARAMETER_UBO_BUCKET_SLOTS[0]
 
-/** サンプリング対象になるテクスチャプロパティ */
-type TextureProperty =
-  | 'parameterTextureMap'
+/** サンプリング対象になるアトラステクスチャプロパティ */
+type AtlasTextureProperty =
   | 'map'
   | 'normalMap'
   | 'emissiveMap'
@@ -84,24 +99,79 @@ type TextureProperty =
   | 'uvAnimationMaskTexture'
 
 /**
- * MToon のパラメータテクスチャとアトラスを使う統合マテリアル（TSL 版）
+ * `@types/three` の ReferenceNode には `element()` の型宣言が欠けているため、
+ * UBO 配列アクセスに使う最小限のインターフェースを補う
+ */
+interface ParameterBufferRefNode
+{
+  count: number | null
+  element(indexNode: Node): Node<'vec4'>
+}
+
+/**
+ * アトラステクスチャの共有 materialReference（シェーダーキャッシュ共有用）
+ *
+ * 各アトラステクスチャは 1 シェーダー内で 1 種類の UV でのみ参照するため、
+ * three-vrm の MToonNodeMaterial と同じく `.context({ getUV })` で安全に共有できる。
+ */
+const _atlasTextureRefs: Record<AtlasTextureProperty, Node<'vec4'>> = {
+  map: materialReference('map', 'texture') as unknown as Node<'vec4'>,
+  normalMap: materialReference('normalMap', 'texture') as unknown as Node<'vec4'>,
+  emissiveMap: materialReference('emissiveMap', 'texture') as unknown as Node<'vec4'>,
+  shadeMultiplyTexture: materialReference('shadeMultiplyTexture', 'texture') as unknown as Node<'vec4'>,
+  shadingShiftTexture: materialReference('shadingShiftTexture', 'texture') as unknown as Node<'vec4'>,
+  matcapTexture: materialReference('matcapTexture', 'texture') as unknown as Node<'vec4'>,
+  rimMultiplyTexture: materialReference('rimMultiplyTexture', 'texture') as unknown as Node<'vec4'>,
+  uvAnimationMaskTexture: materialReference('uvAnimationMaskTexture', 'texture') as unknown as Node<'vec4'>,
+}
+
+/**
+ * vec4 配列長（= bucketSlots × texelsPerSlot）ごとの共有 UBO materialReference
+ *
+ * ReferenceNode は `count` を設定すると内部で `buffer(null, 'vec4', count)` を
+ * 生成し、`NodeUpdateType.OBJECT` で描画中のマテリアルの `parameterBufferData` に
+ * 自動追従する。
+ */
+const _parameterBufferRefs = new Map<number, ParameterBufferRefNode>()
+
+function getParameterBufferRef(vec4Count: number): ParameterBufferRefNode
+{
+  let ref = _parameterBufferRefs.get(vec4Count)
+  if (!ref)
+  {
+    const node = materialReference('parameterBufferData', 'vec4') as unknown as ParameterBufferRefNode
+    node.count = vec4Count
+    ref = node
+    _parameterBufferRefs.set(vec4Count, ref)
+  }
+  return ref
+}
+
+/**
+ * MToon のパラメータ UBO とアトラステクスチャを使う統合マテリアル（TSL 版）
  */
 export class MToonAtlasNodeMaterial extends NodeMaterial
 {
+  /**
+   * avatar-optimizer や MToonAtlasLoaderPlugin に対し、
+   * DataTexture ではなく生 Float32Array（parameterBuffer）の直接受け渡しを要求するフラグ
+   */
+  static readonly prefersParameterBuffer = true as const
+
   /** マテリアル識別フラグ（GLSL 版と共通。エクスポーターが参照する） */
   readonly isMToonAtlasMaterial = true as const
 
   /** TSL 版であることを示すフラグ */
   readonly isMToonAtlasNodeMaterial = true as const
 
-  // ---- シェーダーから参照されるテクスチャ・パラメータ ----
+  // ---- シェーダーから materialReference 経由で参照されるプロパティ ----
   // 自前のプロパティは three がキャッシュキーに含めるため、
-  // テクスチャの有無が変わるとシェーダーが作り直される
+  // テクスチャの有無・サンプラーが変わると自動でシェーダーが切り替わる
 
-  /** パラメータテクスチャ（スロット × テクセル） */
-  parameterTextureMap: Texture | null = null
-  /** パラメータテクスチャの大きさ（x = テクセル数/スロット、y = スロット数） */
-  parameterTextureSize = new Vector2(1, 1)
+  /** UBO 転送用のパディング済みパラメータ配列（bucketSlots × texelsPerSlot × 4） */
+  parameterBufferData: Float32Array = new Float32Array(
+    MIN_BUCKET_SLOTS * DEFAULT_TEXELS_PER_SLOT * 4,
+  )
   /** ベースカラーアトラス */
   map: Texture | null = null
   /** ノーマルマップアトラス */
@@ -121,18 +191,20 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
 
   /**
    * エミッシブを差し替えるノード（NodeMaterial.setupLighting が参照する）。
-   * 通常は null のままで、パラメータテクスチャから求めた値が使われる
+   * 通常は null のままで、パラメータバッファから求めた値が使われる
    */
   emissiveNode: Node | null = null
 
+  private _parameterBuffer: ParameterBufferDescriptor | undefined
   private _parameterTexture: ParameterTextureDescriptor | undefined
+  private _parameterBucketSlots: number = MIN_BUCKET_SLOTS
+  private _texelsPerSlot: number = DEFAULT_TEXELS_PER_SLOT
   private _slotAttribute: MaterialSlotAttributeConfig = { name: DEFAULT_SLOT_ATTRIBUTE_NAME }
   private _isOutline = false
   private _outlineWidthMode: OutlineWidthMode = 'none'
 
-  // シェーダー構築中に使うテクスチャノード（構築ごとに作り直す）
-  private _textureNodes = new Map<TextureProperty, TextureNode>()
-  private _parameterTextureSizeNode: Node<'vec2'> | null = null
+  // シェーダー構築中に共有するアニメーション適用済み UV ノード（setup ごとに作り直す）
+  private _animatedUVNode: Node<'vec2'> | null = null
 
   /**
    * コンストラクタ
@@ -144,10 +216,14 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     super()
     this.lights = true
 
-    const { parameterTexture, slotAttribute, ...rest } = parameters
+    const { parameterBuffer, parameterTexture, slotAttribute, ...rest } = parameters
     this.setValues(rest)
 
-    if (parameterTexture)
+    if (parameterBuffer)
+    {
+      this.setParameterBuffer(parameterBuffer)
+    }
+    else if (parameterTexture)
     {
       this.setParameterTexture(parameterTexture)
     }
@@ -158,33 +234,82 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   }
 
   /**
-   * パラメータテクスチャを設定する
+   * パラメータバッファを設定する（推奨 API）
    *
+   * スロット数が UBO 上限（WebGL2 最小 16KB 基準で既定 112 スロット）を
+   * 超える場合は RangeError を投げる。
    * atlasedTextures を含む場合は各アトラステクスチャも設定する。
+   *
+   * @param descriptor - パラメータバッファディスクリプタ。null で解除
+   * @returns this
+   */
+  setParameterBuffer(descriptor: ParameterBufferDescriptor | null): this
+  {
+    if (descriptor)
+    {
+      const { buffer, bucketSlots } = createPaddedParameterBuffer(
+        descriptor.data,
+        descriptor.slotCount,
+        descriptor.texelsPerSlot,
+      )
+      const prevBucketSlots = this._parameterBucketSlots
+      const prevTexelsPerSlot = this._texelsPerSlot
+
+      this._parameterBuffer = descriptor
+      this._parameterTexture = undefined
+      this._parameterBucketSlots = bucketSlots
+      this._texelsPerSlot = descriptor.texelsPerSlot
+      this.parameterBufferData = buffer
+
+      if (descriptor.atlasedTextures)
+      {
+        const prevMask = this._atlasTexturePresenceMask()
+        this._setAtlasedTextures(descriptor.atlasedTextures)
+        if (this._atlasTexturePresenceMask() !== prevMask)
+        {
+          this.needsUpdate = true
+        }
+      }
+
+      if (prevBucketSlots !== bucketSlots || prevTexelsPerSlot !== descriptor.texelsPerSlot)
+      {
+        this.needsUpdate = true
+      }
+    }
+    else
+    {
+      this._parameterBuffer = undefined
+      this._parameterTexture = undefined
+      this._parameterBucketSlots = MIN_BUCKET_SLOTS
+      this._texelsPerSlot = DEFAULT_TEXELS_PER_SLOT
+      this.parameterBufferData = new Float32Array(
+        MIN_BUCKET_SLOTS * DEFAULT_TEXELS_PER_SLOT * 4,
+      )
+      this.needsUpdate = true
+    }
+
+    return this
+  }
+
+  /**
+   * パラメータテクスチャを設定する（後方互換 API）
+   *
+   * 受け取った DataTexture から生 Float32Array を抽出して UBO に載せる。
+   * 描画時にパラメータテクスチャはサンプリングしない。
    *
    * @param descriptor - パラメータテクスチャディスクリプタ。null で解除
    * @returns this
    */
   setParameterTexture(descriptor: ParameterTextureDescriptor | null): this
   {
-    this._parameterTexture = descriptor ?? undefined
-
-    if (descriptor)
+    if (!descriptor)
     {
-      this.parameterTextureMap = descriptor.texture
-      this.parameterTextureSize.set(descriptor.texelsPerSlot, descriptor.slotCount)
-      if (descriptor.atlasedTextures)
-      {
-        this._setAtlasedTextures(descriptor.atlasedTextures)
-      }
-    }
-    else
-    {
-      this.parameterTextureMap = null
-      this.parameterTextureSize.set(1, 1)
+      return this.setParameterBuffer(null)
     }
 
-    this.needsUpdate = true
+    const bufferDescriptor = extractParameterBufferFromTexture(descriptor)
+    this.setParameterBuffer(bufferDescriptor)
+    this._parameterTexture = descriptor
     return this
   }
 
@@ -204,10 +329,22 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     return this
   }
 
-  /** パラメータテクスチャディスクリプタ */
+  /** パラメータバッファディスクリプタ */
+  get parameterBuffer(): ParameterBufferDescriptor | undefined
+  {
+    return this._parameterBuffer
+  }
+
+  /** パラメータテクスチャディスクリプタ（後方互換。setParameterTexture 経由時のみ設定される） */
   get parameterTexture(): ParameterTextureDescriptor | undefined
   {
     return this._parameterTexture
+  }
+
+  /** 現在の UBO バケットのスロット数（8 / 16 / 32 / 64 / 112） */
+  get parameterBucketSlots(): number
+  {
+    return this._parameterBucketSlots
   }
 
   /** スロット属性設定 */
@@ -263,7 +400,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   /**
    * UV アニメーションの更新（GLSL 版と同じく現状は何もしない）
    *
-   * パラメータテクスチャのオフセット値をそのまま使うため、時間経過による
+   * パラメータバッファのオフセット値をそのまま使うため、時間経過による
    * 更新は行わない。three-vrm の VRM.update() から呼ばれる。
    */
   update(_deltaTime: number): void
@@ -274,12 +411,12 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   customProgramCacheKey(): string
   {
     // is〜 で始まるプロパティと _ で始まるプロパティは three のキャッシュキーに
-    // 含まれないため、シェーダー構成に影響するものをここで加える
-    // テクスチャをノードに直接持たせているため、マテリアル ID も含めて
-    // 別マテリアルとシェーダー（バインディング）を共有しないようにする
+    // 含まれないため、シェーダー構成に影響するものをここで加える。
+    // UBO 配列長（バケットサイズ × texelsPerSlot）が一致し、テクスチャ有無や
+    // アウトライン設定も同じマテリアル同士はシェーダーキャッシュを共有する。
     return (
       super.customProgramCacheKey() +
-      `mtoonAtlas:${this.uuid},${this._isOutline},${this._outlineWidthMode},${this._slotAttribute.name},`
+      `mtoonAtlas:${this._parameterBucketSlots},${this._texelsPerSlot},${this._isOutline},${this._outlineWidthMode},${this._slotAttribute.name},`
     )
   }
 
@@ -287,8 +424,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   {
     super.copy(source)
 
-    this.parameterTextureMap = source.parameterTextureMap
-    this.parameterTextureSize.copy(source.parameterTextureSize)
+    this.parameterBufferData = source.parameterBufferData.slice()
     this.map = source.map
     this.normalMap = source.normalMap
     this.emissiveMap = source.emissiveMap
@@ -298,7 +434,10 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     this.rimMultiplyTexture = source.rimMultiplyTexture
     this.uvAnimationMaskTexture = source.uvAnimationMaskTexture
 
+    this._parameterBuffer = source._parameterBuffer ? { ...source._parameterBuffer } : undefined
     this._parameterTexture = source._parameterTexture ? { ...source._parameterTexture } : undefined
+    this._parameterBucketSlots = source._parameterBucketSlots
+    this._texelsPerSlot = source._texelsPerSlot
     this._slotAttribute = { ...source._slotAttribute }
     this._isOutline = source._isOutline
     this._outlineWidthMode = source._outlineWidthMode
@@ -310,75 +449,70 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
 
   setup(builder: NodeBuilder): void
   {
-    this._textureNodes = new Map()
-    this._parameterTextureSizeNode = uniform(this.parameterTextureSize)
+    this._animatedUVNode = null
     super.setup(builder)
   }
 
   /**
-   * テクスチャプロパティを指定 UV でサンプリングする
+   * アトラステクスチャを指定 UV でサンプリングする
    *
-   * 同じテクスチャは 1 つの TextureNode を元に sample() するので、
-   * 何回読んでもバインディングは 1 つで済む。
+   * モジュール共有の materialReference を使うことで、マテリアルごとに
+   * シェーダーを再コンパイルせずバインディングだけを切り替えられる。
    *
    * @param property - 読むテクスチャのプロパティ名（null でないこと）
    * @param uvNode - サンプリングする UV
    */
-  private _sample(property: TextureProperty, uvNode: Node<'vec2'>): Node<'vec4'>
+  private _sampleAtlas(property: AtlasTextureProperty, uvNode: Node<'vec2'>): Node<'vec4'>
   {
-    let base = this._textureNodes.get(property)
-    if (!base)
-    {
-      base = texture(this[property] as Texture)
-      this._textureNodes.set(property, base)
-    }
-    return base.sample(uvNode)
+    return _atlasTextureRefs[property].context({ getUV: () => uvNode })
   }
 
-  /** 現在のフラグメント / 頂点のスロット番号 */
-  private _slot(): Node<'float'>
+  /** 現在のフラグメント / 頂点のスロット番号（補間誤差を避けるため四捨五入し範囲内に丸める） */
+  private _slotIndex(): Node<'int'>
   {
-    return attribute(this._slotAttribute.name, 'float')
+    const slotAttr = attribute(this._slotAttribute.name, 'float')
+    return int(slotAttr.add(0.5).clamp(0, this._parameterBucketSlots - 1))
   }
 
   /**
-   * パラメータテクスチャの 1 テクセルを読む
+   * パラメータ UBO の 1 vec4 を読む
    *
-   * GLSL 版の sampleParameter と同じく、テクセル中心の UV で読む。
-   * float テクスチャ（NearestFilter）は three が textureLoad に変換する。
-   *
-   * @param texel - スロット内のテクセル番号
+   * @param texel - スロット内の vec4 インデックス（0〜8）
    */
   private _param(texel: number): Node<'vec4'>
   {
-    const size = this._parameterTextureSizeNode ?? uniform(this.parameterTextureSize)
-    const texelUV = vec2(float(texel).add(0.5), this._slot().add(0.5)).div(size)
-    return this._sample('parameterTextureMap', texelUV)
+    const vec4Count = this._parameterBucketSlots * this._texelsPerSlot
+    const index = this._slotIndex().mul(int(this._texelsPerSlot)).add(int(texel))
+    return getParameterBufferRef(vec4Count).element(index)
   }
 
   /**
-   * UV アニメーション（回転 → スクロール）を適用した UV
+   * UV アニメーション（回転 → スクロール）を適用した UV（フラグメント内で 1 回計算して共有）
    *
    * GLSL 版と同じく、マスクは B チャンネル、回転は (0.5, 0.5) 中心。
    */
-  private _animatedUV(): Node<'vec2'>
+  private _getAnimatedUV(): Node<'vec2'>
   {
-    const p6 = this._param(6)
-    const p7 = this._param(7)
-    const mask = this.uvAnimationMaskTexture
-      ? this._sample('uvAnimationMaskTexture', uv()).b
-      : float(1)
+    if (!this._animatedUVNode)
+    {
+      const p6 = this._param(6)
+      const p7 = this._param(7)
+      const mask = this.uvAnimationMaskTexture
+        ? this._sampleAtlas('uvAnimationMaskTexture', uv()).b
+        : float(1)
 
-    const phase = p6.a.mul(mask)
-    const c = cos(phase)
-    const s = sin(phase)
-    const centered = uv().sub(0.5)
-    // mat2( c, -s, s, c ) * centered（GLSL は列優先）
-    const rotated = vec2(
-      c.mul(centered.x).add(s.mul(centered.y)),
-      s.negate().mul(centered.x).add(c.mul(centered.y)),
-    ).add(0.5)
-    return rotated.add(vec2(p7.b, p7.a).mul(mask))
+      const phase = p6.a.mul(mask)
+      const c = cos(phase)
+      const s = sin(phase)
+      const centered = uv().sub(0.5)
+      // mat2( c, -s, s, c ) * centered（GLSL は列優先）
+      const rotated = vec2(
+        c.mul(centered.x).add(s.mul(centered.y)),
+        s.negate().mul(centered.x).add(c.mul(centered.y)),
+      ).add(0.5)
+      this._animatedUVNode = rotated.add(vec2(p7.b, p7.a).mul(mask)).toVar('MToonAtlasAnimatedUV')
+    }
+    return this._animatedUVNode
   }
 
   setupLightingModel(): MToonAtlasLightingModel
@@ -392,7 +526,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     let color: Node<'vec4'> = vec4(p0.rgb, 1)
     if (this.map)
     {
-      color = color.mul(this._sample('map', this._animatedUV()))
+      color = color.mul(this._sampleAtlas('map', this._getAnimatedUV()))
     }
 
     const prevColor = this.colorNode
@@ -406,13 +540,11 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
 
   setupVariants(): void
   {
-    const animatedUV = this._animatedUV()
-
     // 影色
     let shade: Node<'vec3'> = this._param(1).rgb
     if (this.shadeMultiplyTexture)
     {
-      shade = shade.mul(this._sample('shadeMultiplyTexture', animatedUV).rgb)
+      shade = shade.mul(this._sampleAtlas('shadeMultiplyTexture', this._getAnimatedUV()).rgb)
     }
     shadeColor.assign(shade)
 
@@ -420,21 +552,19 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     let shift: Node<'float'> = this._param(8).r.mul(2).sub(1)
     if (this.shadingShiftTexture)
     {
-      shift = shift.add(this._sample('shadingShiftTexture', animatedUV).r.mul(this._param(1).a))
+      shift = shift.add(this._sampleAtlas('shadingShiftTexture', this._getAnimatedUV()).r.mul(this._param(1).a))
     }
     shadingShift.assign(shift)
 
     shadingToony.assign(this._param(6).g)
 
-    rim.assign(this._rimNode(animatedUV))
+    rim.assign(this._rimNode())
   }
 
   /**
    * パラメトリックリム + matcap に rimMultiplyTexture を掛けたもの
-   *
-   * @param animatedUV - UV アニメーション適用済みの UV
    */
-  private _rimNode(animatedUV: Node<'vec2'>): Node<'vec3'>
+  private _rimNode(): Node<'vec3'>
   {
     const p3 = this._param(3)
     const p5 = this._param(5)
@@ -452,12 +582,12 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
       const x = vec3(viewDir.z, 0, viewDir.x.negate()).normalize()
       const y = viewDir.cross(x)
       const sphereUV = vec2(x.dot(normalView), y.dot(normalView).negate()).mul(0.5).add(0.5)
-      rimColor = rimColor.add(p3.rgb.mul(this._sample('matcapTexture', sphereUV).rgb))
+      rimColor = rimColor.add(p3.rgb.mul(this._sampleAtlas('matcapTexture', sphereUV).rgb))
     }
 
     if (this.rimMultiplyTexture)
     {
-      rimColor = rimColor.mul(this._sample('rimMultiplyTexture', animatedUV).rgb)
+      rimColor = rimColor.mul(this._sampleAtlas('rimMultiplyTexture', this._getAnimatedUV()).rgb)
     }
 
     return rimColor
@@ -469,7 +599,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     if (this.normalMap)
     {
       const normalScale = this._param(7).xy
-      normal = normalMap(this._sample('normalMap', this._animatedUV()), normalScale)
+      normal = normalMap(this._sampleAtlas('normalMap', this._getAnimatedUV()), normalScale)
     }
     if (this._isOutline)
     {
@@ -484,7 +614,7 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     let emissive: Node<'vec3'> = p2.rgb.mul(p2.a)
     if (this.emissiveMap)
     {
-      emissive = emissive.mul(this._sample('emissiveMap', this._animatedUV()).rgb)
+      emissive = emissive.mul(this._sampleAtlas('emissiveMap', this._getAnimatedUV()).rgb)
     }
 
     const prevEmissive = this.emissiveNode
@@ -541,6 +671,20 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
   private _hasOutlineWidth(): boolean
   {
     return this._isOutline && this._outlineWidthMode !== 'none'
+  }
+
+  private _atlasTexturePresenceMask(): number
+  {
+    return (
+      (this.map ? 1 : 0) |
+      (this.shadeMultiplyTexture ? 2 : 0) |
+      (this.shadingShiftTexture ? 4 : 0) |
+      (this.normalMap ? 8 : 0) |
+      (this.emissiveMap ? 16 : 0) |
+      (this.matcapTexture ? 32 : 0) |
+      (this.rimMultiplyTexture ? 64 : 0) |
+      (this.uvAnimationMaskTexture ? 128 : 0)
+    )
   }
 
   private _setAtlasedTextures(atlases: AtlasedTextureSet): void

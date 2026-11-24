@@ -19,9 +19,11 @@ import {
   Scene,
 } from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MToonAtlasMaterial } from '../src/MToonAtlasMaterial'
 import { MToonAtlasNodeMaterial } from '../src/nodes'
 import { MToonAtlasExporterPlugin } from '../src/extensions/MToonAtlasExporterPlugin'
+import { MToonAtlasLoaderPlugin } from '../src/extensions/MToonAtlasLoaderPlugin'
 import { MTOON_ATLAS_EXTENSION_NAME } from '../src/extensions/types'
 import type { MToonAtlasMaterialConstructor } from '../src/types'
 
@@ -104,6 +106,103 @@ describe.each([
       expect(typeof mesh.primitives[0].material).toBe('number')
       expect((mesh.primitives[0].attributes as Record<string, number>)._MTOON_MATERIAL_SLOT).toBeDefined()
     }
+  })
+})
+
+describe('MToonAtlasExporterPlugin と parameterBuffer', () =>
+{
+  it('DataTexture を使わず parameterBuffer から書き出し、本体とアウトラインで共有キャッシュする', async () =>
+  {
+    const data = new Float32Array(9 * 2 * 4).fill(0.5)
+    const body = new MToonAtlasNodeMaterial({
+      parameterBuffer: { data, slotCount: 2, texelsPerSlot: 9 },
+      name: 'buffer-atlas',
+    })
+    const outline = body.createOutlineMaterial('worldCoordinates')
+    outline.name = 'buffer-atlas (Outline)'
+
+    const scene = new Scene()
+    scene.add(new Mesh(createGeometry(), body))
+    scene.add(new Mesh(createGeometry(), outline))
+
+    const json = await exportScene(scene) as unknown as {
+      materials: {
+        name: string
+        extensions: Record<string, { parameterTexture: { index: number, slotCount: number, texelsPerSlot: number } }>
+      }[]
+      textures: unknown[]
+    }
+
+    expect(json.materials).toHaveLength(2)
+    const bodyExt = json.materials[0].extensions[MTOON_ATLAS_EXTENSION_NAME]
+    const outlineExt = json.materials[1].extensions[MTOON_ATLAS_EXTENSION_NAME]
+    expect(bodyExt.parameterTexture).toMatchObject({ slotCount: 2, texelsPerSlot: 9 })
+    expect(bodyExt.parameterTexture.index).toBeGreaterThanOrEqual(0)
+    // 同じ Float32Array を参照する本体とアウトラインで 1 つのテクスチャ定義を共有する
+    expect(outlineExt.parameterTexture.index).toBe(bodyExt.parameterTexture.index)
+    expect(json.textures).toHaveLength(1)
+  })
+
+  it('GLB エクスポート → MToonAtlasLoaderPlugin で MToonAtlasNodeMaterial として parameterBuffer へ復元できる', async () =>
+  {
+    const data = new Float32Array(9 * 2 * 4)
+    // slot 0: baseColor = (0.2, 0.4, 0.6), opacity = 1.0
+    data[0] = 0.2
+    data[1] = 0.4
+    data[2] = 0.6
+    data[3] = 1.0
+    // slot 1: baseColor = (0.8, 0.5, 0.25), opacity = 0.75
+    const s1 = 9 * 4
+    data[s1 + 0] = 0.8
+    data[s1 + 1] = 0.5
+    data[s1 + 2] = 0.25
+    data[s1 + 3] = 0.75
+
+    const body = new MToonAtlasNodeMaterial({
+      parameterBuffer: { data, slotCount: 2, texelsPerSlot: 9 },
+      name: 'roundtrip-atlas',
+    })
+    const scene = new Scene()
+    scene.add(new Mesh(createGeometry(), body))
+
+    const exporter = new GLTFExporter()
+    exporter.register((writer) => new MToonAtlasExporterPlugin(writer as never) as never)
+    const glb = await exporter.parseAsync(scene, { binary: true }) as ArrayBuffer
+
+    const loader = new GLTFLoader()
+    loader.register((parser) => new MToonAtlasLoaderPlugin(parser as never, {
+      materialType: MToonAtlasNodeMaterial,
+    }) as never)
+
+    const loaded = await new Promise<{ scene: Scene }>((resolve, reject) =>
+    {
+      loader.parse(glb, '', resolve, reject)
+    })
+
+    let loadedMat: MToonAtlasNodeMaterial | null = null
+    loaded.scene.traverse((obj) =>
+    {
+      if (obj instanceof Mesh && obj.material instanceof MToonAtlasNodeMaterial)
+      {
+        loadedMat = obj.material
+      }
+    })
+
+    expect(loadedMat).not.toBeNull()
+    const mat = loadedMat!
+    expect(mat.parameterTexture).toBeUndefined()
+    expect(mat.parameterBuffer).toBeDefined()
+    expect(mat.parameterBuffer?.slotCount).toBe(2)
+    expect(mat.parameterBuffer?.texelsPerSlot).toBe(9)
+    expect(mat.parameterBucketSlots).toBe(8)
+    expect(mat.parameterBufferData[0]).toBeCloseTo(0.2, 4)
+    expect(mat.parameterBufferData[1]).toBeCloseTo(0.4, 4)
+    expect(mat.parameterBufferData[2]).toBeCloseTo(0.6, 4)
+    expect(mat.parameterBufferData[3]).toBeCloseTo(1.0, 4)
+    expect(mat.parameterBufferData[s1 + 0]).toBeCloseTo(0.8, 4)
+    expect(mat.parameterBufferData[s1 + 1]).toBeCloseTo(0.5, 4)
+    expect(mat.parameterBufferData[s1 + 2]).toBeCloseTo(0.25, 4)
+    expect(mat.parameterBufferData[s1 + 3]).toBeCloseTo(0.75, 4)
   })
 })
 

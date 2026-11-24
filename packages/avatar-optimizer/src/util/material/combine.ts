@@ -14,18 +14,24 @@
 import type {
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
+  ParameterBufferDescriptor,
   ParameterTextureDescriptor,
 } from '@webxr-jp/mtoon-atlas'
 import {
+  getMaxParameterUBOSlots,
   MToonAtlasMaterial,
   type MToonAtlasMaterialConstructor,
   type MToonAtlasMaterialLike,
 } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
-import { BufferGeometry, DataTexture, Mesh, SkinnedMesh } from 'three'
+import { BufferGeometry, Mesh, SkinnedMesh } from 'three'
 import type { MToonLikeMaterial, OptimizationError } from '../../types'
 import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
-import { createParameterTexture } from '../texture'
+import {
+  createParameterTextureFromData,
+  type PackedMaterialParameters,
+  packMaterialParameters,
+} from '../texture'
 import { getRenderMode, getRenderOrderForMode } from './index'
 import type {
   CombinedMeshResult,
@@ -156,8 +162,8 @@ function processSingleGroup(
       }
     }
 
-    // パラメータテクスチャ生成
-    const parameterTexture = yield* createParameterTexture(
+    // 生パラメータ配列を生成（GLSL 版は DataTexture 化、TSL 版はそのまま UBO バッファへ）
+    const packedParameters = yield* packMaterialParameters(
       materials,
       opts.texelsPerSlot,
     )
@@ -182,12 +188,10 @@ function processSingleGroup(
       }
     }
 
-    // MToonAtlasMaterialの作成（excludedMeshes用にも必要なので先に作成）
-    const atlasMaterial = createMToonAtlasMaterial(
+    // MToonAtlasMaterial の作成（excludedMeshes 用にも必要なので先に作成）
+    const atlasMaterial = yield* createMToonAtlasMaterial(
       materials[0],
-      parameterTexture,
-      materials.length,
-      opts.texelsPerSlot,
+      packedParameters,
       opts.slotAttributeName,
       renderMode,
       opts.materialType,
@@ -386,20 +390,19 @@ function combineMToonMaterialsInternal(
 }
 
 /**
- * MToonAtlasMaterialを作成
+ * MToonAtlasMaterial / MToonAtlasNodeMaterial を作成
  *
- * 代表マテリアルのアトラス化されたテクスチャを使用
- * パラメータテクスチャを設定
+ * 代表マテリアルのアトラス化されたテクスチャを使用。
+ * 対象マテリアルが prefersParameterBuffer を持つ場合（TSL / WebGPU 版）は
+ * DataTexture を生成せず生パラメータ配列をそのまま渡し、UBO 上限超過はエラーを返す。
  */
 function createMToonAtlasMaterial(
   representativeMaterial: MToonLikeMaterial,
-  parameterTexture: DataTexture,
-  slotCount: number,
-  texelsPerSlot: number,
+  packedParameters: PackedMaterialParameters,
   slotAttributeName: string,
   renderMode: RenderMode,
   MaterialType: MToonAtlasMaterialConstructor,
-): MToonAtlasMaterialLike {
+): Result<MToonAtlasMaterialLike, OptimizationError> {
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
 
@@ -430,25 +433,48 @@ function createMToonAtlasMaterial(
       representativeMaterial.uvAnimationMaskTexture
   }
 
-  // パラメータテクスチャディスクリプタを構築
-  const parameterTextureDescriptor: ParameterTextureDescriptor = {
-    texture: parameterTexture,
-    slotCount,
-    texelsPerSlot,
-    atlasedTextures,
-  }
-
   // スロット属性設定
   const slotAttribute: MaterialSlotAttributeConfig = {
     name: slotAttributeName,
     description: 'Material slot index for instancing',
   }
 
-  // アトラスマテリアルを作成（GLSL 版 / TSL 版）
-  const material = new MaterialType({
-    parameterTexture: parameterTextureDescriptor,
-    slotAttribute,
-  })
+  // アトラスマテリアルを作成（TSL 版は生バッファ直接渡し、GLSL 版は DataTexture 化）
+  let material: MToonAtlasMaterialLike
+  if (MaterialType.prefersParameterBuffer === true) {
+    const maxSlots = getMaxParameterUBOSlots(packedParameters.texelsPerSlot)
+    if (packedParameters.slotCount > maxSlots) {
+      return err({
+        type: 'PARAMETER_TEXTURE_FAILED',
+        message:
+          `マテリアルスロット数 (${packedParameters.slotCount}) が UBO 上限 ` +
+          `(${maxSlots} スロット, renderMode=${renderMode}) を超えています`,
+      })
+    }
+
+    const parameterBufferDescriptor: ParameterBufferDescriptor = {
+      data: packedParameters.data,
+      slotCount: packedParameters.slotCount,
+      texelsPerSlot: packedParameters.texelsPerSlot,
+      atlasedTextures,
+    }
+    material = new MaterialType({
+      parameterBuffer: parameterBufferDescriptor,
+      slotAttribute,
+    })
+  } else {
+    const parameterTexture = createParameterTextureFromData(packedParameters)
+    const parameterTextureDescriptor: ParameterTextureDescriptor = {
+      texture: parameterTexture,
+      slotCount: packedParameters.slotCount,
+      texelsPerSlot: packedParameters.texelsPerSlot,
+      atlasedTextures,
+    }
+    material = new MaterialType({
+      parameterTexture: parameterTextureDescriptor,
+      slotAttribute,
+    })
+  }
 
   // レンダーモードに応じた設定
   if (renderMode === 'transparentZWrite') {
@@ -471,5 +497,5 @@ function createMToonAtlasMaterial(
     material.transparent = false
   }
 
-  return material
+  return ok(material)
 }

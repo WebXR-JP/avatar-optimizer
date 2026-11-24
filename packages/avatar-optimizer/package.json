@@ -22,6 +22,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:browser": "vitest run --browser.enabled=true --browser.headless=true --coverage.provider=istanbul",
+    "test:webgpu": "vitest run --config vitest.webgpu.config.ts",
     "manual:loaders-gl": "tsx __tests__/manual/loaders-gl.manual.ts",
     "typecheck": "tsc --noEmit"
   },
