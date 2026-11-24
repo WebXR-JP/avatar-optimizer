@@ -142,6 +142,13 @@
 
 .vrm-btn--tool { font-size: 0.75rem; padding: 0.3rem 0.4rem; }
 
+/* リンクをボタン風に見せる（ストレステストへの導線） */
+.vrm-btn--link {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
 .vrm-btn-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

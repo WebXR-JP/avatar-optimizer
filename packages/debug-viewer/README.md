@@ -14,6 +14,7 @@ VRM デバッグビューア - React Three Fiber ベースの VRM モデル表�
 - **ライティング**: 太陽光と環境光による実況的な陰影付け
 - **グリッド表示**: 床グリッドで空間配置を可視化
 - **ライセンス表示**: 読み込んだ VRM の利用条件をサイドバーに一覧表示
+- **マルチ VRM ストレステスト**: `/stress` で数十体を同時描画し、WebGL / WebGPU の性能を比較
 
 ## 開発
 
@@ -50,6 +51,58 @@ const buf = await app.exportVRM(src.value)
 const result = await app.loadVRM(buf.value) // 現在のレンダラーに合ったマテリアルで読み込む
 app.setVRM(result.value)
 ```
+
+### マルチ VRM ストレステスト（`/stress`）
+
+数十体の VRM を同時に描画して、WebGL / WebGPU の描画性能・GPU メモリ・
+テクスチャ数を比較するページです。サイドバー「その他」の
+**Multi-VRM Stress Test**、または直接 `/stress` を開きます。
+
+```
+/stress?count=50&renderer=webgpu&optimize=1
+```
+
+条件はすべて URL クエリで指定でき、同じ URL を開けば同じ条件で再現できます。
+
+| パラメータ | 内容 |
+| --- | --- |
+| `count` | 表示する VRM の数（既定 24 / 最大 100） |
+| `model` | 使う VRM のパス（既定 `/AliciaSolid.vrm`） |
+| `cols` | グリッドの列数（省略時は `count` から自動） |
+| `springbone` | `0` で SpringBone の更新を止める（既定は有効） |
+| `shadows` | `1` で影を有効にする（既定は無効） |
+| `dpr` | 描画の devicePixelRatio（例: `1`）。省略時はディスプレイ依存 |
+| `optimize` | `1` で最適化を 1 回だけ実行し、その結果を全員分に使い回す |
+| `renderer` | `webgpu` で WebGPU 描画（通常ビューアと同じ） |
+
+#### 計測値の読み方
+
+| 項目 | 内容 |
+| --- | --- |
+| `fps` / `frame` | 実測のフレームレートとフレーム間隔。vsync で上限が付くため、60fps に張り付いているときは CPU 時間（`render()` の内訳）で比べる |
+| `VRM update` | three-vrm の更新（SpringBone・表情など）にかかった時間 |
+| `draw calls` | WebGL は実測値。WebGPU は three r187 が記録しないため `n/a` |
+| `triangles` | WebGPU では `info.render.triangles` が 0 のため、メッシュの静的な合計を `(mesh)` 付きで表示 |
+| `textures` | GPU に確保されたテクスチャ数。WebGL は `Texture.source` 単位、WebGPU は `Texture` インスタンス単位で数えるため、同じモデルでも値が異なる |
+
+#### 最適化を 1 回だけ実行する
+
+`optimize=1`（パネルの **Optimize (once)**）では、生の VRM を 1 回だけ
+最適化 + エクスポートし、そのバイナリを全員分の読み込みに使い回します。
+体数を変えても再最適化はしません（モデル・レンダラー・アトラス解像度が
+変わったときだけ再実行）。最適化結果はパネルに、サイズ・マテリアル数・
+スケルトン統合の結果として表示されます。
+
+#### カスタム VRM
+
+パネルの **Upload VRM** から手元の VRM を読み込めます。直近 1 件だけ
+IndexedDB に保存し、再読み込みやレンダラー切替の後も復元します
+（**Clear custom** で削除）。
+
+#### 自動操作向け
+
+開発時は `window.__stressViewer` から `renderer` / `scene` / `camera` /
+`count()` を参照できます（通常ビューアの `window.__viewer` と同じ用途）。
 
 ### 描画性能の計測モード（`?perfprobe=1`）
 

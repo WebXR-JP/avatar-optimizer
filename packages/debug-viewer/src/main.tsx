@@ -5,13 +5,22 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { StressViewer } from './components/StressViewer.tsx'
+import { isStressRoute } from './stress-route.ts'
 
 import { BrowserRouter } from 'react-router-dom'
 
+// ストレステスト（/stress）は通常ビューアとは独立したページとして描画する。
+// StrictMode の二重マウントで VRM を 2 倍読み込んでしまうため、このページだけ
+// StrictMode の外に置く（計測条件を一定に保つため）。
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </StrictMode>,
+  isStressRoute(window.location.pathname)
+    ? <StressViewer />
+    : (
+      <StrictMode>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </StrictMode>
+    ),
 )
