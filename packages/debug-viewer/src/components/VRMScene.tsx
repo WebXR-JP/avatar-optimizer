@@ -11,6 +11,8 @@ import { createBonePointsHelper, updateBonePointsHelper } from '../utils/skeleto
 interface VRMSceneProps
 {
   vrm: VRM | null
+  vrmRevision?: number
+  isOptimizing?: boolean
   vrmAnimation: VRMAnimation | null
   debugMode: DebugMode
   springBoneEnabled?: boolean
@@ -25,7 +27,7 @@ interface VRMSceneProps
  * ライティング、グリッド、VRMモデルの配置を管理します。
  * OrbitControls でマウスによるカメラ操作を提供します。
  */
-function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false, showPointLights = false, logShaderInfo = false }: VRMSceneProps)
+function VRMScene({ vrm, vrmRevision = 0, isOptimizing = false, vrmAnimation, debugMode, springBoneEnabled = true, showBones = false, showColliders = false, showPointLights = false, logShaderInfo = false }: VRMSceneProps)
 {
   const { scene } = useThree()
   const mixerRef = useRef<AnimationMixer | null>(null)
@@ -57,6 +59,8 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
   }, [vrm, scene])
 
   // アニメーションのセットアップ
+  // 最適化・マイグレーション（vrmRevision の変化）で metaVersion や VRMHumanoidRig が
+  // 再構築されるため、クリップとミキサーを作り直す
   useEffect(() =>
   {
     if (!vrm || !vrmAnimation) return
@@ -71,7 +75,7 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
       mixer.stopAllAction()
       mixerRef.current = null
     }
-  }, [vrm, vrmAnimation])
+  }, [vrm, vrmAnimation, vrmRevision])
 
   // デバッグモードの変更をマテリアルに適用
   useEffect(() =>
@@ -92,7 +96,7 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
         }
       }
     })
-  }, [vrm, debugMode])
+  }, [vrm, debugMode, vrmRevision])
 
   // シェーダーキーワード確認用（onBeforeCompile）
   useEffect(() =>
@@ -183,7 +187,7 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
         bonePointsRef.current = null
       }
     }
-  }, [vrm, showBones, scene])
+  }, [vrm, showBones, scene, vrmRevision])
 
   // コライダー可視化ヘルパーの管理
   useEffect(() =>
@@ -225,11 +229,14 @@ function VRMScene({ vrm, vrmAnimation, debugMode, springBoneEnabled = true, show
       colliderHelpersRef.current.forEach(helper => scene.remove(helper))
       colliderHelpersRef.current = []
     }
-  }, [vrm, showColliders, scene])
+  }, [vrm, showColliders, scene, vrmRevision])
 
   // アニメーションループ
   useFrame((_state, delta) =>
   {
+    // 最適化処理中はボーン・SpringBone の更新を止め、バインドポーズが崩れないようにする
+    if (isOptimizing) return
+
     const dt = Math.min(delta, 0.05)
     if (mixerRef.current)
     {

@@ -48,14 +48,14 @@
     "@gltf-transform/extensions": "^4.0.0",
     "@pixiv/three-vrm": "^3.4.4",
     "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
-    "three": "^0.181.1"
+    "three": ">=0.181"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@gltf-transform/core": "^4.0.0",
     "@gltf-transform/extensions": "^4.0.0",
     "@types/node": "^24.10.0",
-    "@types/three": "^0.181.0",
+    "@types/three": "^0.187.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vitest/browser-playwright": "^4.0.16",

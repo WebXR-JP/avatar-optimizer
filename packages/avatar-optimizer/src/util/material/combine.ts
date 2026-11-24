@@ -11,16 +11,19 @@
  * - transparent: 半透明・深度書き込みなし（transparent === true && depthWrite === false）
  */
 
-import { MToonMaterial } from '@pixiv/three-vrm'
 import type {
   AtlasedTextureSet,
   MaterialSlotAttributeConfig,
   ParameterTextureDescriptor,
 } from '@webxr-jp/mtoon-atlas'
-import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
+import {
+  MToonAtlasMaterial,
+  type MToonAtlasMaterialConstructor,
+  type MToonAtlasMaterialLike,
+} from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import { BufferGeometry, DataTexture, Mesh, SkinnedMesh } from 'three'
-import type { OptimizationError } from '../../types'
+import type { MToonLikeMaterial, OptimizationError } from '../../types'
 import { mergeGeometriesWithSlotAttribute } from '../mesh/merge-mesh'
 import { createParameterTexture } from '../texture'
 import { getRenderMode, getRenderOrderForMode } from './index'
@@ -41,6 +44,7 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
   atlasSize: 2048,
   slotAttributeName: 'mtoonMaterialSlot',
   texelsPerSlot: 9,
+  materialType: MToonAtlasMaterial,
 }
 
 /**
@@ -52,7 +56,7 @@ const DEFAULT_OPTIONS: Required<CombineMaterialOptions> = {
  * @returns 結合されたメッシュと統計情報
  */
 export function combineMToonMaterials(
-  materialMeshMap: Map<MToonMaterial, Mesh[]>,
+  materialMeshMap: Map<MToonLikeMaterial, Mesh[]>,
   options?: CombineMaterialOptions,
   excludedMeshes?: Set<Mesh>,
 ): Result<CombinedMeshResult, OptimizationError>
@@ -72,14 +76,14 @@ export function combineMToonMaterials(
 ): Result<CombinedMeshResult, OptimizationError>
 
 export function combineMToonMaterials(
-  input: Map<MToonMaterial, Mesh[]> | MaterialInfo[],
+  input: Map<MToonLikeMaterial, Mesh[]> | MaterialInfo[],
   options: CombineMaterialOptions = {},
   excludedMeshes?: Set<Mesh>,
 ): Result<CombinedMeshResult, OptimizationError> {
   // MaterialInfo[]形式に統一
   let materialInfos: MaterialInfo[]
   if (input instanceof Map) {
-    // 旧API: Map<MToonMaterial, Mesh[]>からMaterialInfo[]に変換
+    // 旧API: Map<MToonLikeMaterial, Mesh[]>からMaterialInfo[]に変換
     materialInfos = []
     for (const [material, meshes] of input) {
       materialInfos.push({
@@ -121,10 +125,10 @@ function groupMaterialInfoByRenderMode(
  */
 interface SingleGroupResult {
   mesh: Mesh | null
-  material: MToonAtlasMaterial
+  material: MToonAtlasMaterialLike
   outlineMesh?: Mesh
-  outlineMaterial?: MToonAtlasMaterial
-  materialSlotIndex: Map<MToonMaterial, number>
+  outlineMaterial?: MToonAtlasMaterialLike
+  materialSlotIndex: Map<MToonLikeMaterial, number>
   meshCount: number
   materialCount: number
 }
@@ -159,7 +163,7 @@ function processSingleGroup(
     )
 
     // マテリアルとメッシュのマッピング
-    const materialSlotIndex = new Map<MToonMaterial, number>()
+    const materialSlotIndex = new Map<MToonLikeMaterial, number>()
     materials.forEach((mat, index) => {
       materialSlotIndex.set(mat, index)
     })
@@ -186,6 +190,7 @@ function processSingleGroup(
       opts.texelsPerSlot,
       opts.slotAttributeName,
       renderMode,
+      opts.materialType,
     )
 
     // マージ対象がない場合はマテリアルのみ返す（excludedMeshes専用グループ）
@@ -221,7 +226,7 @@ function processSingleGroup(
 
     // アウトラインメッシュの作成
     let outlineMesh: Mesh | undefined
-    let outlineMaterial: MToonAtlasMaterial | undefined
+    let outlineMaterial: MToonAtlasMaterialLike | undefined
 
     if (hasAnyOutline) {
       outlineMaterial = atlasMaterial.createOutlineMaterial(
@@ -257,7 +262,7 @@ function processSingleGroup(
  */
 function createCombinedMesh(
   geometry: BufferGeometry,
-  material: MToonAtlasMaterial,
+  material: MToonAtlasMaterialLike,
   sourceMeshes: Mesh[],
   name: string,
 ): { mesh: Mesh; firstSkinnedMesh: SkinnedMesh | undefined } {
@@ -312,7 +317,7 @@ function combineMToonMaterialsInternal(
 
     // 各グループを処理
     const groups = new Map<RenderMode, MeshGroup>()
-    const materialSlotIndex = new Map<MToonMaterial, MaterialSlotInfo>()
+    const materialSlotIndex = new Map<MToonLikeMaterial, MaterialSlotInfo>()
 
     let totalMeshCount = 0
     let totalMaterialCount = 0
@@ -387,13 +392,14 @@ function combineMToonMaterialsInternal(
  * パラメータテクスチャを設定
  */
 function createMToonAtlasMaterial(
-  representativeMaterial: MToonMaterial,
+  representativeMaterial: MToonLikeMaterial,
   parameterTexture: DataTexture,
   slotCount: number,
   texelsPerSlot: number,
   slotAttributeName: string,
   renderMode: RenderMode,
-): MToonAtlasMaterial {
+  MaterialType: MToonAtlasMaterialConstructor,
+): MToonAtlasMaterialLike {
   // アトラス化されたテクスチャセットを構築
   const atlasedTextures: AtlasedTextureSet = {}
 
@@ -438,8 +444,8 @@ function createMToonAtlasMaterial(
     description: 'Material slot index for instancing',
   }
 
-  // MToonAtlasMaterialを作成
-  const material = new MToonAtlasMaterial({
+  // アトラスマテリアルを作成（GLSL 版 / TSL 版）
+  const material = new MaterialType({
     parameterTexture: parameterTextureDescriptor,
     slotAttribute,
   })
@@ -454,7 +460,13 @@ function createMToonAtlasMaterial(
   } else if (renderMode === 'alphaTest') {
     material.transparent = false
     material.alphaTest = 0.5
-    material.updateDefines() // ALPHATESTのdefineを更新
+    // GLSL 版は ALPHATEST の define を更新する必要がある（TSL 版は不要）
+    if (
+      'updateDefines' in material &&
+      typeof material.updateDefines === 'function'
+    ) {
+      material.updateDefines()
+    }
   } else {
     material.transparent = false
   }

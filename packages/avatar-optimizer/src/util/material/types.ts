@@ -3,11 +3,13 @@
  * テクスチャアトラス化とモデル編集に必要な型を集約
  */
 
-import { MToonMaterial } from '@pixiv/three-vrm'
-import { MToonAtlasMaterial } from '@webxr-jp/mtoon-atlas'
+import type {
+  MToonAtlasMaterialConstructor,
+  MToonAtlasMaterialLike,
+} from '@webxr-jp/mtoon-atlas'
 import { Matrix3, Mesh } from 'three'
 import type { SimplifyStatistics } from '../../process/simplify'
-import { OffsetScale } from '../../types'
+import { MToonLikeMaterial, OffsetScale } from '../../types'
 
 /**
  * テクスチャパッキングの結果
@@ -100,6 +102,8 @@ export interface CombineMaterialOptions {
   slotAttributeName?: string
   /** パラメータテクスチャのテクセル数（デフォルト: 8） */
   texelsPerSlot?: number
+  /** 生成するアトラスマテリアルのクラス（デフォルト: MToonAtlasMaterial） */
+  materialType?: MToonAtlasMaterialConstructor
 }
 
 /**
@@ -130,7 +134,7 @@ export type RenderMode =
  */
 export interface MaterialInfo {
   /** マテリアル */
-  material: MToonMaterial
+  material: MToonLikeMaterial
   /** このマテリアルを使用しているメッシュ */
   meshes: Mesh[]
   /** アウトラインが有効かどうか */
@@ -149,11 +153,11 @@ export interface MeshGroup {
   /** 結合されたメッシュ（excludedMeshesのみの場合はnull） */
   mesh: Mesh | null
   /** 使用されたMToonAtlasMaterial */
-  material: MToonAtlasMaterial
+  material: MToonAtlasMaterialLike
   /** アウトライン用メッシュ */
   outlineMesh?: Mesh
   /** アウトライン用MToonAtlasMaterial */
-  outlineMaterial?: MToonAtlasMaterial
+  outlineMaterial?: MToonAtlasMaterialLike
 }
 
 /**
@@ -170,10 +174,10 @@ export interface MaterialSlotInfo {
  * アトラス化・マテリアル統合をスキップした理由
  *
  * `ALREADY_OPTIMIZED`: 既に最適化済みだった。アトラス化するとマテリアルは
- *   MToonAtlasMaterial に置き換わるため、2 回目以降は MToonMaterial が
+ *   MToonAtlasMaterialLike に置き換わるため、2 回目以降は MToonLikeMaterial が
  *   見つからない。この場合は簡略化・マイグレーションも含めて何も行わない
  *   （いずれも冪等ではなく、再適用するとモデルが劣化・破壊されるため）。
- * `NO_MTOON_MATERIAL`: モデルに MToonMaterial が 1 つも無かった。
+ * `NO_MTOON_MATERIAL`: モデルに MToonLikeMaterial が 1 つも無かった。
  *   最適化対象が存在しないため、簡略化とマイグレーションのみ実行される。
  */
 export type AtlasSkipReason = 'ALREADY_OPTIMIZED' | 'NO_MTOON_MATERIAL'
@@ -204,7 +208,7 @@ export interface CombinedMeshResult {
   /** レンダーモードごとのメッシュグループ */
   groups: Map<RenderMode, MeshGroup>
   /** マテリアルからスロット情報へのマッピング */
-  materialSlotIndex: Map<MToonMaterial, MaterialSlotInfo>
+  materialSlotIndex: Map<MToonLikeMaterial, MaterialSlotInfo>
   /** 統計情報 */
   statistics: {
     /** 元のメッシュ数 */

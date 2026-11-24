@@ -1,17 +1,71 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, type GLProps } from '@react-three/fiber'
 import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import type { PerspectiveCamera, WebGLRenderer, Texture } from 'three'
+import { WebGPURenderer } from 'three/webgpu'
 import VRMScene from './VRMScene'
 import { MToonAtlasMaterial, type DebugMode } from '@webxr-jp/mtoon-atlas'
-import type { AtlasGenerationOptions, SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
+import { setKtx2Renderer, type AtlasGenerationOptions, type SimplifyStatistics } from '@webxr-jp/avatar-optimizer'
 import { useSpector } from '../hooks/useSpector'
 import { useWebGLDebug } from '../hooks/useWebGLDebug'
 
 import { LicenseSection } from './LicenseSection'
+import { PerfProbe } from './PerfProbe'
+import { perfProbeEnabled } from '../utils/perf-probe'
+import { rendererMode, rendererFallbackReason, switchRendererMode, type RendererMode } from '../renderer-mode'
 import './VRMCanvas.css'
 
+
+/**
+ * R3F の Canvas に渡すレンダラー設定
+ *
+ * WebGPU のときは WebGPURenderer を生成して init() 完了を待ってから返す。
+ * WebGL のときは R3F 既定の WebGLRenderer に渡すパラメータのみ指定する
+ */
+const CANVAS_GL_PROPS: GLProps = rendererMode === 'webgpu'
+  ? async (props) =>
+  {
+    const renderer = new WebGPURenderer({
+      // R3F の型は WebGL 前提で lib.dom と別定義の OffscreenCanvas を含むためキャストする
+      canvas: props.canvas as HTMLCanvasElement,
+      antialias: true,
+      alpha: true,
+    })
+    await renderer.init()
+    // KTX2 の対応形式を、一時 WebGLRenderer ではなく描画に使う WebGPURenderer で判定させる
+    setKtx2Renderer(renderer)
+    // R3F の Renderer 型は render() を持つことだけを要求する
+    return renderer as unknown as WebGLRenderer
+  }
+  : {
+    antialias: true,
+    alpha: true,
+  }
+
+/** レンダラーが実際に使っているバックエンドの表示情報 */
+interface BackendInfo
+{
+  label: 'WebGL' | 'WebGPU'
+  /** フォールバックが起きた理由。正常なら null */
+  note: string | null
+}
+
+/**
+ * レンダラーが実際に使っているバックエンドと、フォールバック時の補足を返す
+ *
+ * @param gl - R3F が保持するレンダラー（WebGLRenderer または WebGPURenderer）
+ */
+function getBackendInfo(gl: unknown): BackendInfo
+{
+  const renderer = gl as { isWebGPURenderer?: boolean; backend?: { isWebGPUBackend?: boolean } }
+  if (!renderer.isWebGPURenderer) return { label: 'WebGL', note: null }
+  if (renderer.backend?.isWebGPUBackend) return { label: 'WebGPU', note: null }
+  return {
+    label: 'WebGL',
+    note: 'WebGPU の初期化に失敗したため WebGL2 バックエンドで描画しています',
+  }
+}
 
 /**
  * Debug Mode ごとの説明文
@@ -195,6 +249,7 @@ function ExpressionSection({ vrm }: { vrm: VRM })
 interface VRMCanvasProps
 {
   vrm: VRM | null
+  vrmRevision: number
   currentTab: number
   isLoading: boolean
   error: string | null
@@ -209,6 +264,10 @@ interface VRMCanvasProps
   isReplacingTextures: boolean
   vrmAnimation: VRMAnimation | null
   onPlayAnimation: () => Promise<void>
+  /** 読み込み済みモーションの表示名（同梱サンプル名 or ファイル名） */
+  animationName: string | null
+  isLoadingAnimation: boolean
+  onAnimationFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   debugMode: DebugMode
   onDebugModeChange: (mode: DebugMode) => void
   springBoneEnabled: boolean
@@ -263,6 +322,7 @@ function CameraAspectUpdater()
  */
 function VRMCanvas({
   vrm,
+  vrmRevision,
   currentTab,
   isLoading,
   error,
@@ -277,6 +337,9 @@ function VRMCanvas({
   isReplacingTextures,
   vrmAnimation,
   onPlayAnimation,
+  animationName,
+  isLoadingAnimation,
+  onAnimationFileChange,
   debugMode,
   onDebugModeChange,
   springBoneEnabled,
@@ -303,8 +366,12 @@ function VRMCanvas({
 }: VRMCanvasProps)
 {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const animationInputRef = useRef<HTMLInputElement>(null)
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null)
   const [glRenderer, setGlRenderer] = useState<WebGLRenderer | null>(null)
+  // 実際に使われている描画バックエンド。WebGPURenderer は WebGPU が使えないと
+  // WebGL2 バックエンドに黙ってフォールバックするため、画面に明示する
+  const [backendInfo, setBackendInfo] = useState<BackendInfo | null>(null)
 
   // Spector.js WebGLデバッグ（開発環境のみ）
   const { captureFrame, displayUI: displaySpectorUI, isReady: isSpectorReady } = useSpector(canvasElement)
@@ -348,6 +415,11 @@ function VRMCanvas({
     fileInputRef.current?.click()
   }, [])
 
+  const handleAnimationButtonClick = useCallback(() =>
+  {
+    animationInputRef.current?.click()
+  }, [])
+
   return (
     <div className="vrm-canvas">
       {/* 3D Viewport タブ以外では隠すだけにする。
@@ -356,6 +428,33 @@ function VRMCanvas({
         <h1 className="vrm-sidebar__title">VRM Debug Viewer</h1>
 
         <Section title="モデル" defaultOpen>
+          <label className="vrm-field">
+            <span className="vrm-field__label">レンダラー</span>
+            <select
+              className="vrm-field__select"
+              value={rendererMode}
+              onChange={(e) => switchRendererMode(e.target.value as RendererMode)}
+              title="切り替えるとページを再読み込みします"
+            >
+              <option value="webgl">WebGL</option>
+              <option value="webgpu">WebGPU</option>
+            </select>
+          </label>
+          {backendInfo && (
+            <div className="vrm-field__label" data-testid="renderer-backend">
+              Backend: {backendInfo.label}
+            </div>
+          )}
+          {rendererFallbackReason && (
+            <p className="vrm-note" data-testid="renderer-fallback">
+              {rendererFallbackReason}
+            </p>
+          )}
+          {backendInfo?.note && (
+            <p className="vrm-note" data-testid="renderer-backend-note">
+              {backendInfo.note}
+            </p>
+          )}
           <select
             className="vrm-field__select"
             value={selectedModel}
@@ -386,7 +485,7 @@ function VRMCanvas({
 
         {vrm && (
           <Section title="ライセンス">
-            <LicenseSection key={vrm.scene.uuid} vrm={vrm} />
+            <LicenseSection key={`${vrm.scene.uuid}-${vrmRevision}`} vrm={vrm} />
           </Section>
         )}
 
@@ -581,10 +680,28 @@ function VRMCanvas({
           <button
             className="vrm-btn"
             onClick={onPlayAnimation}
-            disabled={!vrm || !!vrmAnimation}
+            disabled={!vrm || !!vrmAnimation || isLoadingAnimation}
           >
-            {vrmAnimation ? 'Playing Animation' : 'Play Animation'}
+            {vrmAnimation ? 'Playing Animation' : isLoadingAnimation ? 'Loading...' : 'Play Animation'}
           </button>
+          <button
+            className="vrm-btn"
+            onClick={handleAnimationButtonClick}
+            disabled={isLoadingAnimation}
+            title="手元の VRMA ファイルでモーションを差し替える"
+          >
+            Upload VRMA
+          </button>
+          <input
+            ref={animationInputRef}
+            type="file"
+            accept=".vrma"
+            onChange={onAnimationFileChange}
+            style={{ display: 'none' }}
+          />
+          {animationName && (
+            <p className="vrm-note" data-testid="animation-name">Animation: {animationName}</p>
+          )}
         </Section>
 
         {(isSpectorReady || glRenderer) && (
@@ -621,26 +738,48 @@ function VRMCanvas({
 
       <div className="vrm-canvas__viewport">
         <Canvas
-          shadows
+          // three r187 で PCFSoftShadowMap が WebGL / WebGPU とも削除され、指定すると
+          // 警告を出して PCFShadowMap に戻されるため、最初から PCFShadowMap を使う
+          shadows="percentage"
           camera={{
             position: [0, 1.5, 3],
             fov: 45,
             near: 0.1,
             far: 100,
           }}
-          gl={{
-            antialias: true,
-            alpha: true,
-          }}
-          onCreated={({ gl }) =>
+          gl={CANVAS_GL_PROPS}
+          onCreated={({ gl, scene, size, camera }) =>
           {
-            gl.shadowMap.type = 2 // THREE.PCFSoftShadowMap
-            setCanvasElement(gl.domElement)
-            setGlRenderer(gl)
+            // gl を非同期ファクトリーで作ると、R3F が初期サイズを確定させる時点で
+            // レンダラーがまだ無く setSize が呼ばれない。WebGPU では深度バッファが
+            // 300x150 のまま残り、描画先とのサイズ不一致で全フレームが無効になる
+            if (rendererMode === 'webgpu')
+            {
+              gl.setSize(size.width, size.height)
+            }
+            setBackendInfo(getBackendInfo(gl))
+            // 開発時のみ、ブラウザ自動操作から描画状態を調べられるよう公開する
+            if (import.meta.env.DEV)
+            {
+              (window as unknown as { __viewer?: unknown }).__viewer = {
+                renderer: gl,
+                scene,
+                camera,
+                rendererMode,
+                rendererFallbackReason,
+              }
+            }
+            // Spector.js と WebGL デバッグツールは WebGL コンテキスト専用
+            if (rendererMode === 'webgl')
+            {
+              setCanvasElement(gl.domElement)
+              setGlRenderer(gl)
+            }
           }}
         >
           <CameraAspectUpdater />
-          <VRMScene vrm={vrm} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
+          {perfProbeEnabled && <PerfProbe vrm={vrm} />}
+          <VRMScene vrm={vrm} vrmRevision={vrmRevision} isOptimizing={isOptimizing} vrmAnimation={vrmAnimation} debugMode={debugMode} springBoneEnabled={springBoneEnabled} showBones={showBones} showColliders={showColliders} showPointLights={showPointLights} logShaderInfo={logShaderInfo} />
         </Canvas>
 
         {currentTab === 0 && error && (

@@ -1,5 +1,9 @@
-import type { VRM } from '@pixiv/three-vrm'
-import { ParameterSemanticId } from '@webxr-jp/mtoon-atlas'
+import type { MToonMaterial, VRM } from '@pixiv/three-vrm'
+import type { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
+import {
+  type MToonAtlasMaterialConstructor,
+  ParameterSemanticId,
+} from '@webxr-jp/mtoon-atlas'
 import type { UastcQuality } from '@webxr-jp/texture-compression'
 import {
   ColorSpace,
@@ -93,7 +97,25 @@ export interface OptimizeModelOptions {
    * 設定された場合、excludedMeshes以外のメッシュを簡略化
    */
   simplify?: SimplifyOptions
+  /**
+   * 統合後に使うアトラスマテリアルのクラス。
+   * 省略時は MToonAtlasMaterial（WebGL 専用）。
+   *
+   * WebGPURenderer で描画する場合（入力が MToonNodeMaterial の場合）は
+   * `@webxr-jp/mtoon-atlas/nodes` の MToonAtlasNodeMaterial を渡す。
+   * MToonNodeMaterial を含むモデルで省略すると INVALID_PARAMETER になる
+   */
+  atlasMaterialType?: MToonAtlasMaterialConstructor
 }
+
+/**
+ * 最適化対象の MToon マテリアル
+ *
+ * WebGL 用の MToonMaterial と、WebGPURenderer 用の MToonNodeMaterial（TSL）の
+ * どちらも扱う。両者は同名のパラメータを持つ。
+ * MToonNodeMaterial は型としてのみ参照し、実行時に three/webgpu を読み込まない
+ */
+export type MToonLikeMaterial = MToonMaterial | MToonNodeMaterial
 
 /**
  * three-vrm / GLTFLoader で読み込んだ VRM ドキュメント

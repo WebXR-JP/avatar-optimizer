@@ -1,4 +1,3 @@
-import { MToonMaterial } from '@pixiv/three-vrm'
 import { ParameterSemanticId } from '@webxr-jp/mtoon-atlas'
 import { err, ok, Result, safeTry } from 'neverthrow'
 import {
@@ -14,6 +13,7 @@ import {
   AtlasImageMap,
   AtlasTextureDescriptor,
   MTOON_TEXTURE_SLOTS,
+  MToonLikeMaterial,
   OffsetScale,
   OptimizationError,
   PARAMETER_LAYOUT,
@@ -85,7 +85,7 @@ function roundToNearestPowerOfTwo(value: number): number {
  * @returns スロット名をキーにしたアトラス画像のマップ
  */
 export function generateAtlasImages(
-  materials: MToonMaterial[],
+  materials: MToonLikeMaterial[],
   placements: OffsetScale[],
 ): Result<AtlasImageMap, OptimizationError> {
   return safeTry(function* () {
@@ -135,7 +135,7 @@ export function generateAtlasImages(
  * @returns DataTexture
  */
 export function createParameterTexture(
-  materials: MToonMaterial[],
+  materials: MToonLikeMaterial[],
   texelsPerSlot: number = 9,
 ): Result<DataTexture, OptimizationError> {
   if (materials.length === 0) {
@@ -215,12 +215,12 @@ function packParameterValue(
 /**
  * MToonMaterialからパラメータ値を抽出
  *
- * @param material - MToonMaterial
+ * @param material - MToonLikeMaterial
  * @param semanticId - パラメータのセマンティクスID
  * @returns パラメータ値（Vector3, Vector4, number のいずれか）
  */
 function extractParameterValue(
-  material: MToonMaterial,
+  material: MToonLikeMaterial,
   semanticId: ParameterSemanticId,
 ): Vector3 | Vector4 | number {
   switch (semanticId) {

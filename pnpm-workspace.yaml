@@ -15,3 +15,9 @@ allowBuilds:
   esbuild: false
   geckodriver: false
   msw: false
+# three r187 で `three/tsl` から `transformedNormalView` が削除され、three-vrm 3.4.4〜3.5.5 の
+# `@pixiv/three-vrm/nodes`（MToonNodeMaterial）が import 時に失敗する。上流の修正
+# （https://github.com/pixiv/three-vrm/pull/1890）と同じく `normalView` に置き換えている。
+# three-vrm が修正版をリリースしたら、更新してこのパッチを削除すること。
+patchedDependencies:
+  '@pixiv/three-vrm@3.4.4': patches/@pixiv__three-vrm@3.4.4.patch

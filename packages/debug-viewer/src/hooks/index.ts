@@ -1,6 +1,6 @@
 export { useVRMScene } from './useVRMScene'
 export { loadVRM, loadVRMFromFile, type VRMLoaderError } from './useVRMLoader'
 export { replaceVRMTextures, type TextureReplacementError } from './useTextureReplacement'
-export { loadVRMAnimation, type VRMAnimationLoaderError } from './useVRMAnimationLoader'
+export { loadVRMAnimation, loadVRMAnimationFromFile, type VRMAnimationLoaderError } from './useVRMAnimationLoader'
 export { useSpector } from './useSpector'
 export { useWebGLDebug } from './useWebGLDebug'

@@ -31,6 +31,57 @@ pnpm -F debug-viewer run build
 pnpm -F debug-viewer run preview
 ```
 
+### レンダラーの切り替え（WebGL / WebGPU）
+
+サイドバー「モデル」のレンダラー選択で切り替えます（URL の `?renderer=webgpu` でも指定可能）。切り替えるとページを再読み込みします。
+
+- WebGPU では MToon を three-vrm の `MToonNodeMaterial`、最適化済み VRM を mtoon-atlas の `MToonAtlasNodeMaterial` で読み込み、`WebGPURenderer` で描画します
+- WebGPU のアダプタが取得できない環境では three が WebGL2 バックエンドに自動でフォールバックします。実際のバックエンドはレンダラー選択の下に表示されます
+- Spector.js と「WebGL ツール」は WebGL のときのみ使えます
+- WebGPU での `Optimize` は `atlasMaterialType: MToonAtlasNodeMaterial` を指定して最適化します
+- 開発時は `window.__viewer`（`renderer` / `scene` / `camera` / `rendererMode`）から描画状態を参照できます
+- 開発時は `window.__viewerApp` から読み込み・最適化・表示を呼べます。WebGL 用マテリアルで読み込んで最適化した結果を WebGPU で表示する、といった比較に使えます
+
+```javascript
+const app = window.__viewerApp
+const src = await app.loadVRMWithWebGLMaterials('/AliciaSolid.vrm')
+await app.optimizeModel(src.value, { migrateVRM0ToVRM1: true })
+const buf = await app.exportVRM(src.value)
+const result = await app.loadVRM(buf.value) // 現在のレンダラーに合ったマテリアルで読み込む
+app.setVRM(result.value)
+```
+
+### 描画性能の計測モード（`?perfprobe=1`）
+
+Safari・Quest など、手元で DevTools を開けないブラウザで描画の問題を調べるための開発用モードです。`pnpm dev` の開発サーバーでのみ動きます。
+
+```
+https://<dev サーバー>/?renderer=webgpu&perfprobe=1
+```
+
+VRM を読み込むと、次の順に計測します。
+
+1. 条件を変えながら描画時間を測る（そのまま / 影なし / VRM 非表示 / VRM の影なし / メッシュ 1 つずつの影）
+2. 測り終えたら、5 秒ごとに状態を送り続ける
+
+記録はページから開発サーバーの `/__perf-log` に送られ、`node_modules/.cache/perf-log.jsonl` に JSON Lines で追記されます。
+
+| kind | 内容 |
+|------|------|
+| `env` | UA、実際のバックエンド、dpr、キャンバスサイズ |
+| `meshes` | VRM の各メッシュ（頂点数・モーフ数・マテリアル） |
+| `stage` / `monitor` | フレーム間隔、`render()` の CPU 時間、GPU 完了待ち、ドローコール、パイプラインの生成回数（`pipelineCreations`） |
+| `gpu-error` | 捕捉されなかった WebGPU のエラー |
+| `shader-compile` | WGSL のコンパイルエラー（該当行付き） |
+| `console-error` / `console-warn` | console 出力。長いもの（Metal のコンパイルエラーなど）はエラー行と末尾だけ |
+| `ui-click` / `ui-change` | ボタン操作・入力の変更（何をした直後に壊れたかを追うため） |
+| `setSize` | レンダラーのリサイズ |
+
+```bash
+# 最新の記録を見る
+tail -f packages/debug-viewer/node_modules/.cache/perf-log.jsonl
+```
+
 ### 同梱モデル
 
 モデル選択のドロップダウンから読み込めます。
@@ -75,10 +126,22 @@ AliciaSolid（VRM 0.x）の場合は次のように変わります。
 
 ### サンプルモーション
 
-開発時の動作確認用モーションとして、以下のページから VRMA ファイルをダウンロードし、`public/vrma/` に配置してください（ディレクトリがない場合は作成してください）。
-今はVRMA_03.vrmaだけ使ってます
+動作確認用の VRMA は `public/samples/test.vrma` に同梱しています。
+これは [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) のサンプルモーションをそのまま置いたもので、
+`Play Animation` を押すと再生されます。追加のダウンロードは不要です。
 
-https://booth.pm/ja/items/5512385?srsltid=AfmBOop7sRKuMxeJwy_4IiEbqh4LKRcvTrI3b2AlYSh2IAC-48yIXH0Q
+```bash
+# 同梱ファイルを three-vrm の最新サンプルで更新する場合
+curl -sL -o packages/debug-viewer/public/samples/test.vrma \
+  https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm-animation/examples/models/test.vrma
+```
+
+自前のモーションで確認したい場合は、サイドバー「その他」セクションの **Upload VRMA** から
+`.vrma` ファイルを選択すると、そのモーションに差し替えて再生します（リポジトリには保存されません）。
+再生中のモーション名はボタンの下に表示されます。
+
+`public/vrma/` に置いて起動時から使いたい場合は、`src/App.tsx` の `SAMPLE_VRMA_PATH` を
+そのパスに変更してください（`public/vrma/` はリポジトリに含めないよう `.gitignore` 済みです）。
 
 ## 依存関係
 

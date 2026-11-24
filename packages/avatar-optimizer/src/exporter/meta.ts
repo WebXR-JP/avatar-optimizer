@@ -183,3 +183,34 @@ export function buildVRM1MetaDef(
     ? migrateVRM0Meta(meta, thumbnailImage)
     : convertVRM1Meta(meta as VRM1Meta, thumbnailImage)
 }
+
+/**
+ * ランタイムの VRM 0.x メタ情報を VRM 1.0 の VRM1Meta オブジェクトへ変換する
+ *
+ * VRM 0.x -> VRM 1.0 マイグレーション後に vrm.meta を更新するために使う。
+ * 権限フィールドの変換規則は buildVRM1MetaDef（エクスポート時変換）と同一で、
+ * サムネイルは VRM0Meta.texture.image を VRM1Meta.thumbnailImage へ移す。
+ * 既に VRM 1.0 のメタであればそのまま返す。
+ *
+ * @param meta - three-vrm が保持するメタ情報
+ */
+export function migrateVRM0MetaToVRM1(meta: VRMMeta): VRM1Meta {
+  if (!isVRM0Meta(meta)) {
+    return meta as VRM1Meta
+  }
+
+  const { thumbnailImage: _unusedIndex, ...rest } = migrateVRM0Meta(
+    meta,
+    undefined,
+  )
+  const thumbnailImage = meta.texture?.image as HTMLImageElement | undefined
+
+  return {
+    ...rest,
+    metaVersion: '1',
+    name: rest.name ?? '',
+    authors: rest.authors ?? [],
+    licenseUrl: rest.licenseUrl ?? DEFAULT_LICENSE_URL,
+    thumbnailImage,
+  }
+}

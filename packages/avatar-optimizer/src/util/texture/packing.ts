@@ -8,14 +8,60 @@
  * 複数の変種を提供し、高品質なテクスチャレイアウトを生成します。
  */
 
-import { MaxRectsBssf, Packer } from 'rectpack-ts'
+import { MaxRectsBssf, Packer, PackerBBF } from 'rectpack-ts'
 import { Rectangle } from 'rectpack-ts/dist/src/geometry'
+import type { PackingAlgorithm } from 'rectpack-ts/dist/src/packing-algorithm'
 import { SORT_AREA } from 'rectpack-ts/dist/src/sorting.js'
 import { Vector2 } from 'three'
 import type { PackingLayouts } from '../material/types'
 
 const ATLAS_SIZE = 2048 // ←相対値しか返さないので割となんでもいい
 const SCALE_SEARCH_EPSILON = 0.0001
+
+/**
+ * テクスチャがアトラスに収まらなかったことを表すエラー。
+ * 自動スケーリングはこのエラーのときだけ縮小して再試行し、
+ * それ以外の例外（ライブラリ内部の不具合など）は握り潰さずに伝播させる。
+ */
+class TextureDoesNotFitError extends Error {}
+
+/**
+ * rectpack-ts の PackerBBF（Bin Best Fit）を、エンジン非依存に動くよう置き換えたもの。
+ *
+ * 元の fitRect は空配列に対する reduce の TypeError を握り潰して
+ * 「収まる open bin が無い」ことを検出しているが、その判定を
+ * V8 のエラーメッセージ（'Reduce of empty array ...'）の文字列一致で行っている。
+ * Safari (JavaScriptCore) のメッセージは 'reduce of empty array ...' と小文字始まりのため
+ * 判定に外れて再 throw され、最初の矩形すら配置できずパッキングが常に失敗する。
+ *
+ * ここでは配列長を見て分岐し、エラーメッセージに依存しない。
+ * それ以外の挙動（最良 fitness の bin を選ぶ・無ければ新しい bin を開く）は元実装と同じ。
+ * パッチではなくサブクラスにしているのは、利用側のインストールにも効かせるため。
+ */
+class EngineSafePackerBBF extends PackerBBF {
+  fitRect(width: number, height: number, rid?: string): boolean {
+    let bestBin: PackingAlgorithm | null = null
+    let bestFitness = Infinity
+    for (const bin of this._openBins) {
+      const fitness = bin.fitness(width, height)
+      if (fitness !== null && fitness < bestFitness) {
+        bestFitness = fitness
+        bestBin = bin
+      }
+    }
+
+    if (bestBin) {
+      bestBin.addRect(width, height, rid)
+      return true
+    }
+
+    while (true) {
+      const newBin = this._newOpenBin(width, height)
+      if (!newBin) return false
+      if (newBin.addRect(width, height, rid)) return true
+    }
+  }
+}
 
 /**
  * テクスチャサイズ配列をパッキング（単一ビンモード）
@@ -49,6 +95,7 @@ export function packTexturesWithMaxRects(
   // - sortAlgo: SORT_AREA（面積でソート）
   // - rotation: true（回転を許可）
   const packer = new Packer({
+    binAlgo: EngineSafePackerBBF,
     packAlgo: MaxRectsBssf,
     sortAlgo: SORT_AREA,
     rotation: true,
@@ -68,7 +115,7 @@ export function packTexturesWithMaxRects(
   // パッキング結果を取得
   const bins = packer.binList()
   if (bins.length === 0) {
-    throw new Error('Packing failed: No bins were created')
+    throw new TextureDoesNotFitError('Packing failed: No bins were created')
   }
 
   // 最初のビンを取得
@@ -86,14 +133,14 @@ export function packTexturesWithMaxRects(
 
   // すべてのテクスチャがパッキングされたか確認
   if (packed.length !== sizes.length) {
-    throw new Error(
+    throw new TextureDoesNotFitError(
       `Packing failed: ${packed.length}/${sizes.length} textures packed. Textures do not fit in atlas.`,
     )
   }
 
   // 複数のビンが使用されていないか確認
   if (bins.length > 1) {
-    throw new Error(
+    throw new TextureDoesNotFitError(
       `Packing failed: ${bins.length} bins required, but expected single bin. Textures do not fit in atlas.`,
     )
   }
@@ -131,8 +178,9 @@ export async function packTexturesWithAutoScaling(
   // まずは等倍でトライし、成功すればそのまま返す
   try {
     return attemptPack(1)
-  } catch {
-    // 続行してスケールを絞り込む
+  } catch (error) {
+    // 収まらない場合のみスケールを絞り込む。それ以外は本当の失敗なので伝播
+    if (!(error instanceof TextureDoesNotFitError)) throw error
   }
 
   const minScaleLimit = computeMinScaleLimit(sizes)
@@ -152,7 +200,8 @@ export async function packTexturesWithAutoScaling(
       lastSuccessScale = currentScale
       lastSuccessResult = result
       break
-    } catch {
+    } catch (error) {
+      if (!(error instanceof TextureDoesNotFitError)) throw error
       lastFailedScale = currentScale
       if (currentScale <= minScaleLimit) {
         throw new Error(
@@ -192,7 +241,8 @@ export async function packTexturesWithAutoScaling(
       lastSuccessScale = mid
       lastSuccessResult = result
       low = mid
-    } catch {
+    } catch (error) {
+      if (!(error instanceof TextureDoesNotFitError)) throw error
       high = mid
     }
   }

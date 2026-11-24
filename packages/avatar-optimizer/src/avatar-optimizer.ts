@@ -1,17 +1,24 @@
-import { MToonMaterial, VRM } from '@pixiv/three-vrm'
-import { ok, ResultAsync, safeTry } from 'neverthrow'
-import { Bone, BufferAttribute, Mesh } from 'three'
+import type { VRM } from '@pixiv/three-vrm'
+import { err, ok, ResultAsync, safeTry } from 'neverthrow'
+import { BufferAttribute, Mesh } from 'three'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
+import { migrateVRM0ToVRM1 } from './process/migrate-vrm'
 import { buildPatternMaterialMappings, pack } from './process/packing'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { simplifyMeshes, SimplifyStatistics } from './process/simplify'
-import { OffsetScale, OptimizationError, OptimizeModelOptions } from './types'
+import {
+  MToonLikeMaterial,
+  OffsetScale,
+  OptimizationError,
+  OptimizeModelOptions,
+} from './types'
 import {
   assignAtlasTexturesToMaterial,
   CombinedMeshResult,
   combineMToonMaterials as combineMeshAndMaterial,
   getMToonMaterialInfoFromObject3D,
   getRenderOrderForMode,
+  isMToonLikeMaterial,
 } from './util/material'
 import { deleteMesh } from './util/mesh/deleter'
 import {
@@ -20,8 +27,6 @@ import {
   createEmptyCombinedMeshResult,
   hasAtlasedMaterial,
 } from './util/optimize-helpers'
-import { migrateSkeletonVRM0ToVRM1 } from './util/skeleton'
-import { migrateSpringBone } from './util/springbone'
 
 /**
  * 受け取ったThree.jsオブジェクトのツリーのメッシュ及びそのマテリアルを走査し、
@@ -41,8 +46,12 @@ export function optimizeModel(
   return safeTry(async function* () {
     const rootNode = vrm.scene
 
-    // SpringBoneを初期姿勢にリセット（マイグレーション前に物理演算の影響を排除）
+    // SpringBone・Humanoid を初期姿勢（バインドポーズ）にリセット
+    // アニメーション再生中や物理演算による変形がメッシュ統合・マイグレーションに混入しないようにする
     vrm.springBoneManager?.reset()
+    vrm.humanoid?.resetNormalizedPose?.()
+    vrm.humanoid?.resetRawPose?.()
+    rootNode.updateMatrixWorld(true)
 
     // モデルのマテリアル集計（アウトライン情報を含む）
     const materialInfoResult = getMToonMaterialInfoFromObject3D(rootNode)
@@ -55,8 +64,24 @@ export function optimizeModel(
       const materialInfos = materialInfoResult.value
       const materials = materialInfos.map((info) => info.material)
 
+      // TSL 版（MToonNodeMaterial）のモデルに WebGL 専用の MToonAtlasMaterial を
+      // 当てると WebGPURenderer で描画できなくなる。変更を加える前に止める
+      if (
+        !options.atlasMaterialType &&
+        materials.some(
+          (m) => 'isMToonNodeMaterial' in m && m.isMToonNodeMaterial,
+        )
+      ) {
+        return err({
+          type: 'INVALID_PARAMETER' as const,
+          message:
+            'MToonNodeMaterial を含むモデルを最適化するには atlasMaterialType に ' +
+            '@webxr-jp/mtoon-atlas/nodes の MToonAtlasNodeMaterial を指定してください',
+        })
+      }
+
       // 後方互換性のためのMap生成
-      const materialMeshMap = new Map<MToonMaterial, Mesh[]>()
+      const materialMeshMap = new Map<MToonLikeMaterial, Mesh[]>()
       for (const info of materialInfos) {
         materialMeshMap.set(info.material, info.meshes)
       }
@@ -76,7 +101,7 @@ export function optimizeModel(
       )
 
       // アトラス画像をマテリアルにそれぞれアサインする
-      const materialPlacementMap = new Map<MToonMaterial, OffsetScale>()
+      const materialPlacementMap = new Map<MToonLikeMaterial, OffsetScale>()
       patternMappings.forEach((mapping, index) => {
         const placement = packLayouts.packed[index]
         for (const materialIndex of mapping.materialIndices) {
@@ -116,11 +141,21 @@ export function optimizeModel(
         )
       }
 
+      // 非同期処理（パッキング・簡略化）の間にアニメーションや物理演算がボーンを
+      // 動かしている可能性があるため、メッシュ統合直前にもバインドポーズへ戻す
+      vrm.springBoneManager?.reset()
+      vrm.humanoid?.resetNormalizedPose?.()
+      vrm.humanoid?.resetRawPose?.()
+      rootNode.updateMatrixWorld(true)
+
       // 複数のMesh及びMToonMaterialを統合してドローコール数を削減
       // レンダーモード（opaque/alphaTest/transparent）ごとに別メッシュとして結合
       combineResult = yield* combineMeshAndMaterial(
         materialInfos,
-        {},
+        // undefined を渡すと既定値（MToonAtlasMaterial）を上書きしてしまうため、指定時のみ渡す
+        options.atlasMaterialType
+          ? { materialType: options.atlasMaterialType }
+          : {},
         excludedMeshes,
       )
 
@@ -137,7 +172,7 @@ export function optimizeModel(
           ? mesh.material[0]
           : mesh.material
 
-        if (!(originalMaterial instanceof MToonMaterial)) continue
+        if (!isMToonLikeMaterial(originalMaterial)) continue
 
         // スロット情報を取得
         const slotInfo = combineResult.materialSlotIndex.get(originalMaterial)
@@ -246,61 +281,22 @@ export function optimizeModel(
           : {
               reason: 'NO_MTOON_MATERIAL',
               message:
-                'MToonMaterial が見つからないため、アトラス化とマテリアル統合を' +
+                'MToon マテリアル（MToonMaterial / MToonNodeMaterial）が見つからないため、アトラス化とマテリアル統合を' +
                 'スキップしました（簡略化とマイグレーションのみ実行）。',
             },
       )
     }
 
-    // VRM0.x -> VRM1.0 スケルトンマイグレーション（メッシュ統合後に実行）
-    // VRM1.0の場合はスキップ（metaVersion === '1'）
+    // VRM0.x -> VRM1.0 マイグレーション（メッシュ統合後に実行）
+    // VRM1.0 の場合はスキップ（metaVersion === '1'）。
+    // 既に最適化済みのモデル（マイグレーション無しで最適化した場合など）でも
+    // 重複実行による劣化・破壊を防ぐためスキップする。
     const isVRM1 = vrm.meta?.metaVersion === '1'
-
-    // 既に最適化済みのモデルではマイグレーションもスキップする。
-    // migrateSkeletonVRM0ToVRM1 は Y軸180度回転と頂点/bindMatrix の焼き込みを
-    // 行うが vrm.meta.metaVersion は更新されないため、同じ VRM に対して
-    // 二重に適用され、アバターが後ろ向きになる（実機で再現確認済み）。
     const skipAsAlreadyOptimized =
       combineResult.atlasSkipped?.reason === 'ALREADY_OPTIMIZED'
 
     if (options.migrateVRM0ToVRM1 && !isVRM1 && !skipAsAlreadyOptimized) {
-      // SpringBoneManagerを一時的に退避
-      // マイグレーション中に外部からvrm.update()が呼ばれても
-      // SpringBoneが動かないようにする
-      const springBoneManager = vrm.springBoneManager
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(vrm as any).springBoneManager = null
-
-      // SpringBoneを初期姿勢にリセット（物理演算による変形を排除）
-      // マイグレーションはボーンのワールド座標を記録するため、
-      // 物理演算で変形した状態だと正しい座標が記録されない
-      springBoneManager?.reset()
-
-      // Humanoid Boneのセットを構築
-      // VRM1.0仕様ではHumanoid Boneのみ回転がidentityである必要がある
-      // 非Humanoid Bone（髪、服、SpringBone制御のボーンなど）は回転を保持
-      const humanoidBones = new Set<Bone>()
-      if (vrm.humanoid) {
-        Object.values(vrm.humanoid.humanBones).forEach((humanBone) => {
-          const node = humanBone.node
-          if (node instanceof Bone) {
-            humanoidBones.add(node)
-          }
-        })
-      }
-
-      yield* migrateSkeletonVRM0ToVRM1(rootNode, { humanoidBones })
-
-      // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(vrm as any).springBoneManager = springBoneManager
-
-      // SpringBone関連の調整を一括で実行
-      // - 末端ジョイントに仮想tailノードを作成
-      // - 重力方向（gravityDir）をY軸180度回転
-      // - コライダーオフセットをY軸180度回転
-      // - SpringBoneの初期状態を再設定
-      migrateSpringBone(vrm)
+      yield* migrateVRM0ToVRM1(vrm)
     }
 
     return ok(combineResult)

@@ -3,13 +3,16 @@
  * URL / File / Blob / ArrayBuffer から VRM を読み込む
  */
 import type { VRM } from '@pixiv/three-vrm'
-import { VRMLoaderPlugin } from '@pixiv/three-vrm'
+import { MToonMaterialLoaderPlugin, VRMLoaderPlugin } from '@pixiv/three-vrm'
 import { VRMMetaLoaderPlugin } from '@pixiv/three-vrm-core'
 import {
+  type Ktx2SupportRenderer,
   MToonAtlasLoaderPlugin,
+  type MToonAtlasMaterialConstructor,
   resolveKtx2Loader,
 } from '@webxr-jp/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
+import type { Material } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { VRMLoaderError } from '../types'
@@ -40,6 +43,32 @@ export interface LoadVRMOptions {
    * アプリ全体で切り替えるなら `setKtx2TranscoderPath()` の方が簡単
    */
   ktx2TranscoderPath?: string
+
+  /**
+   * KTX2 の対応形式の判定に使うレンダラー。`ktx2Loader` を渡した場合は無視される。
+   * 省略時は `setKtx2Renderer()` の値、それも無ければ一時 WebGLRenderer で判定する。
+   * WebGPURenderer で描画する場合は `await renderer.init()` 済みのものを渡す
+   */
+  ktx2Renderer?: Ktx2SupportRenderer
+
+  /**
+   * VRMC_materials_mtoon から生成するマテリアルのクラス。
+   * 省略時は three-vrm の既定（WebGL 用の MToonMaterial）。
+   *
+   * WebGPURenderer で描画する場合は `@pixiv/three-vrm/nodes` の
+   * `MToonNodeMaterial` を渡す。three-vrm の
+   * `MToonMaterialLoaderPlugin` の `materialType` にそのまま渡される
+   */
+  mtoonMaterialType?: typeof Material
+
+  /**
+   * 最適化済み VRM（XRIFT_mtoon_atlas）から生成するマテリアルのクラス。
+   * 省略時は MToonAtlasMaterial（WebGL 専用）。
+   *
+   * WebGPURenderer で描画する場合は `@webxr-jp/mtoon-atlas/nodes` の
+   * `MToonAtlasNodeMaterial` を渡す
+   */
+  mtoonAtlasMaterialType?: MToonAtlasMaterialConstructor
 }
 
 /**
@@ -90,7 +119,8 @@ export function loadVRM(
       // GLTFLoader と MToonAtlasLoaderPlugin で同じインスタンスを共有し、
       // 二重生成（一時 WebGLRenderer が 2 つ作られる）を避ける
       const ktx2Loader =
-        options.ktx2Loader ?? resolveKtx2Loader(options.ktx2TranscoderPath)
+        options.ktx2Loader ??
+        resolveKtx2Loader(options.ktx2TranscoderPath, options.ktx2Renderer)
       if (ktx2Loader) {
         loader.setKTX2Loader(ktx2Loader)
       }
@@ -121,7 +151,14 @@ export function loadVRM(
           ],
         })
 
-        return new VRMLoaderPlugin(parser, { metaPlugin })
+        // 既定のままなら three-vrm に任せ、指定時のみ差し替える
+        const mtoonMaterialPlugin = options.mtoonMaterialType
+          ? new MToonMaterialLoaderPlugin(parser, {
+              materialType: options.mtoonMaterialType,
+            })
+          : undefined
+
+        return new VRMLoaderPlugin(parser, { metaPlugin, mtoonMaterialPlugin })
       })
       loader.register(
         (parser) =>
@@ -131,6 +168,8 @@ export function loadVRM(
             // ローダーの生成に失敗した場合、プラグイン側の再解決が
             // 既定値（CDN）に落ちないよう、指定パスも渡しておく
             ktx2TranscoderPath: options.ktx2TranscoderPath,
+            ktx2Renderer: options.ktx2Renderer,
+            materialType: options.mtoonAtlasMaterialType,
           }),
       )
 

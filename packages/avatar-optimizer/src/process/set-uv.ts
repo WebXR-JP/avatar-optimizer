@@ -1,7 +1,7 @@
-import { MToonMaterial } from '@pixiv/three-vrm'
 import { Result } from 'neverthrow'
 import { BufferAttribute, BufferGeometry, Mesh, Object3D } from 'three'
-import { OffsetScale, OptimizationError } from '../types'
+import { MToonLikeMaterial, OffsetScale, OptimizationError } from '../types'
+import { isMToonLikeMaterial } from '../util/material'
 import { remapGeometryUVs } from '../util/mesh/uv'
 
 /**
@@ -16,36 +16,21 @@ import { remapGeometryUVs } from '../util/mesh/uv'
  */
 export function applyPlacementsToGeometries(
   rootNode: Object3D,
-  materialPlacementMap: Map<MToonMaterial, OffsetScale>,
+  materialPlacementMap: Map<MToonLikeMaterial, OffsetScale>,
 ): Result<void[], OptimizationError> {
   const targets = new Map<BufferGeometry, OffsetScale>()
   rootNode.traverse((obj) => {
     if (!(obj instanceof Mesh)) return
     if (!(obj.geometry instanceof BufferGeometry)) return
 
-    let material: MToonMaterial | null = null
+    // Outline付きMToonの場合はOutline用に複数マテリアルになっている
+    // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
+    const material = Array.isArray(obj.material)
+      ? obj.material[0]
+      : obj.material
 
-    if (Array.isArray(obj.material)) {
-      // Outline付きMToonの場合はOutline用に複数マテリアルになっている
-      // 両マテリアルが全インデックスを参照するため、同様に1つのマテリアルだけ処理すればいい。
-      material = obj.material[0]
-    } else if (obj.material instanceof MToonMaterial) {
-      material = obj.material
-    }
-
-    if (!(material instanceof MToonMaterial)) {
-      // @ts-ignore
-      if (
-        obj.material?.isMToonMaterial ||
-        (Array.isArray(obj.material) && obj.material[0]?.isMToonMaterial)
-      ) {
-        console.warn(
-          'Found MToonMaterial-like object but instanceof failed. This indicates a dual package hazard.',
-          obj.material,
-        )
-      }
-      return
-    }
+    // WebGL 用 MToonLikeMaterial と TSL 用 MToonNodeMaterial のどちらも対象
+    if (!isMToonLikeMaterial(material)) return
 
     const placement = materialPlacementMap.get(material)
     if (!placement) {

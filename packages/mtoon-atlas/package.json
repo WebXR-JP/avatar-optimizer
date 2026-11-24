@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./nodes": {
+      "types": "./dist/nodes/index.d.ts",
+      "import": "./dist/nodes/index.js",
+      "require": "./dist/nodes/index.cjs"
     }
   },
   "files": [
@@ -34,11 +39,11 @@
     "@pixiv/three-vrm": "^3.4.4",
     "@pixiv/three-vrm-materials-mtoon": "^3.4.4",
     "@types/node": "^22.0.0",
-    "@types/three": "^0.181.0",
+    "@types/three": "^0.187.0",
     "@types/upng-js": "^2.1.5",
     "esbuild-raw-plugin": "^0.3.1",
     "jsdom": "^27.3.0",
-    "three": "^0.181.1",
+    "three": "^0.187.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"

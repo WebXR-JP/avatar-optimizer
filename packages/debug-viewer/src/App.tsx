@@ -5,17 +5,32 @@ import type { VRM } from '@pixiv/three-vrm'
 import type { VRMAnimation } from '@pixiv/three-vrm-animation'
 import { Mesh, SkinnedMesh } from 'three'
 import { VRMCanvas, TextureViewer, SceneInspector } from './components'
-import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation } from './hooks'
-import { optimizeModel, exportVRM, migrateSkeletonVRM0ToVRM1, migrateSpringBone, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
+import { loadVRM, loadVRMFromFile, replaceVRMTextures, loadVRMAnimation, loadVRMAnimationFromFile } from './hooks'
+import { loadVRM as loadVRMCore, optimizeModel, exportVRM, migrateVRM0ToVRM1, simplifyMeshes, type AtlasGenerationOptions, type CombinedMeshResult, type SimplifyStatistics, type TextureCompressionOptions } from '@webxr-jp/avatar-optimizer'
 import type { DebugMode } from '@webxr-jp/mtoon-atlas'
+import { MToonAtlasNodeMaterial } from '@webxr-jp/mtoon-atlas/nodes'
+import { rendererMode } from './renderer-mode'
 import './App.css'
+
+// WebGPU のときは MToonNodeMaterial を TSL 版のアトラスマテリアルに統合する
+const atlasMaterialType = rendererMode === 'webgpu' ? MToonAtlasNodeMaterial : undefined
+
+// 動作確認用のサンプルモーション。@pixiv/three-vrm のサンプル (test.vrma) を
+// public/samples/ に同梱している。差し替える場合は public/vrma/ に置いてパスを変える。
+// 取得元: https://github.com/pixiv/three-vrm/blob/dev/packages/three-vrm-animation/examples/models/test.vrma
+const SAMPLE_VRMA_PATH = '/samples/test.vrma'
 
 function App()
 {
   const navigate = useNavigate()
   const location = useLocation()
   const [vrm, setVRM] = useState<VRM | null>(null)
+  // VRM のインプレース変更（最適化・マイグレーション）を子コンポーネントへ通知するカウンタ
+  const [vrmRevision, setVrmRevision] = useState(0)
   const [vrmAnimation, setVRMAnimation] = useState<VRMAnimation | null>(null)
+  // 再生中のモーションの表示名（同梱サンプル or 読み込んだファイル名）
+  const [animationName, setAnimationName] = useState<string | null>(null)
+  const [isLoadingAnimation, setIsLoadingAnimation] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
@@ -81,6 +96,19 @@ function App()
     }
   }
 
+  // 開発時のみ、ブラウザ自動操作から読み込み・最適化・表示を行えるよう公開する。
+  // WebGL 用マテリアルで読み込んだ結果との比較などの検証に使う
+  useEffect(() =>
+  {
+    if (!import.meta.env.DEV) return
+    const target = window as unknown as { __viewerApp?: unknown }
+    target.__viewerApp = { setVRM, loadVRM, loadVRMWithWebGLMaterials: loadVRMCore, optimizeModel, exportVRM }
+    return () =>
+    {
+      delete target.__viewerApp
+    }
+  }, [])
+
   // 利用可能なデフォルトモデル一覧
   const defaultModels = [
     { name: 'AliciaSolid', path: '/AliciaSolid.vrm' },
@@ -89,7 +117,6 @@ function App()
     { name: 'AliciaSolid (COLOR_0)', path: '/AliciaSolid_COLOR0.vrm' },
     { name: 'Vivi', path: '/Vivi.vrm' },
     { name: 'Vita', path: '/Vita.vrm' },
-    { name: 'dairichan_hatsuyumekomari', path: '/dairichan_hatsuyumekomari.vrm' },
     { name: 'seedsan', path: '/seedsan.vrm' },
   ]
   const [selectedModel, setSelectedModel] = useState(defaultModels[0].path)
@@ -171,18 +198,26 @@ function App()
     setIsOptimizing(true)
     setError(null)
 
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions })
-
-    if (result.isErr())
+    // optimizeModel が Err ではなく reject した場合もボタンを "Optimizing..." のまま
+    // 固めないよう、終了処理は finally で必ず行う
+    try
     {
-      const err = result.error
-      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
-      setIsOptimizing(false)
-      return
-    }
+      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions, atlasMaterialType })
 
-    reportOptimizationResult(result.value, 'Optimization successful')
-    setIsOptimizing(false)
+      if (result.isErr())
+      {
+        const err = result.error
+        setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
+        return
+      }
+
+      reportOptimizationResult(result.value, 'Optimization successful')
+      setVrmRevision((r) => r + 1)
+    }
+    finally
+    {
+      setIsOptimizing(false)
+    }
   }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションなしの最適化のみ（デバッグ用）
@@ -194,21 +229,27 @@ function App()
     setError(null)
 
     // マイグレーションなしで最適化
-    const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions })
-
-    if (result.isErr())
+    try
     {
-      const err = result.error
-      setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
-      setIsOptimizing(false)
-      return
-    }
+      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions, atlasMaterialType })
 
-    reportOptimizationResult(
-      result.value,
-      'Optimization (without migration) successful',
-    )
-    setIsOptimizing(false)
+      if (result.isErr())
+      {
+        const err = result.error
+        setErrorWithLog(`Optimization failed (${err.type}): ${err.message}`)
+        return
+      }
+
+      reportOptimizationResult(
+        result.value,
+        'Optimization (without migration) successful',
+      )
+      setVrmRevision((r) => r + 1)
+    }
+    finally
+    {
+      setIsOptimizing(false)
+    }
   }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションのみ（デバッグ用）
@@ -225,31 +266,16 @@ function App()
       return
     }
 
-    // SpringBoneManagerを一時的に退避（useFrameでのupdate呼び出しを防ぐ）
-    const springBoneManager = vrm.springBoneManager
-    ;(vrm as any).springBoneManager = null
-
-    // SpringBoneを初期姿勢にリセット
-    springBoneManager?.reset()
-
-    // マイグレーション実行
-    const result = migrateSkeletonVRM0ToVRM1(vrm.scene)
+    const result = migrateVRM0ToVRM1(vrm)
 
     if (result.isErr())
     {
       const err = result.error
       setErrorWithLog(`Migration failed (${err.type}): ${err.message}`)
-      // SpringBoneManagerを復元
-      ;(vrm as any).springBoneManager = springBoneManager
       return
     }
 
-    // SpringBoneManagerを復元（migrateSpringBoneがspringBoneManagerを使うため）
-    ;(vrm as any).springBoneManager = springBoneManager
-
-    // SpringBone関連の調整を一括で実行
-    migrateSpringBone(vrm)
-
+    setVrmRevision((r) => r + 1)
     console.log('Migration successful')
   }, [vrm, setErrorWithLog])
 
@@ -468,21 +494,50 @@ function App()
 
   const handlePlayAnimation = useCallback(async () =>
   {
-    setIsLoading(true)
+    setIsLoadingAnimation(true)
     setError(null)
 
-    const result = await loadVRMAnimation('/vrma/VRMA_03.vrma')
+    const result = await loadVRMAnimation(SAMPLE_VRMA_PATH)
 
     if (result.isErr())
     {
       setErrorWithLog(result.error.message)
-      setIsLoading(false)
+      setIsLoadingAnimation(false)
       return
     }
 
     setVRMAnimation(result.value)
-    setIsLoading(false)
+    setAnimationName('test.vrma (three-vrm sample)')
+    setIsLoadingAnimation(false)
   }, [setErrorWithLog])
+
+  // 手元の VRMA ファイルでモーションを差し替える
+  const handleAnimationFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) =>
+    {
+      const file = event.target.files?.[0]
+      // 同じファイルを選び直しても change が発火するようにリセットする
+      event.target.value = ''
+      if (!file) return
+
+      setIsLoadingAnimation(true)
+      setError(null)
+
+      const result = await loadVRMAnimationFromFile(file)
+
+      if (result.isErr())
+      {
+        setErrorWithLog(result.error.message)
+        setIsLoadingAnimation(false)
+        return
+      }
+
+      setVRMAnimation(result.value)
+      setAnimationName(file.name)
+      setIsLoadingAnimation(false)
+    },
+    [setErrorWithLog],
+  )
 
   // Export VRM後にそのまま再読み込みする（エクスポート結果の確認用）
   const handleReloadExport = useCallback(async () =>
@@ -534,6 +589,7 @@ function App()
 
     setVRM(loadResult.value)
     setVRMAnimation(null)
+    setAnimationName(null)
     setIsReloading(false)
     restoreSpringBone()
   }, [vrm, springBoneEnabled, setErrorWithLog])
@@ -551,6 +607,7 @@ function App()
         {/* Canvas は常にレンダリング（コンテキスト保持） */}
         <VRMCanvas
           vrm={vrm}
+          vrmRevision={vrmRevision}
           currentTab={currentTab}
           isLoading={isLoading}
           error={error}
@@ -565,6 +622,9 @@ function App()
           isReplacingTextures={isReplacingTextures}
           vrmAnimation={vrmAnimation}
           onPlayAnimation={handlePlayAnimation}
+          animationName={animationName}
+          isLoadingAnimation={isLoadingAnimation}
+          onAnimationFileChange={handleAnimationFileChange}
           debugMode={debugMode}
           onDebugModeChange={setDebugMode}
           springBoneEnabled={springBoneEnabled}
