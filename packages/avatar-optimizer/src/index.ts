@@ -4,6 +4,7 @@
 
 // メイン処理のエクスポート
 export { optimizeModel } from './avatar-optimizer'
+export { disposeAtlasRenderer } from './util/texture/composite'
 
 // IO (load/export)
 export { exportVRM, loadVRM, type LoadVRMOptions, type VRMSource } from './io'
