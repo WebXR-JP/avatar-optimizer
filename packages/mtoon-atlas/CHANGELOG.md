@@ -1,5 +1,11 @@
 # @webxr-jp/mtoon-atlas
 
+## 0.6.0
+
+### Minor Changes
+
+- 23022c7: `getKtx2Source`、`isCompressedTexture`、`extractRgbaData` をエクスポートに追加しました。また、`MToonAtlasExporterPlugin.setTextureCompressionOptions` を非推奨（`@deprecated`）にしました。
+
 ## 0.5.1
 
 ### Patch Changes
