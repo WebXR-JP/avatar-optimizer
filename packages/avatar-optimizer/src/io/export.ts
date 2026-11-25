@@ -14,6 +14,10 @@ import type { ExportVRMError, ExportVRMOptions } from '../types'
 /**
  * VRM をバイナリとしてエクスポートする
  *
+ * KTX2 テクスチャ圧縮を行いたい場合は、事前に `optimizeModel(vrm, { textureCompression })`
+ * を使用してください。`optimizeModel` で圧縮済みのテクスチャは、`exportVRM` に
+ * `textureCompression` を指定しなくてもそのまま KTX2 バイナリとしてパススルー出力されます。
+ *
  * @param vrm - エクスポート対象の VRM
  * @param options - エクスポートオプション
  * @returns ArrayBuffer (バイナリデータ) またはエラー

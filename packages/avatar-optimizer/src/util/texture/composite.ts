@@ -118,6 +118,14 @@ export function composeImagesToAtlas(
   // 透明対応のオフスクリーンレンダーターゲットを作成
   const renderTarget = new WebGLRenderTarget(width, height)
 
+  // 元の colorSpace を退避（描画時に NoColorSpace へ切り替えた後、finally で復元する）
+  const originalColorSpaces = new Map<Texture, string>()
+  for (const layer of layers) {
+    if (!originalColorSpaces.has(layer.image)) {
+      originalColorSpaces.set(layer.image, layer.image.colorSpace)
+    }
+  }
+
   try {
     // 3. 各レイヤーをシーンに追加
     for (const layer of layers) {
@@ -176,6 +184,9 @@ export function composeImagesToAtlas(
     })
     sharedGeometry.dispose()
     renderTarget.dispose()
+    for (const [texture, origColorSpace] of originalColorSpaces) {
+      texture.colorSpace = origColorSpace
+    }
     layers.forEach((layer) => layer.image.dispose())
   }
 }

@@ -71,12 +71,12 @@ if (result.isOk()) {
 
 ### テクスチャ圧縮 (KTX2)
 
-エクスポート時に `textureCompression` オプションを指定すると、アトラステクスチャを KTX2 形式（UASTC）で圧縮できます。GPU 対応の圧縮フォーマットでファイルサイズを削減しつつ、ランタイムのメモリ効率を向上させます。
+最適化（`optimizeModel`）時に `textureCompression` オプションを指定すると、アトラステクスチャを KTX2 形式（UASTC）で圧縮し、ランタイム上でも GPU 向け `CompressedTexture` に差し替えます。VRAM とファイルサイズを削減しつつ、元の KTX2 バイナリもキャッシュされるため、後続の `exportVRM` では追加指定なしでそのまま KTX2 として書き出されます。
 
 ```typescript
-import { exportVRM, UastcQuality } from '@webxr-jp/avatar-optimizer'
+import { optimizeModel, exportVRM, UastcQuality } from '@webxr-jp/avatar-optimizer'
 
-const result = await exportVRM(vrm, {
+const result = await optimizeModel(vrm, {
   textureCompression: {
     quality: UastcQuality.Default,  // 品質レベル (0-4)
     compressionLevel: 3,            // 圧縮レベル (0-5)
@@ -84,9 +84,12 @@ const result = await exportVRM(vrm, {
     supercompression: true,         // Zstandard 超圧縮
   },
 })
+
+// 追加オプションなしで KTX2 のままエクスポートされる
+const exported = await exportVRM(vrm)
 ```
 
-> **注意**: テクスチャ圧縮はブラウザ環境専用です（WebAssembly 使用）。KTX2 テクスチャを読み込むには `KTX2Loader` が必要です。
+> **注意**: テクスチャ圧縮はブラウザ環境専用です（WebAssembly / `KTX2Loader` 使用）。KTX2 テクスチャを読み込むには `KTX2Loader` が必要です。
 
 ### VRM の最適化
 
@@ -147,7 +150,7 @@ VRM をバイナリとしてエクスポートします。
 |-----------|-----|------|
 | `vrm` | `VRM` | エクスポート対象 |
 | `options.binary` | `boolean` | バイナリ形式で出力 (default: `true`) |
-| `options.textureCompression` | `TextureCompressionOptions` | テクスチャ圧縮オプション（省略時は圧縮なし） |
+| `options.textureCompression` | `TextureCompressionOptions` | 非推奨 (`@deprecated`)。`optimizeModel` 側で指定してください（省略時は圧縮なし） |
 
 #### TextureCompressionOptions
 
@@ -169,6 +172,11 @@ VRM のマテリアルを最適化します。
 | `options.atlas.defaultResolution` | `number` | デフォルトアトラス解像度 (default: `2048`) |
 | `options.atlas.slotResolutions` | `Record<string, number>` | スロットごとの解像度オーバーライド |
 | `options.simplify` | `SimplifyOptions` | メッシュ簡略化オプション |
+| `options.atlasMaterialType` | `MToonAtlasMaterialConstructor` | 統合後に使うアトラスマテリアルのクラス（WebGPURenderer 時は `MToonAtlasNodeMaterial`） |
+| `options.textureCompression` | `TextureCompressionOptions` | アトラステクスチャを KTX2 形式で圧縮し `CompressedTexture` へ差し替え |
+| `options.ktx2Loader` | `KTX2Loader` | `textureCompression` 指定時に使う `detectSupport` 済み `KTX2Loader` |
+| `options.ktx2TranscoderPath` | `string` | `textureCompression` 指定時のトランスコーダー配信元ディレクトリ |
+| `options.ktx2Renderer` | `Ktx2SupportRenderer` | `textureCompression` 指定時の対応形式判定用レンダラー |
 
 #### SimplifyOptions
 

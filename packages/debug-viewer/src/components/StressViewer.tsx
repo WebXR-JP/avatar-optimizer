@@ -606,6 +606,7 @@ export function StressViewer()
         migrateVRM0ToVRM1: true,
         atlas: ATLAS_OPTIONS,
         atlasMaterialType: ATLAS_MATERIAL_TYPE,
+        textureCompression: { supercompression: true },
       })
       if (optimizeResult.isErr())
       {
@@ -620,9 +621,7 @@ export function StressViewer()
       console.info('[stress] optimize:', stats.statistics, stats.atlasSkipped ?? null)
 
       setPhase('exporting')
-      const exportResult = await exportVRM(sourceVrm, {
-        textureCompression: { supercompression: true },
-      })
+      const exportResult = await exportVRM(sourceVrm)
       // 最適化済みの VRM はエクスポートにしか使わないのでここで解放する
       VRMUtils.deepDispose(sourceVrm.scene)
 

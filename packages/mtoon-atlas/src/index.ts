@@ -60,8 +60,13 @@ export {
   MTOON_TRANSPARENT_RENDER_ORDER,
   MTOON_TRANSPARENT_ZWRITE_RENDER_ORDER,
 } from './render-order'
-// 独自ローダーで KTX2 テクスチャを読み込む場合に、再エクスポート可能にするための登録関数
-export { rememberKtx2Source } from './extensions/ktx2-source-cache'
+// 独自ローダーで KTX2 テクスチャを読み込む場合に、再エクスポート可能にするための登録・判定関数
+export {
+  rememberKtx2Source,
+  getKtx2Source,
+  isCompressedTexture,
+} from './extensions/ktx2-source-cache'
+export { extractRgbaData } from './extensions/extract-rgba-data'
 export type { TextureCompressionOptions } from './extensions/MToonAtlasExporterPlugin'
 export { MTOON_ATLAS_EXTENSION_NAME } from './extensions/types'
 export type { MToonAtlasExtensionSchema } from './extensions/types'

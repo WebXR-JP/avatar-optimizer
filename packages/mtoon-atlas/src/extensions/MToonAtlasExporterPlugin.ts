@@ -3,6 +3,7 @@ import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
 import type { MToonAtlasMaterialLike, ParameterBufferDescriptor } from '../types'
+import { extractRgbaData } from './extract-rgba-data'
 import { getKtx2Source, isCompressedTexture } from './ktx2-source-cache'
 import
 {
@@ -106,6 +107,10 @@ export class MToonAtlasExporterPlugin
   /**
    * テクスチャ圧縮オプションを設定
    * 設定された場合、アトラステクスチャを KTX2 形式で圧縮してエクスポート
+   *
+   * @deprecated `optimizeModel(vrm, { textureCompression })` 側での KTX2 圧縮を推奨します。
+   * 最適化時に圧縮・キャッシュされたテクスチャは、このオプションを指定しなくても
+   * そのまま KTX2 バイナリとしてパススルー出力されます。
    *
    * @param options - 圧縮オプション
    */
@@ -789,86 +794,7 @@ export class MToonAtlasExporterPlugin
    */
   private async extractRgbaData(image: any): Promise<Uint8Array>
   {
-    // DataTexture（image.dataがある場合）
-    if (image.data && image.width && image.height)
-    {
-      const srcData = image.data
-      const isFloatData = srcData instanceof Float32Array ||
-        srcData.constructor?.name === 'Float32Array'
-      const pixelCount = image.width * image.height * 4
-
-      if (isFloatData)
-      {
-        const rgbaData = new Uint8Array(pixelCount)
-        for (let i = 0; i < pixelCount; i++)
-        {
-          rgbaData[i] = Math.round(Math.min(1, Math.max(0, srcData[i])) * 255)
-        }
-        return rgbaData
-      } else
-      {
-        return new Uint8Array(srcData)
-      }
-    }
-
-    // HTMLCanvasElement
-    if (image instanceof HTMLCanvasElement)
-    {
-      const ctx = image.getContext('2d')
-      if (ctx)
-      {
-        const imageData = ctx.getImageData(0, 0, image.width, image.height)
-        return new Uint8Array(imageData.data)
-      }
-    }
-
-    // HTMLImageElement または ImageBitmap
-    // ImageBitmapはブラウザ環境のみで利用可能なため、typeofでチェック
-    if (image instanceof HTMLImageElement ||
-      (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap))
-    {
-      const canvas = document.createElement('canvas')
-      canvas.width = image.width
-      canvas.height = image.height
-      const ctx = canvas.getContext('2d')
-      if (ctx)
-      {
-        ctx.drawImage(image, 0, 0)
-        const imageData = ctx.getImageData(0, 0, image.width, image.height)
-        return new Uint8Array(imageData.data)
-      }
-    }
-
-    // toDataURL対応オブジェクト（OffscreenCanvas等）
-    if (typeof image.toDataURL === 'function')
-    {
-      // toDataURLからImageを作成してCanvasに描画
-      return new Promise((resolve, reject) =>
-      {
-        const dataUrl: string = image.toDataURL('image/png')
-        const img = new Image()
-        img.onload = () =>
-        {
-          const canvas = document.createElement('canvas')
-          canvas.width = img.width
-          canvas.height = img.height
-          const ctx = canvas.getContext('2d')
-          if (ctx)
-          {
-            ctx.drawImage(img, 0, 0)
-            const imageData = ctx.getImageData(0, 0, img.width, img.height)
-            resolve(new Uint8Array(imageData.data))
-          } else
-          {
-            reject(new Error('Canvas 2D context取得に失敗'))
-          }
-        }
-        img.onerror = () => reject(new Error('画像のロードに失敗'))
-        img.src = dataUrl
-      })
-    }
-
-    throw new Error('サポートされていない画像形式です')
+    return extractRgbaData(image)
   }
 
   /**
