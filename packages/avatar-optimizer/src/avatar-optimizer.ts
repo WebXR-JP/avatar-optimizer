@@ -1,6 +1,11 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { err, ok, ResultAsync, safeTry } from 'neverthrow'
 import { BufferAttribute, Mesh } from 'three'
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import {
+  compressAtlasTexturesToKtx2,
+  resolveKtx2LoaderForOptimization,
+} from './process/compress-ktx2'
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { migrateVRM0ToVRM1 } from './process/migrate-vrm'
 import { buildPatternMaterialMappings, pack } from './process/packing'
@@ -81,6 +86,12 @@ export function optimizeModel(
         })
       }
 
+      // KTX2 圧縮指定時はモデルへ変更を加える前に KTX2Loader を解決できるか検証する
+      let resolvedKtx2Loader: KTX2Loader | undefined
+      if (options.textureCompression) {
+        resolvedKtx2Loader = yield* resolveKtx2LoaderForOptimization(options)
+      }
+
       // 後方互換性のためのMap生成
       const materialMeshMap = new Map<MToonLikeMaterial, Mesh[]>()
       for (const info of materialInfos) {
@@ -142,7 +153,16 @@ export function optimizeModel(
         )
       }
 
-      // 非同期処理（パッキング・簡略化）の間にアニメーションや物理演算がボーンを
+      // アトラステクスチャを KTX2 へ圧縮し、GPU 向け CompressedTexture に差し替える
+      // マテリアル統合前に行うことで、統合マテリアル・アウトライン双方が同じ圧縮テクスチャを共有する
+      if (options.textureCompression && resolvedKtx2Loader) {
+        yield* await compressAtlasTexturesToKtx2(materialInfos, atlasMap, {
+          compression: options.textureCompression,
+          ktx2Loader: resolvedKtx2Loader,
+        })
+      }
+
+      // 非同期処理（パッキング・簡略化・圧縮）の間にアニメーションや物理演算がボーンを
       // 動かしている可能性があるため、メッシュ統合直前にもバインドポーズへ戻す
       vrm.springBoneManager?.reset()
       vrm.humanoid?.resetNormalizedPose?.()

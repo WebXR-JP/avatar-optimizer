@@ -1,6 +1,7 @@
 import type { MToonMaterial, VRM } from '@pixiv/three-vrm'
 import type { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
 import {
+  type Ktx2SupportRenderer,
   type MToonAtlasMaterialConstructor,
   ParameterSemanticId,
 } from '@webxr-jp/mtoon-atlas'
@@ -14,6 +15,7 @@ import {
   Vector2,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 
 /**
  * Three.jsのImageに相当するUnion型
@@ -106,6 +108,32 @@ export interface OptimizeModelOptions {
    * MToonNodeMaterial を含むモデルで省略すると INVALID_PARAMETER になる
    */
   atlasMaterialType?: MToonAtlasMaterialConstructor
+  /**
+   * テクスチャ圧縮オプション
+   * 指定された場合、アトラス化テクスチャを KTX2（UASTC）形式へ圧縮し、
+   * `KTX2Loader` で GPU 向け `CompressedTexture` へトランスコードして差し替える。
+   * 元の KTX2 バイナリもキャッシュされるため、後続の `exportVRM` では指定なしで
+   * そのまま KTX2 バイナリとしてパススルー出力される
+   */
+  textureCompression?: TextureCompressionOptions
+  /**
+   * 使用する KTX2Loader（`textureCompression` 指定時のみ使用）。
+   * 渡すインスタンスは `detectSupport(renderer)` 済みである必要がある
+   */
+  ktx2Loader?: KTX2Loader
+  /**
+   * KTX2 トランスコーダーの配信元ディレクトリ（`textureCompression` 指定時のみ使用）。
+   * `ktx2Loader` を渡した場合は無視される。
+   * 省略時は `setKtx2TranscoderPath()` の既定値に従う
+   */
+  ktx2TranscoderPath?: string
+  /**
+   * KTX2 の対応形式の判定に使うレンダラー（`textureCompression` 指定時のみ使用）。
+   * `ktx2Loader` を渡した場合は無視される。
+   * 省略時は `setKtx2Renderer()` の値、それも無ければ一時 WebGLRenderer で判定する。
+   * WebGPURenderer で描画する場合は `await renderer.init()` 済みのものを渡す
+   */
+  ktx2Renderer?: Ktx2SupportRenderer
 }
 
 /**
@@ -318,7 +346,7 @@ export type VRMLoaderError =
 
 /**
  * テクスチャ圧縮オプション
- * エクスポート時にアトラステクスチャを KTX2 形式で圧縮する
+ * アトラステクスチャを KTX2 形式で圧縮する
  */
 export interface TextureCompressionOptions {
   /**
@@ -359,6 +387,10 @@ export interface ExportVRMOptions {
   /**
    * テクスチャ圧縮オプション
    * 指定された場合、アトラステクスチャを KTX2 形式で圧縮
+   *
+   * @deprecated `optimizeModel(vrm, { textureCompression })` を使用してください。
+   * `optimizeModel` で圧縮済みのテクスチャは、`exportVRM` にこのオプションを
+   * 指定しなくてもそのまま KTX2 バイナリとしてパススルー出力されます。
    */
   textureCompression?: TextureCompressionOptions
 }

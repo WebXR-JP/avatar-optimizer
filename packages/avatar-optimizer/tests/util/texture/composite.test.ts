@@ -2,6 +2,7 @@ import { MToonMaterial } from '@pixiv/three-vrm'
 import {
   DataTexture,
   RGBAFormat,
+  SRGBColorSpace,
   Texture,
   UnsignedByteType,
   Vector2,
@@ -359,5 +360,29 @@ describe('composeImagesToAtlas', () => {
     }
 
     expect(contexts).toHaveLength(0)
+  })
+
+  it('composeImagesToAtlas 呼び出し後も入力テクスチャの colorSpace が保持される', () => {
+    const inputTex = createSolidTexture(255, 128, 64, 255)
+    inputTex.colorSpace = SRGBColorSpace
+
+    const result = composeImagesToAtlas(
+      [
+        {
+          image: inputTex,
+          uvTransform: {
+            offset: new Vector2(0, 0),
+            scale: new Vector2(1, 1),
+          },
+        },
+      ],
+      { width: 8, height: 8 },
+    )
+
+    expect(result.isOk()).toBe(true)
+    expect(inputTex.colorSpace).toBe(SRGBColorSpace)
+    if (result.isOk()) {
+      result.value.dispose()
+    }
   })
 })

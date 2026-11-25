@@ -61,14 +61,21 @@ const blob = new Blob([exportResult.value], { type: 'model/gltf-binary' })
 ### With Texture Compression
 
 ```typescript
-import { exportVRM, UastcQuality } from '@webxr-jp/avatar-optimizer'
+import {
+  optimizeModel,
+  exportVRM,
+  UastcQuality,
+} from '@webxr-jp/avatar-optimizer'
 
-const exportResult = await exportVRM(vrm, {
+const optimizeResult = await optimizeModel(vrm, {
   textureCompression: {
     quality: UastcQuality.Default,
     supercompression: true,
   },
 })
+
+// Exports with the cached KTX2 textures without re-encoding
+const exportResult = await exportVRM(vrm)
 ```
 
 ### Mesh Simplification
@@ -86,12 +93,12 @@ const result = await simplifyMeshes(vrm, {
 
 ### Main Functions
 
-| Function                       | Description                             |
-| ------------------------------ | --------------------------------------- |
-| `loadVRM(source, options?)`    | Load VRM from File, URL, or ArrayBuffer |
-| `optimizeModel(vrm, options)`  | Apply optimization pipeline             |
-| `exportVRM(vrm, options?)`     | Export VRM to GLB binary                |
-| `simplifyMeshes(vrm, options)` | Reduce polygon count                    |
+| Function                       | Description                                                              |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| `loadVRM(source, options?)`    | Load VRM from File, URL, or ArrayBuffer                                  |
+| `optimizeModel(vrm, options?)` | Apply optimization pipeline (including KTX2 compression)                 |
+| `exportVRM(vrm, options?)`     | Export VRM to GLB binary (`options.textureCompression` is `@deprecated`) |
+| `simplifyMeshes(vrm, options)` | Reduce polygon count                                                     |
 
 ### WebGPURenderer で読み込む
 
@@ -121,8 +128,9 @@ const result = await optimizeModel(vrm, {
 
 ### Types
 
-- `OptimizationOptions` - Configuration for optimization pipeline
-- `ExportVRMOptions` - Export settings including texture compression
+- `OptimizeModelOptions` - Configuration for `optimizeModel` pipeline (including `textureCompression`, `ktx2Loader`, `ktx2TranscoderPath`, `ktx2Renderer`)
+- `OptimizationOptions` - Legacy optimization options type
+- `ExportVRMOptions` - Export settings (`textureCompression` is `@deprecated`)
 - `SimplifyOptions` - Mesh simplification parameters
 - `TextureCompressionOptions` - KTX2 compression settings
 

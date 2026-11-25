@@ -16,6 +16,11 @@ import './App.css'
 // WebGPU のときは MToonNodeMaterial を TSL 版のアトラスマテリアルに統合する
 const atlasMaterialType = rendererMode === 'webgpu' ? MToonAtlasNodeMaterial : undefined
 
+// テクスチャ圧縮オプション（デフォルト有効）
+const DEFAULT_TEXTURE_COMPRESSION_OPTIONS: TextureCompressionOptions = {
+  supercompression: true,
+}
+
 // 動作確認用のサンプルモーション。@pixiv/three-vrm のサンプル (test.vrma) を
 // public/samples/ に同梱している。差し替える場合は public/vrma/ に置いてパスを変える。
 // 取得元: https://github.com/pixiv/three-vrm/blob/dev/packages/three-vrm-animation/examples/models/test.vrma
@@ -59,11 +64,6 @@ function App()
     }
     setError(message)
   }, [])
-
-  // テクスチャ圧縮オプション（デフォルト有効）
-  const textureCompressionOptions: TextureCompressionOptions = {
-    supercompression: true,
-  }
 
   // URLに基づいて現在のタブインデックスを決定
   const getTabValue = (pathname: string) =>
@@ -176,7 +176,7 @@ function App()
    * MToonMaterial が無いモデルではアトラス化がスキップされ、
    * optimizeModel は成功を返す。そのままだと「押したのに何も起きない」
    * ように見えるため、スキップ理由を警告として表示する。
-   * 後続の KTX2 圧縮も効かないので、気づけないと未圧縮の VRM が出力される。
+   * アトラス化をスキップした場合は KTX2 圧縮も行われない。
    */
   const reportOptimizationResult = useCallback(
     (result: CombinedMeshResult, label: string) =>
@@ -203,7 +203,12 @@ function App()
     // 固めないよう、終了処理は finally で必ず行う
     try
     {
-      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: true, atlas: atlasOptions, atlasMaterialType })
+      const result = await optimizeModel(vrm, {
+        migrateVRM0ToVRM1: true,
+        atlas: atlasOptions,
+        atlasMaterialType,
+        textureCompression: DEFAULT_TEXTURE_COMPRESSION_OPTIONS,
+      })
 
       if (result.isErr())
       {
@@ -232,7 +237,12 @@ function App()
     // マイグレーションなしで最適化
     try
     {
-      const result = await optimizeModel(vrm, { migrateVRM0ToVRM1: false, atlas: atlasOptions, atlasMaterialType })
+      const result = await optimizeModel(vrm, {
+        migrateVRM0ToVRM1: false,
+        atlas: atlasOptions,
+        atlasMaterialType,
+        textureCompression: DEFAULT_TEXTURE_COMPRESSION_OPTIONS,
+      })
 
       if (result.isErr())
       {
@@ -466,7 +476,7 @@ function App()
   {
     if (!vrm) return
 
-    const result = await exportVRM(vrm, { textureCompression: textureCompressionOptions })
+    const result = await exportVRM(vrm)
 
     if (result.isErr())
     {
@@ -560,7 +570,7 @@ function App()
       }
     }
 
-    const exportResult = await exportVRM(vrm, { textureCompression: textureCompressionOptions })
+    const exportResult = await exportVRM(vrm)
 
     if (exportResult.isErr())
     {
