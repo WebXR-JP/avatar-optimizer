@@ -1,5 +1,13 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.7.1
+
+### Patch Changes
+
+- dc8d29c: メッシュ統合時および簡略化で削減されなかったパスで、共有頂点バッファ由来の未使用頂点をコンパクションするよう修正しました。また、アウトラインメッシュはアウトライン有効なマテリアルに属するメッシュのみから生成して `castShadow` を無効化し、`outlineWidthMode === 'none'` のマテリアルでは `outlineWidth` を 0 としてパックするようにしました。
+- Updated dependencies [dc8d29c]
+  - @webxr-jp/mtoon-atlas@0.6.1
+
 ## 0.7.0
 
 ### Minor Changes
