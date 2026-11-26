@@ -285,7 +285,9 @@ function extractParameterValue(
     case 'matcapColor':
       return colorToVector3(material.matcapFactor ?? new Color(1, 1, 1))
     case 'outlineWidth':
-      return material.outlineWidthFactor ?? 0
+      return material.outlineWidthMode === 'none'
+        ? 0
+        : (material.outlineWidthFactor ?? 0)
     case 'outlineColor':
       return colorToVector3(material.outlineColorFactor ?? new Color(0, 0, 0))
     case 'outlineLightingMix':

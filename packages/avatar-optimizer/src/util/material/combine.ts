@@ -140,6 +140,18 @@ interface SingleGroupResult {
 }
 
 /**
+ * メッシュが描画可能な有効ジオメトリを持つか判定
+ */
+function hasRenderableGeometry(mesh: Mesh): boolean {
+  if (!(mesh.geometry instanceof BufferGeometry)) return false
+  const vertexCount = mesh.geometry.attributes.position?.count ?? 0
+  const indexCount = mesh.geometry.index
+    ? mesh.geometry.index.count
+    : vertexCount
+  return vertexCount > 0 && indexCount > 0
+}
+
+/**
  * 単一グループのマテリアル結合処理
  */
 function processSingleGroup(
@@ -150,17 +162,6 @@ function processSingleGroup(
 ): Result<SingleGroupResult, OptimizationError> {
   return safeTry(function* () {
     const materials = materialInfos.map((info) => info.material)
-
-    // アウトライン情報を収集
-    let hasAnyOutline = false
-    let outlineWidthMode: OutlineWidthMode = 'worldCoordinates'
-    for (const info of materialInfos) {
-      if (info.hasOutline) {
-        hasAnyOutline = true
-        outlineWidthMode = info.outlineWidthMode
-        break
-      }
-    }
 
     // 生パラメータ配列を生成（GLSL 版は DataTexture 化、TSL 版はそのまま UBO バッファへ）
     const packedParameters = yield* packMaterialParameters(
@@ -174,9 +175,13 @@ function processSingleGroup(
       materialSlotIndex.set(mat, index)
     })
 
-    // ジオメトリ結合用マップの構築
+    // ジオメトリ結合用マップの構築（アウトライン対象メッシュもここで収集）
     const meshToSlotIndex = new Map<Mesh, number>()
     const meshesForMerge: Mesh[] = []
+    const outlineMeshes: Mesh[] = []
+    let outlineWidthMode: OutlineWidthMode = 'worldCoordinates'
+    let hasSelectedOutlineMode = false
+    let renderableMergeMeshCount = 0
 
     for (const info of materialInfos) {
       const slotIndex = materialSlotIndex.get(info.material) ?? 0
@@ -185,6 +190,17 @@ function processSingleGroup(
 
         meshToSlotIndex.set(mesh, slotIndex)
         meshesForMerge.push(mesh)
+
+        if (hasRenderableGeometry(mesh)) {
+          renderableMergeMeshCount++
+          if (info.hasOutline) {
+            outlineMeshes.push(mesh)
+            if (!hasSelectedOutlineMode) {
+              outlineWidthMode = info.outlineWidthMode
+              hasSelectedOutlineMode = true
+            }
+          }
+        }
       }
     }
 
@@ -228,25 +244,41 @@ function processSingleGroup(
     // 半透明の描画順は再読み込み時にローダーが付ける値と揃える
     combinedMesh.renderOrder = getRenderOrderForMode(renderMode)
 
-    // アウトラインメッシュの作成
+    // アウトラインメッシュの作成（アウトライン対象マテリアルのメッシュのみを含める）
     let outlineMesh: Mesh | undefined
     let outlineMaterial: MToonAtlasMaterialLike | undefined
 
-    if (hasAnyOutline) {
+    if (outlineMeshes.length > 0) {
       outlineMaterial = atlasMaterial.createOutlineMaterial(
         outlineWidthMode === 'screenCoordinates'
           ? 'screenCoordinates'
           : 'worldCoordinates',
       )
 
+      // 全有効マージメッシュがアウトライン対象なら本体とジオメトリを共有し、
+      // 混在時のみアウトライン対象メッシュだけで再マージして余分な頂点パスを防ぐ
+      let outlineGeometry: BufferGeometry
+      if (outlineMeshes.length === renderableMergeMeshCount) {
+        outlineGeometry = mergedGeometry
+      } else {
+        const mergedOutlineGeometries = yield* mergeGeometriesWithSlotAttribute(
+          outlineMeshes,
+          meshToSlotIndex,
+          opts.slotAttributeName,
+        )
+        outlineGeometry = mergedOutlineGeometries[0]
+      }
+
       const outlineResult = createCombinedMesh(
-        mergedGeometry,
+        outlineGeometry,
         outlineMaterial,
-        meshesForMerge,
+        outlineMeshes,
         `CombinedMToonMesh_${renderMode}_Outline`,
       )
       outlineMesh = outlineResult.mesh
       outlineMesh.renderOrder = combinedMesh.renderOrder - 1
+      // 裏面膨張アウトラインがシャドウマップ生成パスで余計な頂点シェーダーを走らせないよう無効化
+      outlineMesh.castShadow = false
     }
 
     return ok({

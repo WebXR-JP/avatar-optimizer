@@ -195,6 +195,45 @@ describe('simplify', () => {
         expect(simplified.getAttribute('skinIndex')).toBeDefined()
       }
     })
+
+    it('should compact unused vertices even when index count is unchanged', () => {
+      // 6頂点のうち最初の3頂点だけを参照する1三角形（targetRatio: 1.0 で簡略化されない）
+      const geometry = new BufferGeometry()
+      const positions = new Float32Array([
+        0,
+        0,
+        0, // 0: 使用
+        1,
+        0,
+        0, // 1: 使用
+        0,
+        1,
+        0, // 2: 使用
+        9,
+        9,
+        9, // 3: 未使用
+        8,
+        8,
+        8, // 4: 未使用
+        7,
+        7,
+        7, // 5: 未使用
+      ])
+      geometry.setAttribute('position', new BufferAttribute(positions, 3))
+      geometry.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
+
+      const result = simplifyGeometry(geometry, {
+        targetRatio: 1.0,
+        targetError: 0.01,
+      })
+
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        const simplified = result.value
+        expect(simplified.index?.count).toBe(3)
+        expect(simplified.getAttribute('position').count).toBe(3)
+      }
+    })
   })
 
   describe('simplifyMeshes', () => {

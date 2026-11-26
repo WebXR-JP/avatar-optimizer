@@ -12,6 +12,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { OptimizationError } from '../../types'
+import { compactIndexedGeometry } from './compact-geometry'
 
 /**
  * ジオメトリの属性を正規化し、マージ可能な状態にする
@@ -133,7 +134,10 @@ export function mergeGeometriesWithSlotAttribute(
   for (const mesh of meshes) {
     if (mesh.geometry instanceof BufferGeometry) {
       const vertexCount = mesh.geometry.attributes.position?.count ?? 0
-      if (vertexCount > 0) {
+      const indexCount = mesh.geometry.index
+        ? mesh.geometry.index.count
+        : vertexCount
+      if (vertexCount > 0 && indexCount > 0) {
         validMeshes.push({ mesh, geometry: mesh.geometry })
       }
     }
@@ -231,8 +235,13 @@ export function mergeGeometriesWithSlotAttribute(
   const slotData: number[] = []
 
   for (const { mesh, geometry } of validMeshes) {
-    const transformedGeometry = geometry.clone()
-    const vertexCount = geometry.attributes.position?.count ?? 0
+    // 共有頂点バッファの未使用頂点を除去し、morphTargets もこの段階で破棄する
+    // （TODO: 顔メッシュを判別して、顔メッシュの場合はモーフターゲットを残す）
+    const transformedGeometry = compactIndexedGeometry(geometry, {
+      preserveMorphAttributes: false,
+    })
+    const vertexCount = transformedGeometry.attributes.position?.count ?? 0
+    if (vertexCount === 0) continue
 
     // SkinnedMeshの場合はbindMatrixとIBM補正を適用して、頂点を正準なモデル空間に変換
     if (mesh instanceof SkinnedMesh) {
@@ -282,14 +291,13 @@ export function mergeGeometriesWithSlotAttribute(
       transformedGeometry.applyMatrix4(mesh.matrixWorld)
     }
 
-    // TODO: 顔メッシュを判別して、顔メッシュの場合はモーフターゲットを残す
-    // 現状は全てのメッシュからモーフターゲットを削除
+    // compactIndexedGeometry({ preserveMorphAttributes: false }) で除去済みだが明示的に保証
     transformedGeometry.morphAttributes = {}
     transformedGeometry.morphTargetsRelative = false
 
     transformedGeometries.push(transformedGeometry)
 
-    // スロットインデックスを頂点数分追加
+    // コンパクション後の頂点数に合わせてスロットインデックスを追加
     const slotIndex = materialSlotMap.get(mesh) ?? 0
     for (let i = 0; i < vertexCount; i++) {
       slotData.push(slotIndex)

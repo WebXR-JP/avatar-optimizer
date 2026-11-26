@@ -13,6 +13,7 @@ import {
   InterleavedBufferAttribute,
 } from 'three'
 import { OptimizationError, SimplifyOptions } from '../../types'
+import { compactIndexedGeometry } from './compact-geometry'
 
 /** デフォルト設定 */
 const DEFAULT_SIMPLIFY_OPTIONS: Required<SimplifyOptions> = {
@@ -176,10 +177,11 @@ export function simplifyGeometry(
       )
     }
 
-    // 簡略化が実質的に行われなかった場合
+    // 簡略化が実質的に行われなかった場合でも、共有頂点バッファ由来の未使用頂点を除去する
     if (newIndices.length === indices.length) {
-      // 元のジオメトリのクローンを返す
-      return ok(geometry.clone())
+      return ok(
+        compactIndexedGeometry(geometry, { preserveMorphAttributes: false }),
+      )
     }
 
     // 新しいジオメトリの構築（使用される頂点のみを含む）

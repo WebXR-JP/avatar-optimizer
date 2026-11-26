@@ -28,5 +28,16 @@ describe('MToonAtlasMaterial', () => {
     expect(material.fragmentShader).toContain('IGNORE_VERTEX_COLOR')
   })
 
+  it('should only sample outlineWidthFactor inside #ifdef OUTLINE in vertex shader', () => {
+    const material = new MToonAtlasMaterial()
+    const outlineBlockStart = material.vertexShader.indexOf('#ifdef OUTLINE')
+    expect(outlineBlockStart).toBeGreaterThan(-1)
+
+    const sampleIdx = material.vertexShader.indexOf(
+      'sampleParameter(vMaterialSlot, 3.0)',
+    )
+    expect(sampleIdx).toBeGreaterThan(outlineBlockStart)
+  })
+
   // TODO: 詳細なテストケースを追加
 })
