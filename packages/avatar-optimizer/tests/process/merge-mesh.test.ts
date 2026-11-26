@@ -613,5 +613,107 @@ describe('merge-mesh', () => {
         )
       }
     })
+
+    it('should compact unused vertices when merging primitives sharing a vertex buffer', () => {
+      // 10頂点の共有頂点バッファを用意し、3つのメッシュがそれぞれ3頂点（1三角形）のみ参照する
+      const sharedPositions = new Float32Array(10 * 3)
+      const sharedSkinWeights = new Float32Array(10 * 4)
+      const sharedSkinIndices = new Uint16Array(10 * 4)
+      for (let i = 0; i < 10; i++) {
+        sharedPositions[i * 3] = i
+        sharedPositions[i * 3 + 1] = i * 2
+        sharedPositions[i * 3 + 2] = 0
+        sharedSkinWeights[i * 4] = 1
+        sharedSkinIndices[i * 4] = 0
+      }
+
+      const posAttr = new BufferAttribute(sharedPositions, 3)
+      const weightAttr = new BufferAttribute(sharedSkinWeights, 4)
+      const indexAttr = new BufferAttribute(sharedSkinIndices, 4)
+
+      const bone = new Bone()
+      const skeleton = new Skeleton([bone], [new Matrix4()])
+
+      const meshes: SkinnedMesh[] = []
+      const slotMap = new Map<Mesh, number>()
+      const triangleRanges = [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8],
+      ]
+
+      triangleRanges.forEach((tri, idx) => {
+        const geo = new BufferGeometry()
+        geo.setAttribute('position', posAttr)
+        geo.setAttribute('skinWeight', weightAttr)
+        geo.setAttribute('skinIndex', indexAttr)
+        geo.setIndex(new BufferAttribute(new Uint16Array(tri), 1))
+
+        const mesh = new SkinnedMesh(geo, new MToonMaterial())
+        mesh.bind(skeleton, new Matrix4())
+        meshes.push(mesh)
+        slotMap.set(mesh, idx)
+      })
+
+      const result = mergeGeometriesWithSlotAttribute(
+        meshes,
+        slotMap,
+        'mtoonMaterialSlot',
+      )
+
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        const [mergedGeometry] = result.value
+        const mergedPos = mergedGeometry.getAttribute('position')
+        const mergedSlot = mergedGeometry.getAttribute('mtoonMaterialSlot')
+
+        // 3 * 10 = 30 ではなく、実参照の 3 * 3 = 9 頂点にコンパクションされること
+        expect(mergedPos.count).toBe(9)
+        expect(mergedSlot.count).toBe(9)
+        expect(mergedGeometry.index?.count).toBe(9)
+
+        // 各三角形の頂点座標とスロット値が正しいこと
+        for (let i = 0; i < 9; i++) {
+          expect(mergedPos.getX(i)).toBeCloseTo(i)
+          expect(mergedPos.getY(i)).toBeCloseTo(i * 2)
+          expect(mergedSlot.getX(i)).toBe(Math.floor(i / 3))
+        }
+      }
+    })
+
+    it('should skip meshes with empty index buffer when merging', () => {
+      const geoValid = new BufferGeometry()
+      geoValid.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      geoValid.setIndex(new BufferAttribute(new Uint16Array([0, 1, 2]), 1))
+
+      const geoEmptyIndex = new BufferGeometry()
+      geoEmptyIndex.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array([5, 5, 5, 6, 5, 5, 5, 6, 5]), 3),
+      )
+      geoEmptyIndex.setIndex(new BufferAttribute(new Uint16Array(0), 1))
+
+      const meshValid = new Mesh(geoValid, new MToonMaterial())
+      const meshEmpty = new Mesh(geoEmptyIndex, new MToonMaterial())
+
+      const result = mergeGeometriesWithSlotAttribute(
+        [meshValid, meshEmpty],
+        new Map<Mesh, number>([
+          [meshValid, 0],
+          [meshEmpty, 1],
+        ]),
+        'mtoonMaterialSlot',
+      )
+
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        const [merged] = result.value
+        expect(merged.getAttribute('position').count).toBe(3)
+        expect(merged.getAttribute('mtoonMaterialSlot').count).toBe(3)
+      }
+    })
   })
 })

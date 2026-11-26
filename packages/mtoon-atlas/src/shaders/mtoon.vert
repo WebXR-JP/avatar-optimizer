@@ -64,11 +64,6 @@ vec4 sampleParameter(float slotIndex, float texelIndex) {
 void main() {
   vMaterialSlot = mtoonMaterialSlot;
 
-  // Sample outlineWidthFactor from parameter texture
-  // outlineWidth is at texel 3, channel a (index 3)
-  vec4 param3 = sampleParameter(vMaterialSlot, 3.0);
-  float outlineWidthFactor = param3.a;
-
   // #include <uv_vertex>
   #ifdef MTOON_USE_UV
     // COMPAT: pre-r151 uses a common uvTransform
@@ -115,6 +110,11 @@ void main() {
   vViewPosition = - mvPosition.xyz;
 
   #ifdef OUTLINE
+    // Sample outlineWidthFactor from parameter texture (outline pass only)
+    // outlineWidth is at texel 3, channel a (index 3)
+    vec4 param3 = sampleParameter(vMaterialSlot, 3.0);
+    float outlineWidthFactor = param3.a;
+
     float worldNormalLength = length( transformedNormal );
     vec3 outlineOffset = outlineWidthFactor * worldNormalLength * objectNormal;
 

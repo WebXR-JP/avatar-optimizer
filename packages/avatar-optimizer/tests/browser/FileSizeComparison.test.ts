@@ -1121,5 +1121,76 @@ describe('File Size Comparison', () => {
 
       expect(true).toBe(true)
     })
+
+    it('should compact unused vertices in combined meshes (no shared-buffer vertex explosion)', async () => {
+      // 最適化前の元モデルのユニーク頂点数をカウント（同一 POSITION アクセサを重複カウントしない）
+      const view = new DataView(originalBuffer)
+      const jsonChunkLength = view.getUint32(12, true)
+      const jsonString = new TextDecoder().decode(
+        new Uint8Array(originalBuffer, 20, jsonChunkLength),
+      )
+      const originalJson = JSON.parse(jsonString)
+
+      const originalPosAccessors = new Set<number>()
+      for (const mesh of originalJson.meshes || []) {
+        for (const prim of mesh.primitives || []) {
+          if (prim.attributes?.POSITION !== undefined) {
+            originalPosAccessors.add(prim.attributes.POSITION)
+          }
+        }
+      }
+      let originalUniqueVertices = 0
+      for (const accIdx of originalPosAccessors) {
+        originalUniqueVertices += originalJson.accessors[accIdx].count
+      }
+
+      // 最適化後の統合メッシュ（Outline を除く CombinedMToonMesh_*）の頂点数合計
+      let combinedMainVertices = 0
+      optimizedVRM.scene.traverse((obj) => {
+        if (
+          obj instanceof SkinnedMesh &&
+          obj.name.startsWith('CombinedMToonMesh_') &&
+          !obj.name.endsWith('_Outline')
+        ) {
+          combinedMainVertices +=
+            obj.geometry.getAttribute('position')?.count ?? 0
+        }
+      })
+
+      // 以前は未コンパクションのため 45,358 頂点になっていたが、
+      // コンパクション後は元のユニーク頂点数（21,529）未満に収まる
+      expect(combinedMainVertices).toBeGreaterThan(0)
+      expect(combinedMainVertices).toBeLessThan(originalUniqueVertices)
+    })
+
+    it('should exclude non-outline materials from outlineMesh and disable castShadow on outline meshes', () => {
+      const opaqueMain = optimizedVRM.scene.getObjectByName(
+        'CombinedMToonMesh_opaque',
+      ) as SkinnedMesh | undefined
+      const opaqueOutline = optimizedVRM.scene.getObjectByName(
+        'CombinedMToonMesh_opaque_Outline',
+      ) as SkinnedMesh | undefined
+
+      expect(opaqueMain).toBeDefined()
+      expect(opaqueOutline).toBeDefined()
+
+      // AliciaSolid の opaque にはアウトラインなしの Alicia_eye (278頂点) が含まれるため、
+      // アウトラインメッシュの頂点数は本体より少ない
+      const mainVertices = opaqueMain!.geometry.getAttribute('position').count
+      const outlineVertices =
+        opaqueOutline!.geometry.getAttribute('position').count
+      expect(outlineVertices).toBeGreaterThan(0)
+      expect(outlineVertices).toBeLessThan(mainVertices)
+
+      // すべての *_Outline メッシュで castShadow が無効化されていること
+      let outlineCount = 0
+      optimizedVRM.scene.traverse((obj) => {
+        if (obj instanceof SkinnedMesh && obj.name.endsWith('_Outline')) {
+          outlineCount++
+          expect(obj.castShadow).toBe(false)
+        }
+      })
+      expect(outlineCount).toBeGreaterThan(0)
+    })
   })
 })
