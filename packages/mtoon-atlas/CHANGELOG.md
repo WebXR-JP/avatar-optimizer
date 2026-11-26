@@ -1,5 +1,11 @@
 # @webxr-jp/mtoon-atlas
 
+## 0.6.1
+
+### Patch Changes
+
+- dc8d29c: GLSL 頂点シェーダー（`mtoon.vert`）の `outlineWidthFactor` サンプリングを `#ifdef OUTLINE` ブロック内へ移動し、本体描画パスでの不要な頂点テクスチャフェッチを除去しました。
+
 ## 0.6.0
 
 ### Minor Changes
