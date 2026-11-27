@@ -8,6 +8,7 @@
  * - exportVRM(vrm)（textureCompression 指定なし）で KTX2 パススルー出力され、
  *   loadVRM() で再読み込み・再描画できること
  * - 後方互換として exportVRM(vrm, { textureCompression }) も引き続き動作すること
+ * - ktx2Transcode: false ではテクスチャを差し替えず、記録した KTX2 が出力されること
  */
 
 import { MToonNodeMaterial } from '@pixiv/three-vrm/nodes'
@@ -236,6 +237,54 @@ describe('optimizeModel KTX2 texture compression', () => {
     const json = parseGlbJsonChunk(exportRes._unsafeUnwrap())
     expect(json.extensionsUsed).toContain('KHR_texture_basisu')
     expect(json.images?.some((img) => img.mimeType === 'image/ktx2')).toBe(true)
+  })
+
+  it('ktx2Transcode: false ではテクスチャを差し替えずに KTX2 を記録し、無指定 exportVRM で KTX2 が出力される', async () => {
+    const loadRes = await loadVRM(aliciaBuffer.slice(0))
+    expect(loadRes.isOk()).toBe(true)
+    const vrm = loadRes._unsafeUnwrap()
+
+    const optRes = await optimizeModel(vrm, {
+      atlas: { defaultResolution: 256 },
+      textureCompression: { supercompression: true, generateMipmaps: false },
+      ktx2Transcode: false,
+    })
+    expect(optRes.isOk()).toBe(true)
+
+    const atlasMaterials = collectMToonAtlasMaterials(vrm.scene)
+    expect(atlasMaterials.length).toBeGreaterThan(0)
+    for (const mat of atlasMaterials) {
+      for (const [slot, tex] of Object.entries(
+        getAtlasedTexturesFromMaterial(mat),
+      )) {
+        if (!tex) continue
+        // メモリ上は非圧縮のまま、エンコード結果だけが記録されていること
+        expect(isCompressedTexture(tex), `${slot} should stay raw`).toBe(false)
+        const ktx2Source = getKtx2Source(tex)
+        expect(ktx2Source, `${slot} ktx2 source`).toBeDefined()
+        expect(Array.from(ktx2Source!.subarray(0, 12))).toEqual(KTX2_MAGIC)
+      }
+    }
+
+    const exportRes = await exportVRM(vrm)
+    expect(exportRes.isOk()).toBe(true)
+    const exportedGlb = exportRes._unsafeUnwrap()
+    const json = parseGlbJsonChunk(exportedGlb)
+    expect(json.extensionsUsed).toContain('KHR_texture_basisu')
+    expect(json.images?.some((img) => img.mimeType === 'image/ktx2')).toBe(true)
+
+    const reloadedResult = await loadVRM(exportedGlb.slice(0))
+    expect(reloadedResult.isOk()).toBe(true)
+    const reloadedMaterials = collectMToonAtlasMaterials(
+      reloadedResult._unsafeUnwrap().scene,
+    )
+    expect(
+      reloadedMaterials.some((mat) =>
+        Object.values(getAtlasedTexturesFromMaterial(mat)).some(
+          (tex) => tex && isCompressedTexture(tex),
+        ),
+      ),
+    ).toBe(true)
   })
 
   it('WebGPURenderer (MToonAtlasNodeMaterial) で optimizeModel 時 KTX2 圧縮→即時描画→無指定 exportVRM が通る', async () => {

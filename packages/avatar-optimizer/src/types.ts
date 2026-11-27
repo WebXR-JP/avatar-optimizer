@@ -13,9 +13,11 @@ import {
   Texture,
   TypedArray,
   Vector2,
+  type WebGLRenderer,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import type { WebGPURenderer } from 'three/webgpu'
 
 /**
  * Three.jsのImageに相当するUnion型
@@ -116,6 +118,19 @@ export interface OptimizeModelOptions {
    * そのまま KTX2 バイナリとしてパススルー出力される
    */
   textureCompression?: TextureCompressionOptions
+  /**
+   * KTX2 圧縮したテクスチャを GPU 向けにトランスコードしてマテリアルへ差し替えるか
+   * （`textureCompression` 指定時のみ使用）。
+   *
+   * `false` にすると KTX2 へのエンコードだけを行い、KTX2Loader を使わない。
+   * メモリ上のテクスチャは非圧縮のまま残るが、エンコード結果が記録されるため
+   * `exportVRM` の出力は KTX2 になる。KTX2Loader（Web Worker とトランスコーダー）を
+   * 使えない Node で、最適化結果をファイルへ書き出す用途向け。
+   * `false` のときは `ktx2Loader` / `ktx2TranscoderPath` / `ktx2Renderer` は無視される
+   *
+   * @default true
+   */
+  ktx2Transcode?: boolean
   /**
    * 使用する KTX2Loader（`textureCompression` 指定時のみ使用）。
    * 渡すインスタンスは `detectSupport(renderer)` 済みである必要がある
@@ -310,6 +325,51 @@ export interface AtlasGenerationOptions {
    * 例: { map: 2048, normalMap: 1024, emissiveMap: 512 }
    */
   slotResolutions?: SlotAtlasResolution
+  /**
+   * アトラス合成（オフスクリーン描画と読み戻し）に使うレンダラー。
+   * 省略時はライブラリ内で共有するオフスクリーン WebGLRenderer を使う（OffscreenCanvas と WebGL2 が必要）。
+   *
+   * WebGL の無い環境（Node + Dawn など）では初期化済みの WebGPURenderer を渡す。
+   * Node では `@webxr-jp/avatar-optimizer/node` の `createNodeAtlasRenderer()` で作成できる。
+   * 渡したレンダラーのレンダーターゲットとクリア色は合成後に元へ戻す。破棄は呼び出し側で行う
+   */
+  renderer?: AtlasRenderer
+}
+
+/**
+ * アトラス合成に使えるレンダラー
+ * WebGPURenderer は型としてのみ参照し、実行時に three/webgpu を読み込まない
+ */
+export type AtlasRenderer = WebGLRenderer | WebGPURenderer
+
+/**
+ * WebGPU の GPUDevice
+ * 利用側に @webgpu/types を要求しないよう、実体の型は問わない
+ */
+export type NodeGPUDevice = object
+
+/** WebGPU の GPU（`navigator.gpu` 相当）のうち、デバイス取得に使う部分 */
+export interface NodeGPU {
+  requestAdapter(options?: object): Promise<{
+    requestDevice(): Promise<NodeGPUDevice>
+  } | null>
+}
+
+/**
+ * `createNodeAtlasRenderer()`（`@webxr-jp/avatar-optimizer/node`）のオプション
+ * device と gpu のどちらかを指定する。両方あれば device を使う
+ */
+export interface NodeAtlasRendererOptions {
+  /**
+   * 使用する GPUDevice。
+   * Dawn（`webgpu` パッケージ）の場合、デバイスを作った GPU オブジェクトが GC されると
+   * クラッシュするので、その GPU も gpu に渡すか利用側で参照を保持しておく
+   */
+  device?: NodeGPUDevice
+  /** GPUDevice を要求する GPU（`webgpu` パッケージの `create([])` の戻り値など） */
+  gpu?: NodeGPU
+  /** gpu からアダプタを要求するときのオプション（GPURequestAdapterOptions） */
+  adapterOptions?: object
 }
 
 /**

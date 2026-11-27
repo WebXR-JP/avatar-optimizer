@@ -1,49 +1,11 @@
-// This code implements the `-sMODULARIZE` settings by taking the generated
-// JS program code (INNER_JS_CODE) and wrapping it in a factory function.
-
-// When targetting node and ES6 we use `await import ..` in the generated code
-// so the outer function needs to be marked as async.
 async function BASIS(moduleArg = {}) {
   var moduleRtn
-
-  // include: shell.js
-  // include: minimum_runtime_check.js
-  // end include: minimum_runtime_check.js
-  // The Module object: Our interface to the outside world. We import
-  // and export values on it. There are various ways Module can be used:
-  // 1. Not defined. We create it here
-  // 2. A function parameter, function(moduleArg) => Promise<Module>
-  // 3. pre-run appended it, var Module = {}; ..generated code..
-  // 4. External script tag defines var Module.
-  // We need to check if Module already exists (e.g. case 3 above).
-  // Substitution will be replaced with actual code on later stage of the build,
-  // this way Closure Compiler will not mangle it (e.g. case 4. above).
-  // Note that if you want to run closure, and also to use Module
-  // after the generated code, you will need to define   var Module = {};
-  // before the code. Then that object will be used in the code, and you
-  // can continue to use Module afterwards as well.
   var Module = moduleArg
-
-  // Determine the runtime environment we are in. You can customize this by
-  // setting the ENVIRONMENT setting at compile time (see settings.js).
-
   var ENVIRONMENT_IS_WEB = true
   var ENVIRONMENT_IS_WORKER = false
-  var ENVIRONMENT_IS_NODE = false
-  var ENVIRONMENT_IS_SHELL = false
-
-  // --pre-jses are emitted after the Module integration code, so that they can
-  // refer to Module (if they choose; they can also define Module)
-
   var arguments_ = []
   var thisProgram = './this.program'
-  var quit_ = (status, toThrow) => {
-    throw toThrow
-  }
-
   var _scriptName = import.meta.url
-
-  // `/` should be present at the end if `scriptDirectory` is not empty
   var scriptDirectory = ''
   function locateFile(path) {
     if (Module['locateFile']) {
@@ -51,23 +13,12 @@ async function BASIS(moduleArg = {}) {
     }
     return scriptDirectory + path
   }
-
-  // Hooks that are implemented differently in different runtime environments.
   var readAsync, readBinary
-
-  // Note that this includes Node.js workers when relevant (pthreads is enabled).
-  // Node.js workers are detected as a combination of ENVIRONMENT_IS_WORKER and
-  // ENVIRONMENT_IS_NODE.
   if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
     try {
-      scriptDirectory = new URL('.', _scriptName).href // includes trailing slash
-    } catch {
-      // Must be a `blob:` or `data:` URL (e.g. `blob:http://site.com/etc/etc`), we cannot
-      // infer anything from them.
-    }
-
+      scriptDirectory = new URL('.', _scriptName).href
+    } catch {}
     {
-      // include: web_or_worker_shell_read.js
       readAsync = async (url) => {
         var response = await fetch(url, { credentials: 'same-origin' })
         if (response.ok) {
@@ -75,100 +26,17 @@ async function BASIS(moduleArg = {}) {
         }
         throw new Error(response.status + ' : ' + response.url)
       }
-      // end include: web_or_worker_shell_read.js
     }
   } else {
   }
-
   var out = console.log.bind(console)
   var err = console.error.bind(console)
-
-  // end include: shell.js
-
-  // include: preamble.js
-  // === Preamble library stuff ===
-
-  // Documentation for the public APIs defined in this file must be updated in:
-  //    site/source/docs/api_reference/preamble.js.rst
-  // A prebuilt local version of the documentation is available at:
-  //    site/build/text/docs/api_reference/preamble.js.txt
-  // You can also build docs locally as HTML or other formats in site/
-  // An online HTML version (which may be of a different version of Emscripten)
-  //    is up at http://kripken.github.io/emscripten-site/docs/api_reference/preamble.js.html
-
   var wasmBinary
-
-  // Wasm globals
-
-  //========================================
-  // Runtime essentials
-  //========================================
-
-  // whether we are quitting the application. no code should run after this.
-  // set in exit() and abort()
   var ABORT = false
-
-  // set by exit() and abort().  Passed to 'onExit' handler.
-  // NOTE: This is also used as the process return code code in shell environments
-  // but only when noExitRuntime is false.
-  var EXITSTATUS
-
-  // In STRICT mode, we only define assert() when ASSERTIONS is set.  i.e. we
-  // don't define it at all in release modes.  This matches the behaviour of
-  // MINIMAL_RUNTIME.
-  // TODO(sbc): Make this the default even without STRICT enabled.
-  /** @type {function(*, string=)} */
-  function assert(condition, text) {
-    if (!condition) {
-      // This build was created without ASSERTIONS defined.  `assert()` should not
-      // ever be called in this configuration but in case there are callers in
-      // the wild leave this simple abort() implementation here for now.
-      abort(text)
-    }
-  }
-
-  /**
-   * Indicates whether filename is delivered via file protocol (as opposed to http/https)
-   * @noinline
-   */
-  var isFileURI = (filename) => filename.startsWith('file://')
-
-  // include: runtime_common.js
-  // include: runtime_stack_check.js
-  // end include: runtime_stack_check.js
-  // include: runtime_exceptions.js
-  // end include: runtime_exceptions.js
-  // include: runtime_debug.js
-  // end include: runtime_debug.js
+  class EmscriptenEH {}
+  class EmscriptenSjLj extends EmscriptenEH {}
   var readyPromiseResolve, readyPromiseReject
-
-  // Memory management
-  var /** @type {!Int8Array} */
-    HEAP8,
-    /** @type {!Uint8Array} */
-    HEAPU8,
-    /** @type {!Int16Array} */
-    HEAP16,
-    /** @type {!Uint16Array} */
-    HEAPU16,
-    /** @type {!Int32Array} */
-    HEAP32,
-    /** @type {!Uint32Array} */
-    HEAPU32,
-    /** @type {!Float32Array} */
-    HEAPF32,
-    /** @type {!Float64Array} */
-    HEAPF64
-
-  // BigInt64Array type is not correctly defined in closure
-  var /** not-@type {!BigInt64Array} */
-    HEAP64,
-    /* BigUint64Array type is not correctly defined in closure
-/** not-@type {!BigUint64Array} */
-    HEAPU64
-
   var runtimeInitialized = false
-
   function updateMemoryViews() {
     var b = wasmMemory.buffer
     Module['HEAP8'] = HEAP8 = new Int8Array(b)
@@ -182,10 +50,6 @@ async function BASIS(moduleArg = {}) {
     HEAP64 = new BigInt64Array(b)
     HEAPU64 = new BigUint64Array(b)
   }
-
-  // include: memoryprofiler.js
-  // end include: memoryprofiler.js
-  // end include: runtime_common.js
   function preRun() {
     if (Module['preRun']) {
       if (typeof Module['preRun'] == 'function')
@@ -194,29 +58,16 @@ async function BASIS(moduleArg = {}) {
         addOnPreRun(Module['preRun'].shift())
       }
     }
-    // Begin ATPRERUNS hooks
     callRuntimeCallbacks(onPreRuns)
-    // End ATPRERUNS hooks
   }
-
   function initRuntime() {
     runtimeInitialized = true
-
-    // Begin ATINITS hooks
     if (!Module['noFSInit'] && !FS.initialized) FS.init()
     TTY.init()
-    // End ATINITS hooks
-
-    wasmExports['__wasm_call_ctors']()
-
-    // Begin ATPOSTCTORS hooks
+    wasmExports['ba']()
     FS.ignorePermissions = false
-    // End ATPOSTCTORS hooks
   }
-
   function postRun() {
-    // PThreads reuse the runtime from the main thread.
-
     if (Module['postRun']) {
       if (typeof Module['postRun'] == 'function')
         Module['postRun'] = [Module['postRun']]
@@ -224,59 +75,25 @@ async function BASIS(moduleArg = {}) {
         addOnPostRun(Module['postRun'].shift())
       }
     }
-
-    // Begin ATPOSTRUNS hooks
     callRuntimeCallbacks(onPostRuns)
-    // End ATPOSTRUNS hooks
   }
-
-  /** @param {string|number=} what */
   function abort(what) {
     Module['onAbort']?.(what)
-
-    what = 'Aborted(' + what + ')'
-    // TODO(sbc): Should we remove printing and leave it up to whoever
-    // catches the exception?
+    what = `Aborted(${what})`
     err(what)
-
     ABORT = true
-
     what += '. Build with -sASSERTIONS for more info.'
-
-    // Use a wasm runtime error, because a JS error might be seen as a foreign
-    // exception, which means we'd run destructors on it. We need the error to
-    // simply make the program stop.
-    // FIXME This approach does not work in Wasm EH because it currently does not assume
-    // all RuntimeErrors are from traps; it decides whether a RuntimeError is from
-    // a trap or not based on a hidden field within the object. So at the moment
-    // we don't have a way of throwing a wasm trap from JS. TODO Make a JS API that
-    // allows this in the wasm spec.
-
-    // Suppress closure compiler warning here. Closure compiler's builtin extern
-    // definition for WebAssembly.RuntimeError claims it takes no arguments even
-    // though it can.
-    // TODO(https://github.com/google/closure-compiler/pull/3913): Remove if/when upstream closure gets fixed.
-    /** @suppress {checkTypes} */
     var e = new WebAssembly.RuntimeError(what)
-
     readyPromiseReject?.(e)
-    // Throw the error whether or not MODULARIZE is set because abort is used
-    // in code paths apart from instantiation where an exception is expected
-    // to be thrown when abort is called.
     throw e
   }
-
   var wasmBinaryFile
-
   function findWasmBinary() {
     if (Module['locateFile']) {
       return locateFile('basis_encoder.wasm')
     }
-
-    // Use bundler-friendly `new URL(..., import.meta.url)` pattern; works in browsers too.
     return new URL('basis_encoder.wasm', import.meta.url).href
   }
-
   function getBinarySync(file) {
     if (file == wasmBinaryFile && wasmBinary) {
       return new Uint8Array(wasmBinary)
@@ -284,27 +101,17 @@ async function BASIS(moduleArg = {}) {
     if (readBinary) {
       return readBinary(file)
     }
-    // Throwing a plain string here, even though it not normally adviables since
-    // this gets turning into an `abort` in instantiateArrayBuffer.
     throw 'both async and sync fetching of the wasm failed'
   }
-
   async function getWasmBinary(binaryFile) {
-    // If we don't have the binary yet, load it asynchronously using readAsync.
     if (!wasmBinary) {
-      // Fetch the binary using readAsync
       try {
         var response = await readAsync(binaryFile)
         return new Uint8Array(response)
-      } catch {
-        // Fall back to getBinarySync below;
-      }
+      } catch {}
     }
-
-    // Otherwise, getBinarySync should be able to get it synchronously
     return getBinarySync(binaryFile)
   }
-
   async function instantiateArrayBuffer(binaryFile, imports) {
     try {
       var binary = await getWasmBinary(binaryFile)
@@ -312,11 +119,9 @@ async function BASIS(moduleArg = {}) {
       return instance
     } catch (reason) {
       err(`failed to asynchronously prepare wasm: ${reason}`)
-
       abort(reason)
     }
   }
-
   async function instantiateAsync(binary, binaryFile, imports) {
     if (!binary) {
       try {
@@ -327,59 +132,28 @@ async function BASIS(moduleArg = {}) {
         )
         return instantiationResult
       } catch (reason) {
-        // We expect the most common failure cause to be a bad MIME type for the binary,
-        // in which case falling back to ArrayBuffer instantiation should work.
         err(`wasm streaming compile failed: ${reason}`)
         err('falling back to ArrayBuffer instantiation')
-        // fall back of instantiateArrayBuffer below
       }
     }
     return instantiateArrayBuffer(binaryFile, imports)
   }
-
   function getWasmImports() {
-    // prepare imports
-    var imports = {
-      env: wasmImports,
-      wasi_snapshot_preview1: wasmImports,
-    }
+    var imports = { a: wasmImports }
     return imports
   }
-
-  // Create the wasm instance.
-  // Receives the wasm imports, returns the exports.
   async function createWasm() {
-    // Load the wasm module and create an instance of using native support in the JS engine.
-    // handle a generated wasm instance, receiving its exports and
-    // performing other necessary setup
-    /** @param {WebAssembly.Module=} module*/
     function receiveInstance(instance, module) {
       wasmExports = instance.exports
-
+      wasmExports = applySignatureConversions(wasmExports)
       assignWasmExports(wasmExports)
-
       updateMemoryViews()
-
       return wasmExports
     }
-
-    // Prefer streaming instantiation if available.
     function receiveInstantiationResult(result) {
-      // 'result' is a ResultObject object which has both the module and instance.
-      // receiveInstance() will swap in the exports (to Module.asm) so they can be called
-      // TODO: Due to Closure regression https://github.com/google/closure-compiler/issues/3193, the above line no longer optimizes out down to the following line.
-      // When the regression is fixed, can restore the above PTHREADS-enabled path.
       return receiveInstance(result['instance'])
     }
-
     var info = getWasmImports()
-
-    // User shell pages can write their own Module.instantiateWasm = function(imports, successCallback) callback
-    // to manually instantiate the Wasm module themselves. This allows pages to
-    // run the instantiation parallel to any other async startup actions they are
-    // performing.
-    // Also pthreads and wasm workers initialize the wasm instance through this
-    // path.
     if (Module['instantiateWasm']) {
       return new Promise((resolve, reject) => {
         Module['instantiateWasm'](info, (inst, mod) => {
@@ -387,17 +161,11 @@ async function BASIS(moduleArg = {}) {
         })
       })
     }
-
     wasmBinaryFile ??= findWasmBinary()
     var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info)
     var exports = receiveInstantiationResult(result)
     return exports
   }
-
-  // end include: preamble.js
-
-  // Begin JS library code
-
   class ExitStatus {
     name = 'ExitStatus'
     constructor(status) {
@@ -405,167 +173,91 @@ async function BASIS(moduleArg = {}) {
       this.status = status
     }
   }
-
+  var HEAP16
+  var HEAP32
+  var HEAP64
+  var HEAP8
+  var HEAPF32
+  var HEAPF64
+  var HEAPU16
+  var HEAPU32
+  var HEAPU64
+  var HEAPU8
   var callRuntimeCallbacks = (callbacks) => {
     while (callbacks.length > 0) {
-      // Pass the module as the first argument.
       callbacks.shift()(Module)
     }
   }
   var onPostRuns = []
   var addOnPostRun = (cb) => onPostRuns.push(cb)
-
   var onPreRuns = []
   var addOnPreRun = (cb) => onPreRuns.push(cb)
-
-  /**
-   * @param {number} ptr
-   * @param {string} type
-   */
-  function getValue(ptr, type = 'i8') {
-    if (type.endsWith('*')) type = '*'
-    switch (type) {
-      case 'i1':
-        return HEAP8[ptr]
-      case 'i8':
-        return HEAP8[ptr]
-      case 'i16':
-        return HEAP16[ptr >> 1]
-      case 'i32':
-        return HEAP32[ptr >> 2]
-      case 'i64':
-        return HEAP64[ptr >> 3]
-      case 'float':
-        return HEAPF32[ptr >> 2]
-      case 'double':
-        return HEAPF64[ptr >> 3]
-      case '*':
-        return HEAPU32[ptr >> 2]
-      default:
-        abort(`invalid type for getValue: ${type}`)
-    }
-  }
-
   var noExitRuntime = true
-
-  /**
-   * @param {number} ptr
-   * @param {number} value
-   * @param {string} type
-   */
-  function setValue(ptr, value, type = 'i8') {
-    if (type.endsWith('*')) type = '*'
-    switch (type) {
-      case 'i1':
-        HEAP8[ptr] = value
-        break
-      case 'i8':
-        HEAP8[ptr] = value
-        break
-      case 'i16':
-        HEAP16[ptr >> 1] = value
-        break
-      case 'i32':
-        HEAP32[ptr >> 2] = value
-        break
-      case 'i64':
-        HEAP64[ptr >> 3] = BigInt(value)
-        break
-      case 'float':
-        HEAPF32[ptr >> 2] = value
-        break
-      case 'double':
-        HEAPF64[ptr >> 3] = value
-        break
-      case '*':
-        HEAPU32[ptr >> 2] = value
-        break
-      default:
-        abort(`invalid type for setValue: ${type}`)
-    }
-  }
-
   var stackRestore = (val) => __emscripten_stack_restore(val)
-
   var stackSave = () => _emscripten_stack_get_current()
-
   class ExceptionInfo {
-    // excPtr - Thrown object pointer to wrap. Metadata pointer is calculated from it.
     constructor(excPtr) {
       this.excPtr = excPtr
       this.ptr = excPtr - 24
     }
-
     set_type(type) {
-      HEAPU32[(this.ptr + 4) >> 2] = type
+      HEAPU32[((this.ptr + 4) >>> 2) >>> 0] = type
     }
-
     get_type() {
-      return HEAPU32[(this.ptr + 4) >> 2]
+      return HEAPU32[((this.ptr + 4) >>> 2) >>> 0]
     }
-
     set_destructor(destructor) {
-      HEAPU32[(this.ptr + 8) >> 2] = destructor
+      HEAPU32[((this.ptr + 8) >>> 2) >>> 0] = destructor
     }
-
     get_destructor() {
-      return HEAPU32[(this.ptr + 8) >> 2]
+      return HEAPU32[((this.ptr + 8) >>> 2) >>> 0]
     }
-
     set_caught(caught) {
       caught = caught ? 1 : 0
-      HEAP8[this.ptr + 12] = caught
+      HEAP8[(this.ptr + 12) >>> 0] = caught
     }
-
     get_caught() {
-      return HEAP8[this.ptr + 12] != 0
+      return HEAP8[(this.ptr + 12) >>> 0] != 0
     }
-
     set_rethrown(rethrown) {
       rethrown = rethrown ? 1 : 0
-      HEAP8[this.ptr + 13] = rethrown
+      HEAP8[(this.ptr + 13) >>> 0] = rethrown
     }
-
     get_rethrown() {
-      return HEAP8[this.ptr + 13] != 0
+      return HEAP8[(this.ptr + 13) >>> 0] != 0
     }
-
-    // Initialize native structure fields. Should be called once after allocated.
     init(type, destructor) {
       this.set_adjusted_ptr(0)
       this.set_type(type)
       this.set_destructor(destructor)
     }
-
     set_adjusted_ptr(adjustedPtr) {
-      HEAPU32[(this.ptr + 16) >> 2] = adjustedPtr
+      HEAPU32[((this.ptr + 16) >>> 2) >>> 0] = adjustedPtr
     }
-
     get_adjusted_ptr() {
-      return HEAPU32[(this.ptr + 16) >> 2]
+      return HEAPU32[((this.ptr + 16) >>> 2) >>> 0]
     }
   }
-
-  var exceptionLast = 0
-
   var uncaughtExceptionCount = 0
-  var ___cxa_throw = (ptr, type, destructor) => {
+  var INT53_MAX = 9007199254740992
+  var INT53_MIN = -9007199254740992
+  var bigintToI53Checked = (num) =>
+    num < INT53_MIN || num > INT53_MAX ? NaN : Number(num)
+  function ___cxa_throw(ptr, type, destructor) {
+    ptr >>>= 0
+    type >>>= 0
+    destructor >>>= 0
     var info = new ExceptionInfo(ptr)
-    // Initialize ExceptionInfo content after it was allocated in __cxa_allocate_exception.
     info.init(type, destructor)
-    exceptionLast = ptr
     uncaughtExceptionCount++
-    throw exceptionLast
+    abort()
   }
-
   var syscallGetVarargI = () => {
-    // the `+` prepended here is necessary to convince the JSCompiler that varargs is indeed a number.
-    var ret = HEAP32[+SYSCALLS.varargs >> 2]
+    var ret = HEAP32[(+SYSCALLS.varargs >>> 2) >>> 0]
     SYSCALLS.varargs += 4
     return ret
   }
   var syscallGetVarargP = syscallGetVarargI
-
   var PATH = {
     isAbs: (path) => path.charAt(0) === '/',
     splitPath: (filename) => {
@@ -574,7 +266,6 @@ async function BASIS(moduleArg = {}) {
       return splitPathRe.exec(filename).slice(1)
     },
     normalizeArray: (parts, allowAboveRoot) => {
-      // if the path tries to go above the root, `up` ends up > 0
       var up = 0
       for (var i = parts.length - 1; i >= 0; i--) {
         var last = parts[i]
@@ -588,7 +279,6 @@ async function BASIS(moduleArg = {}) {
           up--
         }
       }
-      // if the path is allowed to go above the root, restore leading ..s
       if (allowAboveRoot) {
         for (; up; up--) {
           parts.unshift('..')
@@ -599,7 +289,6 @@ async function BASIS(moduleArg = {}) {
     normalize: (path) => {
       var isAbsolute = PATH.isAbs(path),
         trailingSlash = path.slice(-1) === '/'
-      // Normalize the path
       path = PATH.normalizeArray(
         path.split('/').filter((p) => !!p),
         !isAbsolute,
@@ -617,11 +306,9 @@ async function BASIS(moduleArg = {}) {
         root = result[0],
         dir = result[1]
       if (!root && !dir) {
-        // No dirname whatsoever
         return '.'
       }
       if (dir) {
-        // It has a dirname, strip trailing slash
         dir = dir.slice(0, -1)
       }
       return root + dir
@@ -630,32 +317,22 @@ async function BASIS(moduleArg = {}) {
     join: (...paths) => PATH.normalize(paths.join('/')),
     join2: (l, r) => PATH.normalize(l + '/' + r),
   }
-
-  var initRandomFill = () => {
-    return (view) => crypto.getRandomValues(view)
-  }
-  var randomFill = (view) => {
-    // Lazily init on the first invocation.
-    ;(randomFill = initRandomFill())(view)
-  }
-
+  var initRandomFill = () => (view) => (crypto.getRandomValues(view), 0)
+  var randomFill = (view) => (randomFill = initRandomFill())(view)
   var PATH_FS = {
     resolve: (...args) => {
       var resolvedPath = '',
         resolvedAbsolute = false
       for (var i = args.length - 1; i >= -1 && !resolvedAbsolute; i--) {
         var path = i >= 0 ? args[i] : FS.cwd()
-        // Skip empty and invalid entries
         if (typeof path != 'string') {
           throw new TypeError('Arguments to path.resolve must be strings')
         } else if (!path) {
-          return '' // an invalid portion invalidates the whole thing
+          return ''
         }
         resolvedPath = path + '/' + resolvedPath
         resolvedAbsolute = PATH.isAbs(path)
       }
-      // At this point the path should be resolved to a full absolute path, but
-      // handle relative paths to be safe (might happen when process.cwd() fails)
       resolvedPath = PATH.normalizeArray(
         resolvedPath.split('/').filter((p) => !!p),
         !resolvedAbsolute,
@@ -695,86 +372,57 @@ async function BASIS(moduleArg = {}) {
       return outputParts.join('/')
     },
   }
-
   var UTF8Decoder = globalThis.TextDecoder && new TextDecoder()
-
   var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
     var maxIdx = idx + maxBytesToRead
     if (ignoreNul) return maxIdx
-    // TextDecoder needs to know the byte length in advance, it doesn't stop on
-    // null terminator by itself.
-    // As a tiny code save trick, compare idx against maxIdx using a negation,
-    // so that maxBytesToRead=undefined/NaN means Infinity.
     while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx
     return idx
   }
-
-  /**
-   * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
-   * array that contains uint8 values, returns a copy of that string as a
-   * Javascript String object.
-   * heapOrArray is either a regular array, or a JavaScript typed array view.
-   * @param {number=} idx
-   * @param {number=} maxBytesToRead
-   * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
-   * @return {string}
-   */
   var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
+    idx >>>= 0
     var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul)
-
-    // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
     if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
       return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr))
     }
     var str = ''
     while (idx < endPtr) {
-      // For UTF8 byte structure, see:
-      // http://en.wikipedia.org/wiki/UTF-8#Description
-      // https://www.ietf.org/rfc/rfc2279.txt
-      // https://tools.ietf.org/html/rfc3629
       var u0 = heapOrArray[idx++]
-      if (!(u0 & 0x80)) {
+      if (!(u0 & 128)) {
         str += String.fromCharCode(u0)
         continue
       }
       var u1 = heapOrArray[idx++] & 63
-      if ((u0 & 0xe0) == 0xc0) {
+      if ((u0 & 224) == 192) {
         str += String.fromCharCode(((u0 & 31) << 6) | u1)
         continue
       }
       var u2 = heapOrArray[idx++] & 63
-      if ((u0 & 0xf0) == 0xe0) {
+      if ((u0 & 240) == 224) {
         u0 = ((u0 & 15) << 12) | (u1 << 6) | u2
       } else {
         u0 =
           ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63)
       }
-
-      if (u0 < 0x10000) {
+      if (u0 < 65536) {
         str += String.fromCharCode(u0)
       } else {
-        var ch = u0 - 0x10000
-        str += String.fromCharCode(0xd800 | (ch >> 10), 0xdc00 | (ch & 0x3ff))
+        var ch = u0 - 65536
+        str += String.fromCharCode(55296 | (ch >> 10), 56320 | (ch & 1023))
       }
     }
     return str
   }
-
   var FS_stdin_getChar_buffer = []
-
   var lengthBytesUTF8 = (str) => {
     var len = 0
     for (var i = 0; i < str.length; ++i) {
-      // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
-      // unit, not a Unicode code point of the character! So decode
-      // UTF16->UTF32->UTF8.
-      // See http://unicode.org/faq/utf_bom.html#utf16-3
-      var c = str.charCodeAt(i) // possibly a lead surrogate
-      if (c <= 0x7f) {
+      var c = str.charCodeAt(i)
+      if (c <= 127) {
         len++
-      } else if (c <= 0x7ff) {
+      } else if (c <= 2047) {
         len += 2
-      } else if (c >= 0xd800 && c <= 0xdfff) {
+      } else if (c >= 55296 && c <= 57343) {
         len += 4
         ++i
       } else {
@@ -783,47 +431,37 @@ async function BASIS(moduleArg = {}) {
     }
     return len
   }
-
   var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
-    // Parameter maxBytesToWrite is not optional. Negative values, 0, null,
-    // undefined and false each don't write out any bytes.
+    outIdx >>>= 0
     if (!(maxBytesToWrite > 0)) return 0
-
     var startIdx = outIdx
-    var endIdx = outIdx + maxBytesToWrite - 1 // -1 for string null terminator.
+    var endIdx = outIdx + maxBytesToWrite - 1
     for (var i = 0; i < str.length; ++i) {
-      // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description
-      // and https://www.ietf.org/rfc/rfc2279.txt
-      // and https://tools.ietf.org/html/rfc3629
       var u = str.codePointAt(i)
-      if (u <= 0x7f) {
+      if (u <= 127) {
         if (outIdx >= endIdx) break
-        heap[outIdx++] = u
-      } else if (u <= 0x7ff) {
+        heap[outIdx++ >>> 0] = u
+      } else if (u <= 2047) {
         if (outIdx + 1 >= endIdx) break
-        heap[outIdx++] = 0xc0 | (u >> 6)
-        heap[outIdx++] = 0x80 | (u & 63)
-      } else if (u <= 0xffff) {
+        heap[outIdx++ >>> 0] = 192 | (u >> 6)
+        heap[outIdx++ >>> 0] = 128 | (u & 63)
+      } else if (u <= 65535) {
         if (outIdx + 2 >= endIdx) break
-        heap[outIdx++] = 0xe0 | (u >> 12)
-        heap[outIdx++] = 0x80 | ((u >> 6) & 63)
-        heap[outIdx++] = 0x80 | (u & 63)
+        heap[outIdx++ >>> 0] = 224 | (u >> 12)
+        heap[outIdx++ >>> 0] = 128 | ((u >> 6) & 63)
+        heap[outIdx++ >>> 0] = 128 | (u & 63)
       } else {
         if (outIdx + 3 >= endIdx) break
-        heap[outIdx++] = 0xf0 | (u >> 18)
-        heap[outIdx++] = 0x80 | ((u >> 12) & 63)
-        heap[outIdx++] = 0x80 | ((u >> 6) & 63)
-        heap[outIdx++] = 0x80 | (u & 63)
-        // Gotcha: if codePoint is over 0xFFFF, it is represented as a surrogate pair in UTF-16.
-        // We need to manually skip over the second code unit for correct iteration.
+        heap[outIdx++ >>> 0] = 240 | (u >> 18)
+        heap[outIdx++ >>> 0] = 128 | ((u >> 12) & 63)
+        heap[outIdx++ >>> 0] = 128 | ((u >> 6) & 63)
+        heap[outIdx++ >>> 0] = 128 | (u & 63)
         i++
       }
     }
-    // Null-terminate the pointer to the buffer.
-    heap[outIdx] = 0
+    heap[outIdx >>> 0] = 0
     return outIdx - startIdx
   }
-  /** @type {function(string, boolean=, number=)} */
   var intArrayFromString = (stringy, dontAddNull, length) => {
     var len = length > 0 ? length : lengthBytesUTF8(stringy) + 1
     var u8array = new Array(len)
@@ -835,8 +473,7 @@ async function BASIS(moduleArg = {}) {
     if (!FS_stdin_getChar_buffer.length) {
       var result = null
       if (globalThis.window?.prompt) {
-        // Browser.
-        result = window.prompt('Input: ') // returns null on cancel
+        result = window.prompt('Input: ')
         if (result !== null) {
           result += '\n'
         }
@@ -851,29 +488,10 @@ async function BASIS(moduleArg = {}) {
   }
   var TTY = {
     ttys: [],
-    init() {
-      // https://github.com/emscripten-core/emscripten/pull/1555
-      // if (ENVIRONMENT_IS_NODE) {
-      //   // currently, FS.init does not distinguish if process.stdin is a file or TTY
-      //   // device, it always assumes it's a TTY device. because of this, we're forcing
-      //   // process.stdin to UTF8 encoding to at least make stdin reading compatible
-      //   // with text files until FS.init can be refactored.
-      //   process.stdin.setEncoding('utf8');
-      // }
-    },
-    shutdown() {
-      // https://github.com/emscripten-core/emscripten/pull/1555
-      // if (ENVIRONMENT_IS_NODE) {
-      //   // inolen: any idea as to why node -e 'process.stdin.read()' wouldn't exit immediately (with process.stdin being a tty)?
-      //   // isaacs: because now it's reading from the stream, you've expressed interest in it, so that read() kicks off a _read() which creates a ReadReq operation
-      //   // inolen: I thought read() in that case was a synchronous operation that just grabbed some amount of buffered data if it exists?
-      //   // isaacs: it is. but it also triggers a _read() call, which calls readStart() on the handle
-      //   // isaacs: do process.stdin.pause() and i'd think it'd probably close the pending call
-      //   process.stdin.pause();
-      // }
-    },
+    init() {},
+    shutdown() {},
     register(dev, ops) {
-      TTY.ttys[dev] = { input: [], output: [], ops: ops }
+      TTY.ttys[dev] = { input: [], output: [], ops }
       FS.registerDevice(dev, TTY.stream_ops)
     },
     stream_ops: {
@@ -886,13 +504,12 @@ async function BASIS(moduleArg = {}) {
         stream.seekable = false
       },
       close(stream) {
-        // flush any pending line data
         stream.tty.ops.fsync(stream.tty)
       },
       fsync(stream) {
         stream.tty.ops.fsync(stream.tty)
       },
-      read(stream, buffer, offset, length, pos /* ignored */) {
+      read(stream, buffer, offset, length, pos) {
         if (!stream.tty || !stream.tty.ops.get_char) {
           throw new FS.ErrnoError(60)
         }
@@ -942,7 +559,7 @@ async function BASIS(moduleArg = {}) {
           out(UTF8ArrayToString(tty.output))
           tty.output = []
         } else {
-          if (val != 0) tty.output.push(val) // val == 0 would cut text output off in the middle.
+          if (val != 0) tty.output.push(val)
         }
       },
       fsync(tty) {
@@ -952,21 +569,18 @@ async function BASIS(moduleArg = {}) {
         }
       },
       ioctl_tcgets(tty) {
-        // typical setting
         return {
           c_iflag: 25856,
           c_oflag: 5,
           c_cflag: 191,
           c_lflag: 35387,
           c_cc: [
-            0x03, 0x1c, 0x7f, 0x15, 0x04, 0x00, 0x01, 0x00, 0x11, 0x13, 0x1a,
-            0x00, 0x12, 0x0f, 0x17, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            3, 28, 127, 21, 4, 0, 1, 0, 17, 19, 26, 0, 18, 15, 23, 22, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           ],
         }
       },
       ioctl_tcsets(tty, optional_actions, data) {
-        // currently just ignore
         return 0
       },
       ioctl_tiocgwinsz(tty) {
@@ -990,12 +604,8 @@ async function BASIS(moduleArg = {}) {
       },
     },
   }
-
   var zeroMemory = (ptr, size) => HEAPU8.fill(0, ptr, ptr + size)
-
-  var alignMemory = (size, alignment) => {
-    return Math.ceil(size / alignment) * alignment
-  }
+  var alignMemory = (size, alignment) => Math.ceil(size / alignment) * alignment
   var mmapAlloc = (size) => {
     size = alignMemory(size, 65536)
     var ptr = _emscripten_builtin_memalign(65536, size)
@@ -1009,7 +619,6 @@ async function BASIS(moduleArg = {}) {
     },
     createNode(parent, name, mode, dev) {
       if (FS.isBlkdev(mode) || FS.isFIFO(mode)) {
-        // no supported
         throw new FS.ErrnoError(63)
       }
       MEMFS.ops_table ||= {
@@ -1025,9 +634,7 @@ async function BASIS(moduleArg = {}) {
             readdir: MEMFS.node_ops.readdir,
             symlink: MEMFS.node_ops.symlink,
           },
-          stream: {
-            llseek: MEMFS.stream_ops.llseek,
-          },
+          stream: { llseek: MEMFS.stream_ops.llseek },
         },
         file: {
           node: {
@@ -1066,11 +673,8 @@ async function BASIS(moduleArg = {}) {
       } else if (FS.isFile(node.mode)) {
         node.node_ops = MEMFS.ops_table.file.node
         node.stream_ops = MEMFS.ops_table.file.stream
-        node.usedBytes = 0 // The actual number of bytes used in the typed array, as opposed to contents.length which gives the whole capacity.
-        // When the byte data of the file is populated, this will point to either a typed array, or a normal JS array. Typed arrays are preferred
-        // for performance, and used by default. However, typed arrays are not resizable like normal JS arrays are, so there is a small disk size
-        // penalty involved for appending file writes that continuously grow a file similar to std::vector capacity vs used -scheme.
-        node.contents = null
+        node.usedBytes = 0
+        node.contents = MEMFS.emptyFileContents ??= new Uint8Array(0)
       } else if (FS.isLink(node.mode)) {
         node.node_ops = MEMFS.ops_table.link.node
         node.stream_ops = MEMFS.ops_table.link.stream
@@ -1079,7 +683,6 @@ async function BASIS(moduleArg = {}) {
         node.stream_ops = MEMFS.ops_table.chrdev.stream
       }
       node.atime = node.mtime = node.ctime = Date.now()
-      // add the new node to the parent
       if (parent) {
         parent.contents[name] = node
         parent.atime = parent.mtime = parent.ctime = node.atime
@@ -1087,50 +690,34 @@ async function BASIS(moduleArg = {}) {
       return node
     },
     getFileDataAsTypedArray(node) {
-      if (!node.contents) return new Uint8Array(0)
-      if (node.contents.subarray)
-        return node.contents.subarray(0, node.usedBytes) // Make sure to not return excess unused bytes.
-      return new Uint8Array(node.contents)
+      return node.contents.subarray(0, node.usedBytes)
     },
     expandFileStorage(node, newCapacity) {
-      var prevCapacity = node.contents ? node.contents.length : 0
-      if (prevCapacity >= newCapacity) return // No need to expand, the storage was already large enough.
-      // Don't expand strictly to the given requested limit if it's only a very small increase, but instead geometrically grow capacity.
-      // For small filesizes (<1MB), perform size*2 geometric increase, but for large sizes, do a much more conservative size*1.125 increase to
-      // avoid overshooting the allocation cap by a very large margin.
+      var prevCapacity = node.contents.length
+      if (prevCapacity >= newCapacity) return
       var CAPACITY_DOUBLING_MAX = 1024 * 1024
       newCapacity = Math.max(
         newCapacity,
-        (prevCapacity *
-          (prevCapacity < CAPACITY_DOUBLING_MAX ? 2.0 : 1.125)) >>>
+        (prevCapacity * (prevCapacity < CAPACITY_DOUBLING_MAX ? 2 : 1.125)) >>>
           0,
       )
-      if (prevCapacity != 0) newCapacity = Math.max(newCapacity, 256) // At minimum allocate 256b for each file when expanding.
-      var oldContents = node.contents
-      node.contents = new Uint8Array(newCapacity) // Allocate new storage.
-      if (node.usedBytes > 0)
-        node.contents.set(oldContents.subarray(0, node.usedBytes), 0) // Copy old data over to the new storage.
+      if (prevCapacity) newCapacity = Math.max(newCapacity, 256)
+      var oldContents = MEMFS.getFileDataAsTypedArray(node)
+      node.contents = new Uint8Array(newCapacity)
+      node.contents.set(oldContents)
     },
     resizeFileStorage(node, newSize) {
       if (node.usedBytes == newSize) return
-      if (newSize == 0) {
-        node.contents = null // Fully decommit when requesting a resize to zero.
-        node.usedBytes = 0
-      } else {
-        var oldContents = node.contents
-        node.contents = new Uint8Array(newSize) // Allocate new storage.
-        if (oldContents) {
-          node.contents.set(
-            oldContents.subarray(0, Math.min(newSize, node.usedBytes)),
-          ) // Copy old data over to the new storage.
-        }
-        node.usedBytes = newSize
-      }
+      var oldContents = node.contents
+      node.contents = new Uint8Array(newSize)
+      node.contents.set(
+        oldContents.subarray(0, Math.min(newSize, node.usedBytes)),
+      )
+      node.usedBytes = newSize
     },
     node_ops: {
       getattr(node) {
         var attr = {}
-        // device numbers reuse inode numbers.
         attr.dev = FS.isChrdev(node.mode) ? node.id : 1
         attr.ino = node.id
         attr.mode = node.mode
@@ -1150,8 +737,6 @@ async function BASIS(moduleArg = {}) {
         attr.atime = new Date(node.atime)
         attr.mtime = new Date(node.mtime)
         attr.ctime = new Date(node.ctime)
-        // NOTE: In our implementation, st_blocks = Math.ceil(st_size/st_blksize),
-        //       but this is not required by the standard.
         attr.blksize = 4096
         attr.blocks = Math.ceil(attr.size / attr.blksize)
         return attr
@@ -1167,11 +752,8 @@ async function BASIS(moduleArg = {}) {
         }
       },
       lookup(parent, name) {
-        // This error may happen quite a bit. To avoid overhead we reuse it (and
-        // suffer a lack of stack info).
         if (!MEMFS.doesNotExistError) {
           MEMFS.doesNotExistError = new FS.ErrnoError(44)
-          /** @suppress {checkTypes} */
           MEMFS.doesNotExistError.stack = '<generic error, no stack>'
         }
         throw MEMFS.doesNotExistError
@@ -1186,14 +768,12 @@ async function BASIS(moduleArg = {}) {
         } catch (e) {}
         if (new_node) {
           if (FS.isDir(old_node.mode)) {
-            // if we're overwriting a directory at new_name, make sure it's empty.
             for (var i in new_node.contents) {
               throw new FS.ErrnoError(55)
             }
           }
           FS.hashRemoveNode(new_node)
         }
-        // do the internal rewiring
         delete old_node.parent.contents[old_node.name]
         new_dir.contents[new_name] = old_node
         old_node.name = new_name
@@ -1219,7 +799,7 @@ async function BASIS(moduleArg = {}) {
         return ['.', '..', ...Object.keys(node.contents)]
       },
       symlink(parent, newname, oldpath) {
-        var node = MEMFS.createNode(parent, newname, 0o777 | 40960, 0)
+        var node = MEMFS.createNode(parent, newname, 511 | 40960, 0)
         node.link = oldpath
         return node
       },
@@ -1235,60 +815,27 @@ async function BASIS(moduleArg = {}) {
         var contents = stream.node.contents
         if (position >= stream.node.usedBytes) return 0
         var size = Math.min(stream.node.usedBytes - position, length)
-        if (size > 8 && contents.subarray) {
-          // non-trivial, and typed array
-          buffer.set(contents.subarray(position, position + size), offset)
-        } else {
-          for (var i = 0; i < size; i++)
-            buffer[offset + i] = contents[position + i]
-        }
+        buffer.set(contents.subarray(position, position + size), offset)
         return size
       },
       write(stream, buffer, offset, length, position, canOwn) {
-        // If the buffer is located in main memory (HEAP), and if
-        // memory can grow, we can't hold on to references of the
-        // memory buffer, as they may get invalidated. That means we
-        // need to do copy its contents.
         if (buffer.buffer === HEAP8.buffer) {
           canOwn = false
         }
-
         if (!length) return 0
         var node = stream.node
         node.mtime = node.ctime = Date.now()
-
-        if (buffer.subarray && (!node.contents || node.contents.subarray)) {
-          // This write is from a typed array to a typed array?
-          if (canOwn) {
-            node.contents = buffer.subarray(offset, offset + length)
-            node.usedBytes = length
-            return length
-          } else if (node.usedBytes === 0 && position === 0) {
-            // If this is a simple first write to an empty file, do a fast set since we don't need to care about old data.
-            node.contents = buffer.slice(offset, offset + length)
-            node.usedBytes = length
-            return length
-          } else if (position + length <= node.usedBytes) {
-            // Writing to an already allocated and used subrange of the file?
-            node.contents.set(
-              buffer.subarray(offset, offset + length),
-              position,
-            )
-            return length
-          }
-        }
-
-        // Appending to an existing file and we need to reallocate, or source data did not come as a typed array.
-        MEMFS.expandFileStorage(node, position + length)
-        if (node.contents.subarray && buffer.subarray) {
-          // Use typed array write which is available.
-          node.contents.set(buffer.subarray(offset, offset + length), position)
+        if (canOwn) {
+          node.contents = buffer.subarray(offset, offset + length)
+          node.usedBytes = length
+        } else if (node.usedBytes === 0 && position === 0) {
+          node.contents = buffer.slice(offset, offset + length)
+          node.usedBytes = length
         } else {
-          for (var i = 0; i < length; i++) {
-            node.contents[position + i] = buffer[offset + i] // Or fall back to manual write if not.
-          }
+          MEMFS.expandFileStorage(node, position + length)
+          node.contents.set(buffer.subarray(offset, offset + length), position)
+          node.usedBytes = Math.max(node.usedBytes, position + length)
         }
-        node.usedBytes = Math.max(node.usedBytes, position + length)
         return length
       },
       llseek(stream, offset, whence) {
@@ -1312,10 +859,7 @@ async function BASIS(moduleArg = {}) {
         var ptr
         var allocated
         var contents = stream.node.contents
-        // Only make a new copy when MAP_PRIVATE is specified.
-        if (!(flags & 2) && contents && contents.buffer === HEAP8.buffer) {
-          // We can't emulate MAP_SHARED when the file is not backed by the
-          // buffer we're mapping to (e.g. the HEAP buffer).
+        if (!(flags & 2) && contents.buffer === HEAP8.buffer) {
           allocated = false
           ptr = contents.byteOffset
         } else {
@@ -1325,7 +869,6 @@ async function BASIS(moduleArg = {}) {
             throw new FS.ErrnoError(48)
           }
           if (contents) {
-            // Try to avoid unnecessary slices.
             if (position > 0 || position + length < contents.length) {
               if (contents.subarray) {
                 contents = contents.subarray(position, position + length)
@@ -1337,20 +880,19 @@ async function BASIS(moduleArg = {}) {
                 )
               }
             }
-            HEAP8.set(contents, ptr)
+            HEAP8.set(contents, ptr >>> 0)
           }
         }
         return { ptr, allocated }
       },
       msync(stream, buffer, offset, length, mmapFlags) {
         MEMFS.stream_ops.write(stream, buffer, 0, length, offset, false)
-        // should we check if bytesWritten and length are the same?
         return 0
       },
     },
   }
-
   var FS_modeStringToFlags = (str) => {
+    if (typeof str != 'string') return str
     var flagModes = {
       r: 0,
       'r+': 2,
@@ -1365,59 +907,52 @@ async function BASIS(moduleArg = {}) {
     }
     return flags
   }
-
+  var FS_fileDataToTypedArray = (data) => {
+    if (typeof data == 'string') {
+      data = intArrayFromString(data, true)
+    }
+    if (!data.subarray) {
+      data = new Uint8Array(data)
+    }
+    return data
+  }
   var FS_getMode = (canRead, canWrite) => {
     var mode = 0
     if (canRead) mode |= 292 | 73
     if (canWrite) mode |= 146
     return mode
   }
-
   var asyncLoad = async (url) => {
     var arrayBuffer = await readAsync(url)
     return new Uint8Array(arrayBuffer)
   }
-
   var FS_createDataFile = (...args) => FS.createDataFile(...args)
-
-  var getUniqueRunDependency = (id) => {
-    return id
-  }
-
+  var getUniqueRunDependency = (id) => id
   var runDependencies = 0
-
   var dependenciesFulfilled = null
   var removeRunDependency = (id) => {
     runDependencies--
-
     Module['monitorRunDependencies']?.(runDependencies)
-
     if (runDependencies == 0) {
       if (dependenciesFulfilled) {
         var callback = dependenciesFulfilled
         dependenciesFulfilled = null
-        callback() // can add another dependenciesFulfilled
+        callback()
       }
     }
   }
   var addRunDependency = (id) => {
     runDependencies++
-
     Module['monitorRunDependencies']?.(runDependencies)
   }
-
   var preloadPlugins = []
   var FS_handledByPreloadPlugin = async (byteArray, fullname) => {
-    // Ensure plugins are ready.
     if (typeof Browser != 'undefined') Browser.init()
-
     for (var plugin of preloadPlugins) {
       if (plugin['canHandle'](fullname)) {
         return plugin['handle'](byteArray, fullname)
       }
     }
-    // In no plugin handled this file then return the original/unmodified
-    // byteArray.
     return byteArray
   }
   var FS_preloadFile = async (
@@ -1430,18 +965,14 @@ async function BASIS(moduleArg = {}) {
     canOwn,
     preFinish,
   ) => {
-    // TODO we should allow people to just pass in a complete filename instead
-    // of parent and name being that we just join them anyways
     var fullname = name ? PATH_FS.resolve(PATH.join2(parent, name)) : parent
-    var dep = getUniqueRunDependency(`cp ${fullname}`) // might have several active requests for the same fullname
+    var dep = getUniqueRunDependency(`cp ${fullname}`)
     addRunDependency(dep)
-
     try {
       var byteArray = url
       if (typeof url == 'string') {
         byteArray = await asyncLoad(url)
       }
-
       byteArray = await FS_handledByPreloadPlugin(byteArray, fullname)
       preFinish?.()
       if (!dontCreateFile) {
@@ -1488,15 +1019,8 @@ async function BASIS(moduleArg = {}) {
     ignorePermissions: true,
     filesystems: null,
     syncFSRequests: 0,
-    readFiles: {},
     ErrnoError: class {
       name = 'ErrnoError'
-      // We set the `name` property to be able to identify `FS.ErrnoError`
-      // - the `name` is a standard ECMA-262 property of error objects. Kind of good to have it anyway.
-      // - when using PROXYFS, an error can come from an underlying FS
-      // as different FS objects have their own FS.ErrnoError each,
-      // the test `err instanceof FS.ErrnoError` won't detect an error coming from another filesystem, causing bugs.
-      // we'll use the reliable test `err.name == "ErrnoError"` instead
       constructor(errno) {
         this.errno = errno
       }
@@ -1539,7 +1063,7 @@ async function BASIS(moduleArg = {}) {
       mounted = null
       constructor(parent, name, mode, rdev) {
         if (!parent) {
-          parent = this // root node sets parent to itself
+          parent = this
         }
         this.parent = parent
         this.mount = parent.mount
@@ -1573,37 +1097,25 @@ async function BASIS(moduleArg = {}) {
         throw new FS.ErrnoError(44)
       }
       opts.follow_mount ??= true
-
       if (!PATH.isAbs(path)) {
         path = FS.cwd() + '/' + path
       }
-
-      // limit max consecutive symlinks to 40 (SYMLOOP_MAX).
       linkloop: for (var nlinks = 0; nlinks < 40; nlinks++) {
-        // split the absolute path
         var parts = path.split('/').filter((p) => !!p)
-
-        // start at the root
         var current = FS.root
         var current_path = '/'
-
         for (var i = 0; i < parts.length; i++) {
           var islast = i === parts.length - 1
           if (islast && opts.parent) {
-            // stop resolving
             break
           }
-
           if (parts[i] === '.') {
             continue
           }
-
           if (parts[i] === '..') {
             current_path = PATH.dirname(current_path)
             if (FS.isRoot(current)) {
               path = current_path + '/' + parts.slice(i + 1).join('/')
-              // We're making progress here, don't let many consecutive ..'s
-              // lead to ELOOP
               nlinks--
               continue linkloop
             } else {
@@ -1611,27 +1123,18 @@ async function BASIS(moduleArg = {}) {
             }
             continue
           }
-
           current_path = PATH.join2(current_path, parts[i])
           try {
             current = FS.lookupNode(current, parts[i])
           } catch (e) {
-            // if noent_okay is true, suppress a ENOENT in the last component
-            // and return an object with an undefined node. This is needed for
-            // resolving symlinks in the path when creating a file.
             if (e?.errno === 44 && islast && opts.noent_okay) {
               return { path: current_path }
             }
             throw e
           }
-
-          // jump to the mount's root node if this is a mountpoint
           if (FS.isMountpoint(current) && (!islast || opts.follow_mount)) {
             current = current.mounted.root
           }
-
-          // by default, lookupPath will not follow a symlink if it is the final path component.
-          // setting opts.follow = true will override this behavior.
           if (FS.isLink(current.mode) && (!islast || opts.follow)) {
             if (!current.node_ops.readlink) {
               throw new FS.ErrnoError(52)
@@ -1664,7 +1167,6 @@ async function BASIS(moduleArg = {}) {
     },
     hashName(parentid, name) {
       var hash = 0
-
       for (var i = 0; i < name.length; i++) {
         hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0
       }
@@ -1702,14 +1204,11 @@ async function BASIS(moduleArg = {}) {
           return node
         }
       }
-      // if we failed to find it in the cache, call into the VFS
       return FS.lookup(parent, name)
     },
     createNode(parent, name, mode, rdev) {
       var node = new FS.FSNode(parent, name, mode, rdev)
-
       FS.hashAddNode(node)
-
       return node
     },
     destroyNode(node) {
@@ -1753,12 +1252,13 @@ async function BASIS(moduleArg = {}) {
       if (FS.ignorePermissions) {
         return 0
       }
-      // return 0 if any user, group or owner bits are set.
       if (perms.includes('r') && !(node.mode & 292)) {
         return 2
-      } else if (perms.includes('w') && !(node.mode & 146)) {
+      }
+      if (perms.includes('w') && !(node.mode & 146)) {
         return 2
-      } else if (perms.includes('x') && !(node.mode & 73)) {
+      }
+      if (perms.includes('x') && !(node.mode & 73)) {
         return 2
       }
       return 0
@@ -1798,10 +1298,8 @@ async function BASIS(moduleArg = {}) {
         if (FS.isRoot(node) || FS.getPath(node) === FS.cwd()) {
           return 10
         }
-      } else {
-        if (FS.isDir(node.mode)) {
-          return 31
-        }
+      } else if (FS.isDir(node.mode)) {
+        return 31
       }
       return 0
     },
@@ -1811,16 +1309,14 @@ async function BASIS(moduleArg = {}) {
       }
       if (FS.isLink(node.mode)) {
         return 32
-      } else if (FS.isDir(node.mode)) {
-        if (
-          FS.flagsToPermissionString(flags) !== 'r' || // opening for write
-          flags & (512 | 64)
-        ) {
-          // TODO: check for O_SEARCH? (== search for dir only)
+      }
+      var mode = FS.flagsToPermissionString(flags)
+      if (FS.isDir(node.mode)) {
+        if (mode !== 'r' || flags & (512 | 64)) {
           return 31
         }
       }
-      return FS.nodePermissions(node, FS.flagsToPermissionString(flags))
+      return FS.nodePermissions(node, mode)
     },
     checkOpExists(op, err) {
       if (!op) {
@@ -1846,7 +1342,6 @@ async function BASIS(moduleArg = {}) {
     },
     getStream: (fd) => FS.streams[fd],
     createStream(stream, fd = -1) {
-      // clone it, so we can return an instance of FSStream
       stream = Object.assign(new FS.FSStream(), stream)
       if (fd == -1) {
         fd = FS.nextfd()
@@ -1873,9 +1368,7 @@ async function BASIS(moduleArg = {}) {
     chrdev_stream_ops: {
       open(stream) {
         var device = FS.getDevice(stream.node.rdev)
-        // override node's stream ops with the device's
         stream.stream_ops = device.stream_ops
-        // forward the open call
         stream.stream_ops.open?.(stream)
       },
       llseek() {
@@ -1883,7 +1376,7 @@ async function BASIS(moduleArg = {}) {
       },
     },
     major: (dev) => dev >> 8,
-    minor: (dev) => dev & 0xff,
+    minor: (dev) => dev & 255,
     makedev: (ma, mi) => (ma << 8) | mi,
     registerDevice(dev, ops) {
       FS.devices[dev] = { stream_ops: ops }
@@ -1892,15 +1385,11 @@ async function BASIS(moduleArg = {}) {
     getMounts(mount) {
       var mounts = []
       var check = [mount]
-
       while (check.length) {
         var m = check.pop()
-
         mounts.push(m)
-
         check.push(...m.mounts)
       }
-
       return mounts
     },
     syncfs(populate, callback) {
@@ -1908,23 +1397,18 @@ async function BASIS(moduleArg = {}) {
         callback = populate
         populate = false
       }
-
       FS.syncFSRequests++
-
       if (FS.syncFSRequests > 1) {
         err(
           `warning: ${FS.syncFSRequests} FS.syncfs operations in flight at once, probably just doing extra work`,
         )
       }
-
       var mounts = FS.getMounts(FS.root.mount)
       var completed = 0
-
       function doCallback(errCode) {
         FS.syncFSRequests--
         return callback(errCode)
       }
-
       function done(errCode) {
         if (errCode) {
           if (!done.errored) {
@@ -1937,8 +1421,6 @@ async function BASIS(moduleArg = {}) {
           doCallback(null)
         }
       }
-
-      // sync all mounts
       for (var mount of mounts) {
         if (mount.type.syncfs) {
           mount.type.syncfs(mount, populate, done)
@@ -1951,78 +1433,51 @@ async function BASIS(moduleArg = {}) {
       var root = mountpoint === '/'
       var pseudo = !mountpoint
       var node
-
       if (root && FS.root) {
         throw new FS.ErrnoError(10)
       } else if (!root && !pseudo) {
         var lookup = FS.lookupPath(mountpoint, { follow_mount: false })
-
-        mountpoint = lookup.path // use the absolute path
+        mountpoint = lookup.path
         node = lookup.node
-
         if (FS.isMountpoint(node)) {
           throw new FS.ErrnoError(10)
         }
-
         if (!FS.isDir(node.mode)) {
           throw new FS.ErrnoError(54)
         }
       }
-
-      var mount = {
-        type,
-        opts,
-        mountpoint,
-        mounts: [],
-      }
-
-      // create a root node for the fs
+      var mount = { type, opts, mountpoint, mounts: [] }
       var mountRoot = type.mount(mount)
       mountRoot.mount = mount
       mount.root = mountRoot
-
       if (root) {
         FS.root = mountRoot
       } else if (node) {
-        // set as a mountpoint
         node.mounted = mount
-
-        // add the new mount to the current mount's children
         if (node.mount) {
           node.mount.mounts.push(mount)
         }
       }
-
       return mountRoot
     },
     unmount(mountpoint) {
       var lookup = FS.lookupPath(mountpoint, { follow_mount: false })
-
       if (!FS.isMountpoint(lookup.node)) {
         throw new FS.ErrnoError(28)
       }
-
-      // destroy the nodes for this mount, and all its child mounts
       var node = lookup.node
       var mount = node.mounted
       var mounts = FS.getMounts(mount)
-
       for (var [hash, current] of Object.entries(FS.nameTable)) {
         while (current) {
           var next = current.name_next
-
           if (mounts.includes(current.mount)) {
             FS.destroyNode(current)
           }
-
           current = next
         }
       }
-
-      // no longer a mountpoint
       node.mounted = null
-
-      // remove this mount from the child mounts
       var idx = node.mount.mounts.indexOf(mount)
       node.mount.mounts.splice(idx, 1)
     },
@@ -2052,15 +1507,9 @@ async function BASIS(moduleArg = {}) {
       return FS.statfsNode(FS.lookupPath(path, { follow: true }).node)
     },
     statfsStream(stream) {
-      // We keep a separate statfsStream function because noderawfs overrides
-      // it. In noderawfs, stream.node is sometimes null. Instead, we need to
-      // look at stream.path.
       return FS.statfsNode(stream.node)
     },
     statfsNode(node) {
-      // NOTE: None of the defaults here are true. We're just returning safe and
-      //       sane values. Currently nodefs and rawfs replace these defaults,
-      //       other file systems leave them alone.
       var rtn = {
         bsize: 4096,
         frsize: 4096,
@@ -2073,18 +1522,17 @@ async function BASIS(moduleArg = {}) {
         flags: 2,
         namelen: 255,
       }
-
       if (node.node_ops.statfs) {
         Object.assign(rtn, node.node_ops.statfs(node.mount.opts.root))
       }
       return rtn
     },
-    create(path, mode = 0o666) {
+    create(path, mode = 438) {
       mode &= 4095
       mode |= 32768
       return FS.mknod(path, mode, 0)
     },
-    mkdir(path, mode = 0o777) {
+    mkdir(path, mode = 511) {
       mode &= 511 | 512
       mode |= 16384
       return FS.mknod(path, mode, 0)
@@ -2106,7 +1554,7 @@ async function BASIS(moduleArg = {}) {
     mkdev(path, mode, dev) {
       if (typeof dev == 'undefined') {
         dev = mode
-        mode = 0o666
+        mode = 438
       }
       mode |= 8192
       return FS.mknod(path, mode, dev)
@@ -2135,51 +1583,36 @@ async function BASIS(moduleArg = {}) {
       var new_dirname = PATH.dirname(new_path)
       var old_name = PATH.basename(old_path)
       var new_name = PATH.basename(new_path)
-      // parents must exist
       var lookup, old_dir, new_dir
-
-      // let the errors from non existent directories percolate up
       lookup = FS.lookupPath(old_path, { parent: true })
       old_dir = lookup.node
       lookup = FS.lookupPath(new_path, { parent: true })
       new_dir = lookup.node
-
       if (!old_dir || !new_dir) throw new FS.ErrnoError(44)
-      // need to be part of the same mount
       if (old_dir.mount !== new_dir.mount) {
         throw new FS.ErrnoError(75)
       }
-      // source must exist
       var old_node = FS.lookupNode(old_dir, old_name)
-      // old path should not be an ancestor of the new path
       var relative = PATH_FS.relative(old_path, new_dirname)
       if (relative.charAt(0) !== '.') {
         throw new FS.ErrnoError(28)
       }
-      // new path should not be an ancestor of the old path
       relative = PATH_FS.relative(new_path, old_dirname)
       if (relative.charAt(0) !== '.') {
         throw new FS.ErrnoError(55)
       }
-      // see if the new path already exists
       var new_node
       try {
         new_node = FS.lookupNode(new_dir, new_name)
-      } catch (e) {
-        // not fatal
-      }
-      // early out if nothing needs to change
+      } catch (e) {}
       if (old_node === new_node) {
         return
       }
-      // we'll need to delete the old entry
       var isdir = FS.isDir(old_node.mode)
       var errCode = FS.mayDelete(old_dir, old_name, isdir)
       if (errCode) {
         throw new FS.ErrnoError(errCode)
       }
-      // need delete permissions if we'll be overwriting.
-      // need create permissions if new doesn't already exist.
       errCode = new_node
         ? FS.mayDelete(new_dir, new_name, isdir)
         : FS.mayCreate(new_dir, new_name)
@@ -2195,26 +1628,19 @@ async function BASIS(moduleArg = {}) {
       ) {
         throw new FS.ErrnoError(10)
       }
-      // if we are going to change the parent, check write permissions
       if (new_dir !== old_dir) {
         errCode = FS.nodePermissions(old_dir, 'w')
         if (errCode) {
           throw new FS.ErrnoError(errCode)
         }
       }
-      // remove the node from the lookup hash
       FS.hashRemoveNode(old_node)
-      // do the underlying fs rename
       try {
         old_dir.node_ops.rename(old_node, new_dir, new_name)
-        // update old node (we do this here to avoid each backend
-        // needing to)
         old_node.parent = new_dir
       } catch (e) {
         throw e
       } finally {
-        // add the node back to the hash (in case node_ops.rename
-        // changed its name)
         FS.hashAddNode(old_node)
       }
     },
@@ -2252,9 +1678,6 @@ async function BASIS(moduleArg = {}) {
       var node = FS.lookupNode(parent, name)
       var errCode = FS.mayDelete(parent, name, false)
       if (errCode) {
-        // According to POSIX, we should map EISDIR to EPERM, but
-        // we instead do what Linux does (and we must, as we use
-        // the musl linux libc).
         throw new FS.ErrnoError(errCode)
       }
       if (!parent.node_ops.unlink) {
@@ -2320,11 +1743,7 @@ async function BASIS(moduleArg = {}) {
       FS.doChmod(stream, stream.node, mode, false)
     },
     doChown(stream, node, dontFollow) {
-      FS.doSetAttr(stream, node, {
-        timestamp: Date.now(),
-        dontFollow,
-        // we ignore the uid / gid for now
-      })
+      FS.doSetAttr(stream, node, { timestamp: Date.now(), dontFollow })
     },
     chown(path, uid, gid, dontFollow) {
       var node
@@ -2354,10 +1773,7 @@ async function BASIS(moduleArg = {}) {
       if (errCode) {
         throw new FS.ErrnoError(errCode)
       }
-      FS.doSetAttr(stream, node, {
-        size: len,
-        timestamp: Date.now(),
-      })
+      FS.doSetAttr(stream, node, { size: len, timestamp: Date.now() })
     },
     truncate(path, len) {
       if (len < 0) {
@@ -2383,16 +1799,13 @@ async function BASIS(moduleArg = {}) {
       var lookup = FS.lookupPath(path, { follow: true })
       var node = lookup.node
       var setattr = FS.checkOpExists(node.node_ops.setattr, 63)
-      setattr(node, {
-        atime: atime,
-        mtime: mtime,
-      })
+      setattr(node, { atime, mtime })
     },
-    open(path, flags, mode = 0o666) {
+    open(path, flags, mode = 438) {
       if (path === '') {
         throw new FS.ErrnoError(44)
       }
-      flags = typeof flags == 'string' ? FS_modeStringToFlags(flags) : flags
+      flags = FS_modeStringToFlags(flags)
       if (flags & 64) {
         mode = (mode & 4095) | 32768
       } else {
@@ -2404,9 +1817,6 @@ async function BASIS(moduleArg = {}) {
         node = path
       } else {
         isDirPath = path.endsWith('/')
-        // noent_okay makes it so that if the final component of the path
-        // doesn't exist, lookupPath returns `node: undefined`. `path` will be
-        // updated to point to the target of all symlinks.
         var lookup = FS.lookupPath(path, {
           follow: !(flags & 131072),
           noent_okay: true,
@@ -2414,75 +1824,53 @@ async function BASIS(moduleArg = {}) {
         node = lookup.node
         path = lookup.path
       }
-      // perhaps we need to create the node
       var created = false
       if (flags & 64) {
         if (node) {
-          // if O_CREAT and O_EXCL are set, error out if the node already exists
           if (flags & 128) {
             throw new FS.ErrnoError(20)
           }
         } else if (isDirPath) {
           throw new FS.ErrnoError(31)
         } else {
-          // node doesn't exist, try to create it
-          // Ignore the permission bits here to ensure we can `open` this new
-          // file below. We use chmod below the apply the permissions once the
-          // file is open.
-          node = FS.mknod(path, mode | 0o777, 0)
+          node = FS.mknod(path, mode | 511, 0)
           created = true
         }
       }
       if (!node) {
         throw new FS.ErrnoError(44)
       }
-      // can't truncate a device
       if (FS.isChrdev(node.mode)) {
         flags &= ~512
       }
-      // if asked only for a directory, then this must be one
       if (flags & 65536 && !FS.isDir(node.mode)) {
         throw new FS.ErrnoError(54)
       }
-      // check permissions, if this is not a file we just created now (it is ok to
-      // create and write to a file with read-only permissions; it is read-only
-      // for later use)
       if (!created) {
         var errCode = FS.mayOpen(node, flags)
         if (errCode) {
           throw new FS.ErrnoError(errCode)
         }
       }
-      // do truncation if necessary
       if (flags & 512 && !created) {
         FS.truncate(node, 0)
       }
-      // we've already handled these, don't pass down to the underlying vfs
       flags &= ~(128 | 512 | 131072)
-
-      // register the stream with the filesystem
       var stream = FS.createStream({
         node,
-        path: FS.getPath(node), // we want the absolute path to the node
+        path: FS.getPath(node),
         flags,
         seekable: true,
         position: 0,
         stream_ops: node.stream_ops,
-        // used by the file family libc calls (fopen, fwrite, ferror, etc.)
         ungotten: [],
         error: false,
       })
-      // call the new stream's open function
       if (stream.stream_ops.open) {
         stream.stream_ops.open(stream)
       }
       if (created) {
-        FS.chmod(node, mode & 0o777)
-      }
-      if (Module['logReadFiles'] && !(flags & 1)) {
-        if (!(path in FS.readFiles)) {
-          FS.readFiles[path] = 1
-        }
+        FS.chmod(node, mode & 511)
       }
       return stream
     },
@@ -2490,7 +1878,7 @@ async function BASIS(moduleArg = {}) {
       if (FS.isClosed(stream)) {
         throw new FS.ErrnoError(8)
       }
-      if (stream.getdents) stream.getdents = null // free readdir state
+      if (stream.getdents) stream.getdents = null
       try {
         if (stream.stream_ops.close) {
           stream.stream_ops.close(stream)
@@ -2568,7 +1956,6 @@ async function BASIS(moduleArg = {}) {
         throw new FS.ErrnoError(28)
       }
       if (stream.seekable && stream.flags & 1024) {
-        // seek to the end before writing in append mode
         FS.llseek(stream, 0, 2)
       }
       var seeking = typeof position != 'undefined'
@@ -2589,12 +1976,6 @@ async function BASIS(moduleArg = {}) {
       return bytesWritten
     },
     mmap(stream, length, position, prot, flags) {
-      // User requests writing to file (prot & PROT_WRITE != 0).
-      // Checking if we have permissions to write to the file unless
-      // MAP_PRIVATE flag is set. According to POSIX spec it is possible
-      // to write to file opened in read-only mode with MAP_PRIVATE flag,
-      // as all modifications will be visible only in the memory of
-      // the current process.
       if (
         (prot & 2) !== 0 &&
         (flags & 2) === 0 &&
@@ -2645,14 +2026,8 @@ async function BASIS(moduleArg = {}) {
     writeFile(path, data, opts = {}) {
       opts.flags = opts.flags || 577
       var stream = FS.open(path, opts.flags, opts.mode)
-      if (typeof data == 'string') {
-        data = new Uint8Array(intArrayFromString(data, true))
-      }
-      if (ArrayBuffer.isView(data)) {
-        FS.write(stream, data, 0, data.byteLength, undefined, opts.canOwn)
-      } else {
-        abort('Unsupported data type')
-      }
+      data = FS_fileDataToTypedArray(data)
+      FS.write(stream, data, 0, data.byteLength, undefined, opts.canOwn)
       FS.close(stream)
     },
     cwd: () => FS.currentPath,
@@ -2676,24 +2051,17 @@ async function BASIS(moduleArg = {}) {
       FS.mkdir('/home/web_user')
     },
     createDefaultDevices() {
-      // create /dev
       FS.mkdir('/dev')
-      // setup /dev/null
       FS.registerDevice(FS.makedev(1, 3), {
         read: () => 0,
         write: (stream, buffer, offset, length, pos) => length,
         llseek: () => 0,
       })
       FS.mkdev('/dev/null', FS.makedev(1, 3))
-      // setup /dev/tty and /dev/tty1
-      // stderr needs to print output using err() rather than out()
-      // so we register a second tty just for it.
       TTY.register(FS.makedev(5, 0), TTY.default_tty_ops)
       TTY.register(FS.makedev(6, 0), TTY.default_tty1_ops)
       FS.mkdev('/dev/tty', FS.makedev(5, 0))
       FS.mkdev('/dev/tty1', FS.makedev(6, 0))
-      // setup /dev/[u]random
-      // use a buffer to avoid overhead of individual crypto calls per byte
       var randomBuffer = new Uint8Array(1024),
         randomLeft = 0
       var randomByte = () => {
@@ -2705,14 +2073,10 @@ async function BASIS(moduleArg = {}) {
       }
       FS.createDevice('/dev', 'random', randomByte)
       FS.createDevice('/dev', 'urandom', randomByte)
-      // we're not going to emulate the actual shm device,
-      // just create the tmp dirs that reside in it commonly
       FS.mkdir('/dev/shm')
       FS.mkdir('/dev/shm/tmp')
     },
     createSpecialDirectories() {
-      // create /proc/self/fd which allows /proc/self/fd/6 => readlink gives the
-      // name of the stream for fd 6 (see test_unistd_ttyname)
       FS.mkdir('/proc')
       var proc_self = FS.mkdir('/proc/self')
       FS.mkdir('/proc/self/fd')
@@ -2720,9 +2084,7 @@ async function BASIS(moduleArg = {}) {
         {
           mount() {
             var node = FS.createNode(proc_self, 'fd', 16895, 73)
-            node.stream_ops = {
-              llseek: MEMFS.stream_ops.llseek,
-            }
+            node.stream_ops = { llseek: MEMFS.stream_ops.llseek }
             node.node_ops = {
               lookup(parent, name) {
                 var fd = +name
@@ -2733,7 +2095,7 @@ async function BASIS(moduleArg = {}) {
                   node_ops: { readlink: () => stream.path },
                   id: fd + 1,
                 }
-                ret.parent = ret // make it look like a simple root node
+                ret.parent = ret
                 return ret
               },
               readdir() {
@@ -2750,14 +2112,6 @@ async function BASIS(moduleArg = {}) {
       )
     },
     createStandardStreams(input, output, error) {
-      // TODO deprecate the old functionality of a single
-      // input / output callback and that utilizes FS.createDevice
-      // and instead require a unique set of stream ops
-
-      // by default, we symlink the standard streams to the
-      // default tty devices. however, if the standard streams
-      // have been overwritten we create a unique device for
-      // them instead.
       if (input) {
         FS.createDevice('/dev', 'stdin', input)
       } else {
@@ -2773,39 +2127,27 @@ async function BASIS(moduleArg = {}) {
       } else {
         FS.symlink('/dev/tty1', '/dev/stderr')
       }
-
-      // open default streams for the stdin, stdout and stderr devices
       var stdin = FS.open('/dev/stdin', 0)
       var stdout = FS.open('/dev/stdout', 1)
       var stderr = FS.open('/dev/stderr', 1)
     },
     staticInit() {
       FS.nameTable = new Array(4096)
-
       FS.mount(MEMFS, {}, '/')
-
       FS.createDefaultDirectories()
       FS.createDefaultDevices()
       FS.createSpecialDirectories()
-
-      FS.filesystems = {
-        MEMFS: MEMFS,
-      }
+      FS.filesystems = { MEMFS }
     },
     init(input, output, error) {
       FS.initialized = true
-
-      // Allow Module.stdin etc. to provide defaults, if none explicitly passed to us here
       input ??= Module['stdin']
       output ??= Module['stdout']
       error ??= Module['stderr']
-
       FS.createStandardStreams(input, output, error)
     },
     quit() {
       FS.initialized = false
-      // force-flush all streams, so we get musl std streams printed out
-      // close all of our streams
       for (var stream of FS.streams) {
         if (stream) {
           FS.close(stream)
@@ -2820,7 +2162,6 @@ async function BASIS(moduleArg = {}) {
       return ret.object
     },
     analyzePath(path, dontResolveLastLink) {
-      // operate from within the context of the symlink's target
       try {
         var lookup = FS.lookupPath(path, { follow: !dontResolveLastLink })
         path = lookup.path
@@ -2886,13 +2227,7 @@ async function BASIS(moduleArg = {}) {
       var mode = FS_getMode(canRead, canWrite)
       var node = FS.create(path, mode)
       if (data) {
-        if (typeof data == 'string') {
-          var arr = new Array(data.length)
-          for (var i = 0, len = data.length; i < len; ++i)
-            arr[i] = data.charCodeAt(i)
-          data = arr
-        }
-        // make sure we can write to the file
+        data = FS_fileDataToTypedArray(data)
         FS.chmod(node, mode | 146)
         var stream = FS.open(node, 577)
         FS.write(stream, data, 0, data.length, 0, canOwn)
@@ -2908,19 +2243,16 @@ async function BASIS(moduleArg = {}) {
       var mode = FS_getMode(!!input, !!output)
       FS.createDevice.major ??= 64
       var dev = FS.makedev(FS.createDevice.major++, 0)
-      // Create a fake device that a set of stream ops to emulate
-      // the old behavior.
       FS.registerDevice(dev, {
         open(stream) {
           stream.seekable = false
         },
         close(stream) {
-          // flush any pending line data
           if (output?.buffer?.length) {
             output(10)
           }
         },
-        read(stream, buffer, offset, length, pos /* ignored */) {
+        read(stream, buffer, offset, length, pos) {
           var bytesRead = 0
           for (var i = 0; i < length; i++) {
             var result
@@ -2964,7 +2296,6 @@ async function BASIS(moduleArg = {}) {
           'Lazy loading should have been performed (contents set) in createLazyFile, but it was not. Lazy loading only works in web workers. Use --embed-file or --preload-file in emcc on the main thread.',
         )
       } else {
-        // Command-line.
         try {
           obj.contents = readBinary(obj.url)
         } catch (e) {
@@ -2973,11 +2304,9 @@ async function BASIS(moduleArg = {}) {
       }
     },
     createLazyFile(parent, name, url, canRead, canWrite) {
-      // Lazy chunked Uint8Array (implements get and length from Uint8Array).
-      // Actual getting is abstracted away for eventual reuse.
       class LazyUint8Array {
         lengthKnown = false
-        chunks = [] // Loaded chunks. Index is the chunk number
+        chunks = []
         get(idx) {
           if (idx > this.length - 1 || idx < 0) {
             return undefined
@@ -2990,7 +2319,6 @@ async function BASIS(moduleArg = {}) {
           this.getter = getter
         }
         cacheLength() {
-          // Find length
           var xhr = new XMLHttpRequest()
           xhr.open('HEAD', url, false)
           xhr.send(null)
@@ -3004,12 +2332,8 @@ async function BASIS(moduleArg = {}) {
           var usesGzip =
             (header = xhr.getResponseHeader('Content-Encoding')) &&
             header === 'gzip'
-
-          var chunkSize = 1024 * 1024 // Chunk size in bytes
-
+          var chunkSize = 1024 * 1024
           if (!hasByteServing) chunkSize = datalength
-
-          // Function to get a range from the remote URL.
           var doXHR = (from, to) => {
             if (from > to)
               abort(
@@ -3023,36 +2347,29 @@ async function BASIS(moduleArg = {}) {
               abort(
                 'only ' + datalength + ' bytes available! programmer error!',
               )
-
-            // TODO: Use mozResponseArrayBuffer, responseStream, etc. if available.
             var xhr = new XMLHttpRequest()
             xhr.open('GET', url, false)
             if (datalength !== chunkSize)
               xhr.setRequestHeader('Range', 'bytes=' + from + '-' + to)
-
-            // Some hints to the browser that we want binary data.
             xhr.responseType = 'arraybuffer'
             if (xhr.overrideMimeType) {
               xhr.overrideMimeType('text/plain; charset=x-user-defined')
             }
-
             xhr.send(null)
             if (
               !((xhr.status >= 200 && xhr.status < 300) || xhr.status === 304)
             )
               abort("Couldn't load " + url + '. Status: ' + xhr.status)
             if (xhr.response !== undefined) {
-              return new Uint8Array(
-                /** @type{Array<number>} */ (xhr.response || []),
-              )
+              return new Uint8Array(xhr.response || [])
             }
             return intArrayFromString(xhr.responseText || '', true)
           }
           var lazyArray = this
           lazyArray.setDataGetter((chunkNum) => {
             var start = chunkNum * chunkSize
-            var end = (chunkNum + 1) * chunkSize - 1 // including this byte
-            end = Math.min(end, datalength - 1) // if datalength-1 is selected, this is the last block
+            var end = (chunkNum + 1) * chunkSize - 1
+            end = Math.min(end, datalength - 1)
             if (typeof lazyArray.chunks[chunkNum] == 'undefined') {
               lazyArray.chunks[chunkNum] = doXHR(start, end)
             }
@@ -3060,17 +2377,14 @@ async function BASIS(moduleArg = {}) {
               abort('doXHR failed!')
             return lazyArray.chunks[chunkNum]
           })
-
           if (usesGzip || !datalength) {
-            // if the server uses gzip or doesn't supply the length, we have to download the whole file to get the (uncompressed) length
-            chunkSize = datalength = 1 // this will force getter(0)/doXHR do download the whole file
+            chunkSize = datalength = 1
             datalength = this.getter(0).length
             chunkSize = datalength
             out(
               'LazyFiles on gzip forces download of the whole file when length is accessed',
             )
           }
-
           this._length = datalength
           this._chunkSize = chunkSize
           this.lengthKnown = true
@@ -3088,7 +2402,6 @@ async function BASIS(moduleArg = {}) {
           return this._chunkSize
         }
       }
-
       if (globalThis.XMLHttpRequest) {
         if (!ENVIRONMENT_IS_WORKER)
           abort(
@@ -3097,20 +2410,15 @@ async function BASIS(moduleArg = {}) {
         var lazyArray = new LazyUint8Array()
         var properties = { isDevice: false, contents: lazyArray }
       } else {
-        var properties = { isDevice: false, url: url }
+        var properties = { isDevice: false, url }
       }
-
       var node = FS.createFile(parent, name, properties, canRead, canWrite)
-      // This is a total hack, but I want to get this lazy file code out of the
-      // core of MEMFS. If we want to keep this lazy file concept I feel it should
-      // be its own thin LAZYFS proxying calls to MEMFS.
       if (properties.contents) {
         node.contents = properties.contents
       } else if (properties.url) {
         node.contents = null
         node.url = properties.url
       }
-      // Add a function that defers querying the file size until it is asked the first time.
       Object.defineProperties(node, {
         usedBytes: {
           get: function () {
@@ -3118,7 +2426,6 @@ async function BASIS(moduleArg = {}) {
           },
         },
       })
-      // override each stream op with one that tries to force load the lazy file first
       var stream_ops = {}
       for (const [key, fn] of Object.entries(node.stream_ops)) {
         stream_ops[key] = (...args) => {
@@ -3131,24 +2438,20 @@ async function BASIS(moduleArg = {}) {
         if (position >= contents.length) return 0
         var size = Math.min(contents.length - position, length)
         if (contents.slice) {
-          // normal array
           for (var i = 0; i < size; i++) {
             buffer[offset + i] = contents[position + i]
           }
         } else {
           for (var i = 0; i < size; i++) {
-            // LazyUint8Array from sync binary XHR
             buffer[offset + i] = contents.get(position + i)
           }
         }
         return size
       }
-      // use a custom read function
       stream_ops.read = (stream, buffer, offset, length, position) => {
         FS.forceLoadFile(node)
         return writeChunks(stream, buffer, offset, length, position)
       }
-      // use a custom mmap function
       stream_ops.mmap = (stream, length, position, prot, flags) => {
         FS.forceLoadFile(node)
         var ptr = mmapAlloc(length)
@@ -3162,30 +2465,15 @@ async function BASIS(moduleArg = {}) {
       return node
     },
   }
-
-  /**
-   * Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
-   * emscripten HEAP, returns a copy of that string as a Javascript String object.
-   *
-   * @param {number} ptr
-   * @param {number=} maxBytesToRead - An optional length that specifies the
-   *   maximum number of bytes to read. You can omit this parameter to scan the
-   *   string until the first 0 byte. If maxBytesToRead is passed, and the string
-   *   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
-   *   string will cut short at that byte index.
-   * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
-   * @return {string}
-   */
   var UTF8ToString = (ptr, maxBytesToRead, ignoreNul) => {
+    ptr >>>= 0
     return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead, ignoreNul) : ''
   }
   var SYSCALLS = {
-    DEFAULT_POLLMASK: 5,
     calculateAt(dirfd, path, allowEmpty) {
       if (PATH.isAbs(path)) {
         return path
       }
-      // relative path
       var dir
       if (dirfd === -100) {
         dir = FS.cwd()
@@ -3202,45 +2490,44 @@ async function BASIS(moduleArg = {}) {
       return dir + '/' + path
     },
     writeStat(buf, stat) {
-      HEAPU32[buf >> 2] = stat.dev
-      HEAPU32[(buf + 4) >> 2] = stat.mode
-      HEAPU32[(buf + 8) >> 2] = stat.nlink
-      HEAPU32[(buf + 12) >> 2] = stat.uid
-      HEAPU32[(buf + 16) >> 2] = stat.gid
-      HEAPU32[(buf + 20) >> 2] = stat.rdev
-      HEAP64[(buf + 24) >> 3] = BigInt(stat.size)
-      HEAP32[(buf + 32) >> 2] = 4096
-      HEAP32[(buf + 36) >> 2] = stat.blocks
+      HEAPU32[(buf >>> 2) >>> 0] = stat.dev
+      HEAPU32[((buf + 4) >>> 2) >>> 0] = stat.mode
+      HEAPU32[((buf + 8) >>> 2) >>> 0] = stat.nlink
+      HEAPU32[((buf + 12) >>> 2) >>> 0] = stat.uid
+      HEAPU32[((buf + 16) >>> 2) >>> 0] = stat.gid
+      HEAPU32[((buf + 20) >>> 2) >>> 0] = stat.rdev
+      HEAP64[((buf + 24) >>> 3) >>> 0] = BigInt(stat.size)
+      HEAP32[((buf + 32) >>> 2) >>> 0] = 4096
+      HEAP32[((buf + 36) >>> 2) >>> 0] = stat.blocks
       var atime = stat.atime.getTime()
       var mtime = stat.mtime.getTime()
       var ctime = stat.ctime.getTime()
-      HEAP64[(buf + 40) >> 3] = BigInt(Math.floor(atime / 1000))
-      HEAPU32[(buf + 48) >> 2] = (atime % 1000) * 1000 * 1000
-      HEAP64[(buf + 56) >> 3] = BigInt(Math.floor(mtime / 1000))
-      HEAPU32[(buf + 64) >> 2] = (mtime % 1000) * 1000 * 1000
-      HEAP64[(buf + 72) >> 3] = BigInt(Math.floor(ctime / 1000))
-      HEAPU32[(buf + 80) >> 2] = (ctime % 1000) * 1000 * 1000
-      HEAP64[(buf + 88) >> 3] = BigInt(stat.ino)
+      HEAP64[((buf + 40) >>> 3) >>> 0] = BigInt(Math.floor(atime / 1e3))
+      HEAPU32[((buf + 48) >>> 2) >>> 0] = (atime % 1e3) * 1e3 * 1e3
+      HEAP64[((buf + 56) >>> 3) >>> 0] = BigInt(Math.floor(mtime / 1e3))
+      HEAPU32[((buf + 64) >>> 2) >>> 0] = (mtime % 1e3) * 1e3 * 1e3
+      HEAP64[((buf + 72) >>> 3) >>> 0] = BigInt(Math.floor(ctime / 1e3))
+      HEAPU32[((buf + 80) >>> 2) >>> 0] = (ctime % 1e3) * 1e3 * 1e3
+      HEAP64[((buf + 88) >>> 3) >>> 0] = BigInt(stat.ino)
       return 0
     },
     writeStatFs(buf, stats) {
-      HEAPU32[(buf + 4) >> 2] = stats.bsize
-      HEAPU32[(buf + 60) >> 2] = stats.bsize
-      HEAP64[(buf + 8) >> 3] = BigInt(stats.blocks)
-      HEAP64[(buf + 16) >> 3] = BigInt(stats.bfree)
-      HEAP64[(buf + 24) >> 3] = BigInt(stats.bavail)
-      HEAP64[(buf + 32) >> 3] = BigInt(stats.files)
-      HEAP64[(buf + 40) >> 3] = BigInt(stats.ffree)
-      HEAPU32[(buf + 48) >> 2] = stats.fsid
-      HEAPU32[(buf + 64) >> 2] = stats.flags // ST_NOSUID
-      HEAPU32[(buf + 56) >> 2] = stats.namelen
+      HEAPU32[((buf + 4) >>> 2) >>> 0] = stats.bsize
+      HEAPU32[((buf + 60) >>> 2) >>> 0] = stats.bsize
+      HEAP64[((buf + 8) >>> 3) >>> 0] = BigInt(stats.blocks)
+      HEAP64[((buf + 16) >>> 3) >>> 0] = BigInt(stats.bfree)
+      HEAP64[((buf + 24) >>> 3) >>> 0] = BigInt(stats.bavail)
+      HEAP64[((buf + 32) >>> 3) >>> 0] = BigInt(stats.files)
+      HEAP64[((buf + 40) >>> 3) >>> 0] = BigInt(stats.ffree)
+      HEAPU32[((buf + 48) >>> 2) >>> 0] = stats.fsid
+      HEAPU32[((buf + 64) >>> 2) >>> 0] = stats.flags
+      HEAPU32[((buf + 56) >>> 2) >>> 0] = stats.namelen
     },
     doMsync(addr, stream, len, flags, offset) {
       if (!FS.isFile(stream.node.mode)) {
         throw new FS.ErrnoError(43)
       }
       if (flags & 2) {
-        // MAP_PRIVATE calls need not to be synced back to underlying fs
         return 0
       }
       var buffer = HEAPU8.slice(addr, addr + len)
@@ -3257,6 +2544,7 @@ async function BASIS(moduleArg = {}) {
     },
   }
   function ___syscall_fcntl64(fd, cmd, varargs) {
+    varargs >>>= 0
     SYSCALLS.varargs = varargs
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
@@ -3275,7 +2563,7 @@ async function BASIS(moduleArg = {}) {
         }
         case 1:
         case 2:
-          return 0 // FD_CLOEXEC makes no sense for a single process.
+          return 0
         case 3:
           return stream.flags
         case 4: {
@@ -3286,16 +2574,11 @@ async function BASIS(moduleArg = {}) {
         case 12: {
           var arg = syscallGetVarargP()
           var offset = 0
-          // We're always unlocked.
-          HEAP16[(arg + offset) >> 1] = 2
+          HEAP16[((arg + offset) >>> 1) >>> 0] = 2
           return 0
         }
         case 13:
         case 14:
-          // Pretend that the locking is successful. These are process-level locks,
-          // and Emscripten programs are a single process. If we supported linking a
-          // filesystem between programs, we'd need to do more here.
-          // See https://github.com/emscripten-core/emscripten/issues/23697
           return 0
       }
       return -28
@@ -3304,8 +2587,8 @@ async function BASIS(moduleArg = {}) {
       return -e.errno
     }
   }
-
   function ___syscall_fstat64(fd, buf) {
+    buf >>>= 0
     try {
       return SYSCALLS.writeStat(buf, FS.fstat(fd))
     } catch (e) {
@@ -3313,8 +2596,8 @@ async function BASIS(moduleArg = {}) {
       return -e.errno
     }
   }
-
   function ___syscall_ioctl(fd, op, varargs) {
+    varargs >>>= 0
     SYSCALLS.varargs = varargs
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
@@ -3328,12 +2611,12 @@ async function BASIS(moduleArg = {}) {
           if (stream.tty.ops.ioctl_tcgets) {
             var termios = stream.tty.ops.ioctl_tcgets(stream)
             var argp = syscallGetVarargP()
-            HEAP32[argp >> 2] = termios.c_iflag || 0
-            HEAP32[(argp + 4) >> 2] = termios.c_oflag || 0
-            HEAP32[(argp + 8) >> 2] = termios.c_cflag || 0
-            HEAP32[(argp + 12) >> 2] = termios.c_lflag || 0
+            HEAP32[(argp >>> 2) >>> 0] = termios.c_iflag || 0
+            HEAP32[((argp + 4) >>> 2) >>> 0] = termios.c_oflag || 0
+            HEAP32[((argp + 8) >>> 2) >>> 0] = termios.c_cflag || 0
+            HEAP32[((argp + 12) >>> 2) >>> 0] = termios.c_lflag || 0
             for (var i = 0; i < 32; i++) {
-              HEAP8[argp + i + 17] = termios.c_cc[i] || 0
+              HEAP8[(argp + i + 17) >>> 0] = termios.c_cc[i] || 0
             }
             return 0
           }
@@ -3343,7 +2626,7 @@ async function BASIS(moduleArg = {}) {
         case 21511:
         case 21512: {
           if (!stream.tty) return -59
-          return 0 // no-op, not actually adjusting terminal settings
+          return 0
         }
         case 21506:
         case 21507:
@@ -3351,13 +2634,13 @@ async function BASIS(moduleArg = {}) {
           if (!stream.tty) return -59
           if (stream.tty.ops.ioctl_tcsets) {
             var argp = syscallGetVarargP()
-            var c_iflag = HEAP32[argp >> 2]
-            var c_oflag = HEAP32[(argp + 4) >> 2]
-            var c_cflag = HEAP32[(argp + 8) >> 2]
-            var c_lflag = HEAP32[(argp + 12) >> 2]
+            var c_iflag = HEAP32[(argp >>> 2) >>> 0]
+            var c_oflag = HEAP32[((argp + 4) >>> 2) >>> 0]
+            var c_cflag = HEAP32[((argp + 8) >>> 2) >>> 0]
+            var c_lflag = HEAP32[((argp + 12) >>> 2) >>> 0]
             var c_cc = []
             for (var i = 0; i < 32; i++) {
-              c_cc.push(HEAP8[argp + i + 17])
+              c_cc.push(HEAP8[(argp + i + 17) >>> 0])
             }
             return stream.tty.ops.ioctl_tcsets(stream.tty, op, {
               c_iflag,
@@ -3367,17 +2650,17 @@ async function BASIS(moduleArg = {}) {
               c_cc,
             })
           }
-          return 0 // no-op, not actually adjusting terminal settings
+          return 0
         }
         case 21519: {
           if (!stream.tty) return -59
           var argp = syscallGetVarargP()
-          HEAP32[argp >> 2] = 0
+          HEAP32[(argp >>> 2) >>> 0] = 0
           return 0
         }
         case 21520: {
           if (!stream.tty) return -59
-          return -28 // not supported
+          return -28
         }
         case 21537:
         case 21531: {
@@ -3385,21 +2668,16 @@ async function BASIS(moduleArg = {}) {
           return FS.ioctl(stream, op, argp)
         }
         case 21523: {
-          // TODO: in theory we should write to the winsize struct that gets
-          // passed in, but for now musl doesn't read anything on it
           if (!stream.tty) return -59
           if (stream.tty.ops.ioctl_tiocgwinsz) {
             var winsize = stream.tty.ops.ioctl_tiocgwinsz(stream.tty)
             var argp = syscallGetVarargP()
-            HEAP16[argp >> 1] = winsize[0]
-            HEAP16[(argp + 2) >> 1] = winsize[1]
+            HEAP16[(argp >>> 1) >>> 0] = winsize[0]
+            HEAP16[((argp + 2) >>> 1) >>> 0] = winsize[1]
           }
           return 0
         }
         case 21524: {
-          // TODO: technically, this ioctl call should change the window size.
-          // but, since emscripten doesn't have any concept of a terminal window
-          // yet, we'll just silently throw it away as we do TIOCGWINSZ
           if (!stream.tty) return -59
           return 0
         }
@@ -3408,25 +2686,16 @@ async function BASIS(moduleArg = {}) {
           return 0
         }
         default:
-          return -28 // not supported
+          return -28
       }
     } catch (e) {
       if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
       return -e.errno
     }
   }
-
-  function ___syscall_lstat64(path, buf) {
-    try {
-      path = SYSCALLS.getStr(path)
-      return SYSCALLS.writeStat(buf, FS.lstat(path))
-    } catch (e) {
-      if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
-      return -e.errno
-    }
-  }
-
   function ___syscall_newfstatat(dirfd, path, buf, flags) {
+    path >>>= 0
+    buf >>>= 0
     try {
       path = SYSCALLS.getStr(path)
       var nofollow = flags & 256
@@ -3439,8 +2708,9 @@ async function BASIS(moduleArg = {}) {
       return -e.errno
     }
   }
-
   function ___syscall_openat(dirfd, path, flags, varargs) {
+    path >>>= 0
+    varargs >>>= 0
     SYSCALLS.varargs = varargs
     try {
       path = SYSCALLS.getStr(path)
@@ -3452,21 +2722,8 @@ async function BASIS(moduleArg = {}) {
       return -e.errno
     }
   }
-
-  function ___syscall_stat64(path, buf) {
-    try {
-      path = SYSCALLS.getStr(path)
-      return SYSCALLS.writeStat(buf, FS.stat(path))
-    } catch (e) {
-      if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
-      return -e.errno
-    }
-  }
-
   var __abort_js = () => abort('')
-
   var structRegistrations = {}
-
   var runDestructors = (destructors) => {
     while (destructors.length) {
       var ptr = destructors.pop()
@@ -3474,18 +2731,12 @@ async function BASIS(moduleArg = {}) {
       del(ptr)
     }
   }
-
-  /** @suppress {globalThis} */
   function readPointer(pointer) {
-    return this.fromWireType(HEAPU32[pointer >> 2])
+    return this.fromWireType(HEAPU32[(pointer >>> 2) >>> 0])
   }
-
   var awaitingDependencies = {}
-
   var registeredTypes = {}
-
   var typeDependencies = {}
-
   var InternalError = class InternalError extends Error {
     constructor(message) {
       super(message)
@@ -3501,7 +2752,6 @@ async function BASIS(moduleArg = {}) {
     getTypeConverters,
   ) => {
     myTypes.forEach((type) => (typeDependencies[type] = dependentTypes))
-
     function onComplete(typeConverters) {
       var myTypeConverters = getTypeConverters(typeConverters)
       if (myTypeConverters.length !== myTypes.length) {
@@ -3511,7 +2761,6 @@ async function BASIS(moduleArg = {}) {
         registerType(myTypes[i], myTypeConverters[i])
       }
     }
-
     var typeConverters = new Array(dependentTypes.length)
     var unregisteredTypes = []
     var registered = 0
@@ -3536,10 +2785,10 @@ async function BASIS(moduleArg = {}) {
       onComplete(typeConverters)
     }
   }
-  var __embind_finalize_value_object = (structType) => {
+  var __embind_finalize_value_object = function (structType) {
+    structType >>>= 0
     var reg = structRegistrations[structType]
     delete structRegistrations[structType]
-
     var rawConstructor = reg.rawConstructor
     var rawDestructor = reg.rawDestructor
     var fieldRecords = reg.fields
@@ -3570,7 +2819,6 @@ async function BASIS(moduleArg = {}) {
           optional: getterReturnType.optional,
         }
       }
-
       return [
         {
           name: reg.name,
@@ -3583,8 +2831,6 @@ async function BASIS(moduleArg = {}) {
             return rv
           },
           toWireType: (destructors, o) => {
-            // todo: Here we have an opportunity for -O3 level "unsafe" optimizations:
-            // assume all fields are present without checking.
             for (var fieldName in fields) {
               if (!(fieldName in o) && !fields[fieldName].optional) {
                 throw new TypeError(`Missing field: "${fieldName}"`)
@@ -3605,16 +2851,15 @@ async function BASIS(moduleArg = {}) {
       ]
     })
   }
-
   var AsciiToString = (ptr) => {
+    ptr >>>= 0
     var str = ''
     while (1) {
-      var ch = HEAPU8[ptr++]
+      var ch = HEAPU8[ptr++ >>> 0]
       if (!ch) return str
       str += String.fromCharCode(ch)
     }
   }
-
   var BindingError = class BindingError extends Error {
     constructor(message) {
       super(message)
@@ -3624,7 +2869,6 @@ async function BASIS(moduleArg = {}) {
   var throwBindingError = (message) => {
     throw new BindingError(message)
   }
-  /** @param {Object=} options */
   function sharedRegisterType(rawType, registeredInstance, options = {}) {
     var name = registeredInstance.name
     if (!rawType) {
@@ -3639,69 +2883,60 @@ async function BASIS(moduleArg = {}) {
         throwBindingError(`Cannot register type '${name}' twice`)
       }
     }
-
     registeredTypes[rawType] = registeredInstance
     delete typeDependencies[rawType]
-
     if (awaitingDependencies.hasOwnProperty(rawType)) {
       var callbacks = awaitingDependencies[rawType]
       delete awaitingDependencies[rawType]
       callbacks.forEach((cb) => cb())
     }
   }
-  /** @param {Object=} options */
   function registerType(rawType, registeredInstance, options = {}) {
     return sharedRegisterType(rawType, registeredInstance, options)
   }
-
   var integerReadValueFromPointer = (name, width, signed) => {
-    // integers are quite common, so generate very specialized functions
     switch (width) {
       case 1:
         return signed
-          ? (pointer) => HEAP8[pointer]
-          : (pointer) => HEAPU8[pointer]
+          ? (pointer) => HEAP8[pointer >>> 0]
+          : (pointer) => HEAPU8[pointer >>> 0]
       case 2:
         return signed
-          ? (pointer) => HEAP16[pointer >> 1]
-          : (pointer) => HEAPU16[pointer >> 1]
+          ? (pointer) => HEAP16[(pointer >>> 1) >>> 0]
+          : (pointer) => HEAPU16[(pointer >>> 1) >>> 0]
       case 4:
         return signed
-          ? (pointer) => HEAP32[pointer >> 2]
-          : (pointer) => HEAPU32[pointer >> 2]
+          ? (pointer) => HEAP32[(pointer >>> 2) >>> 0]
+          : (pointer) => HEAPU32[(pointer >>> 2) >>> 0]
       case 8:
         return signed
-          ? (pointer) => HEAP64[pointer >> 3]
-          : (pointer) => HEAPU64[pointer >> 3]
+          ? (pointer) => HEAP64[(pointer >>> 3) >>> 0]
+          : (pointer) => HEAPU64[(pointer >>> 3) >>> 0]
       default:
         throw new TypeError(`invalid integer width (${width}): ${name}`)
     }
   }
-  /** @suppress {globalThis} */
-  var __embind_register_bigint = (
+  var __embind_register_bigint = function (
     primitiveType,
     name,
     size,
     minRange,
     maxRange,
-  ) => {
+  ) {
+    primitiveType >>>= 0
+    name >>>= 0
+    size >>>= 0
     name = AsciiToString(name)
-
     const isUnsignedType = minRange === 0n
-
     let fromWireType = (value) => value
     if (isUnsignedType) {
-      // uint64 get converted to int64 in ABI, fix them up like we do for 32-bit integers.
       const bitSize = size * 8
-      fromWireType = (value) => {
-        return BigInt.asUintN(bitSize, value)
-      }
+      fromWireType = (value) => BigInt.asUintN(bitSize, value)
       maxRange = fromWireType(maxRange)
     }
-
     registerType(primitiveType, {
       name,
-      fromWireType: fromWireType,
+      fromWireType,
       toWireType: (destructors, value) => {
         if (typeof value == 'number') {
           value = BigInt(value)
@@ -3713,53 +2948,44 @@ async function BASIS(moduleArg = {}) {
         size,
         !isUnsignedType,
       ),
-      destructorFunction: null, // This type does not need a destructor
+      destructorFunction: null,
     })
   }
-
-  /** @suppress {globalThis} */
-  var __embind_register_bool = (rawType, name, trueValue, falseValue) => {
+  function __embind_register_bool(rawType, name, trueValue, falseValue) {
+    rawType >>>= 0
+    name >>>= 0
     name = AsciiToString(name)
     registerType(rawType, {
       name,
       fromWireType: function (wt) {
-        // ambiguous emscripten ABI: sometimes return values are
-        // true or false, and sometimes integers (0 or 1)
         return !!wt
       },
       toWireType: function (destructors, o) {
         return o ? trueValue : falseValue
       },
       readValueFromPointer: function (pointer) {
-        return this.fromWireType(HEAPU8[pointer])
+        return this.fromWireType(HEAPU8[pointer >>> 0])
       },
-      destructorFunction: null, // This type does not need a destructor
+      destructorFunction: null,
     })
   }
-
-  var shallowCopyInternalPointer = (o) => {
-    return {
-      count: o.count,
-      deleteScheduled: o.deleteScheduled,
-      preservePointerOnDelete: o.preservePointerOnDelete,
-      ptr: o.ptr,
-      ptrType: o.ptrType,
-      smartPtr: o.smartPtr,
-      smartPtrType: o.smartPtrType,
-    }
-  }
-
+  var shallowCopyInternalPointer = (o) => ({
+    count: o.count,
+    deleteScheduled: o.deleteScheduled,
+    preservePointerOnDelete: o.preservePointerOnDelete,
+    ptr: o.ptr,
+    ptrType: o.ptrType,
+    smartPtr: o.smartPtr,
+    smartPtrType: o.smartPtrType,
+  })
   var throwInstanceAlreadyDeleted = (obj) => {
     function getInstanceTypeName(handle) {
       return handle.$$.ptrType.registeredClass.name
     }
     throwBindingError(getInstanceTypeName(obj) + ' instance already deleted')
   }
-
   var finalizationRegistry = false
-
   var detachFinalizer = (handle) => {}
-
   var runDestructor = ($$) => {
     if ($$.smartPtr) {
       $$.smartPtrType.rawDestructor($$.smartPtr)
@@ -3779,10 +3005,6 @@ async function BASIS(moduleArg = {}) {
       attachFinalizer = (handle) => handle
       return handle
     }
-    // If the running environment has a FinalizationRegistry (see
-    // https://github.com/tc39/proposal-weakrefs), then attach finalizers
-    // for class handles.  We check for the presence of FinalizationRegistry
-    // at run-time, not build-time.
     finalizationRegistry = new FinalizationRegistry((info) => {
       releaseClassHandle(info.$$)
     })
@@ -3790,8 +3012,7 @@ async function BASIS(moduleArg = {}) {
       var $$ = handle.$$
       var hasSmartPtr = !!$$.smartPtr
       if (hasSmartPtr) {
-        // We should not call the destructor on raw pointers in case other code expects the pointee to live
-        var info = { $$: $$ }
+        var info = { $$ }
         finalizationRegistry.register(handle, info, handle)
       }
       return handle
@@ -3799,7 +3020,6 @@ async function BASIS(moduleArg = {}) {
     detachFinalizer = (handle) => finalizationRegistry.unregister(handle)
     return attachFinalizer(handle)
   }
-
   var deletionQueue = []
   var flushPendingDeletes = () => {
     while (deletionQueue.length) {
@@ -3808,11 +3028,9 @@ async function BASIS(moduleArg = {}) {
       obj['delete']()
     }
   }
-
   var delayFunction
   var init_ClassHandle = () => {
     let proto = ClassHandle.prototype
-
     Object.assign(proto, {
       isAliasOf(other) {
         if (!(this instanceof ClassHandle)) {
@@ -3821,71 +3039,56 @@ async function BASIS(moduleArg = {}) {
         if (!(other instanceof ClassHandle)) {
           return false
         }
-
         var leftClass = this.$$.ptrType.registeredClass
         var left = this.$$.ptr
-        other.$$ = /** @type {Object} */ (other.$$)
+        other.$$ = other.$$
         var rightClass = other.$$.ptrType.registeredClass
         var right = other.$$.ptr
-
         while (leftClass.baseClass) {
           left = leftClass.upcast(left)
           leftClass = leftClass.baseClass
         }
-
         while (rightClass.baseClass) {
           right = rightClass.upcast(right)
           rightClass = rightClass.baseClass
         }
-
         return leftClass === rightClass && left === right
       },
-
       clone() {
         if (!this.$$.ptr) {
           throwInstanceAlreadyDeleted(this)
         }
-
         if (this.$$.preservePointerOnDelete) {
           this.$$.count.value += 1
           return this
         } else {
           var clone = attachFinalizer(
             Object.create(Object.getPrototypeOf(this), {
-              $$: {
-                value: shallowCopyInternalPointer(this.$$),
-              },
+              $$: { value: shallowCopyInternalPointer(this.$$) },
             }),
           )
-
           clone.$$.count.value += 1
           clone.$$.deleteScheduled = false
           return clone
         }
       },
-
       delete() {
         if (!this.$$.ptr) {
           throwInstanceAlreadyDeleted(this)
         }
-
         if (this.$$.deleteScheduled && !this.$$.preservePointerOnDelete) {
           throwBindingError('Object already scheduled for deletion')
         }
-
         detachFinalizer(this)
         releaseClassHandle(this.$$)
-
         if (!this.$$.preservePointerOnDelete) {
           this.$$.smartPtr = undefined
           this.$$.ptr = undefined
         }
       },
-
       isDeleted() {
         return !this.$$.ptr
       },
-
       deleteLater() {
         if (!this.$$.ptr) {
           throwInstanceAlreadyDeleted(this)
@@ -3901,27 +3104,19 @@ async function BASIS(moduleArg = {}) {
         return this
       },
     })
-
-    // Support `using ...` from https://github.com/tc39/proposal-explicit-resource-management.
     const symbolDispose = Symbol.dispose
     if (symbolDispose) {
       proto[symbolDispose] = proto['delete']
     }
   }
-  /** @constructor */
   function ClassHandle() {}
-
   var createNamedFunction = (name, func) =>
     Object.defineProperty(func, 'name', { value: name })
-
   var registeredPointers = {}
-
   var ensureOverloadTable = (proto, methodName, humanName) => {
     if (undefined === proto[methodName].overloadTable) {
       var prevFunc = proto[methodName]
-      // Inject an overload resolver function that routes to the appropriate overload based on the number of arguments.
       proto[methodName] = function (...args) {
-        // TODO This check can be removed in -O3 level "unsafe" optimizations.
         if (!proto[methodName].overloadTable.hasOwnProperty(args.length)) {
           throwBindingError(
             `Function '${humanName}' called with an invalid number of arguments (${args.length}) - expects one of (${proto[methodName].overloadTable})!`,
@@ -3929,13 +3124,10 @@ async function BASIS(moduleArg = {}) {
         }
         return proto[methodName].overloadTable[args.length].apply(this, args)
       }
-      // Move the previous function into the overload table.
       proto[methodName].overloadTable = []
       proto[methodName].overloadTable[prevFunc.argCount] = prevFunc
     }
   }
-
-  /** @param {number=} numArguments */
   var exposePublicSymbol = (name, value, numArguments) => {
     if (Module.hasOwnProperty(name)) {
       if (
@@ -3945,25 +3137,19 @@ async function BASIS(moduleArg = {}) {
       ) {
         throwBindingError(`Cannot register public name '${name}' twice`)
       }
-
-      // We are exposing a function with the same name as an existing function. Create an overload table and a function selector
-      // that routes between the two.
       ensureOverloadTable(Module, name, name)
       if (Module[name].overloadTable.hasOwnProperty(numArguments)) {
         throwBindingError(
           `Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`,
         )
       }
-      // Add the new function into the overload table.
       Module[name].overloadTable[numArguments] = value
     } else {
       Module[name] = value
       Module[name].argCount = numArguments
     }
   }
-
   var char_0 = 48
-
   var char_9 = 57
   var makeLegalFunctionName = (name) => {
     name = name.replace(/[^a-zA-Z0-9_]/g, '$')
@@ -3973,8 +3159,6 @@ async function BASIS(moduleArg = {}) {
     }
     return name
   }
-
-  /** @constructor */
   function RegisteredClass(
     name,
     constructor,
@@ -3995,7 +3179,6 @@ async function BASIS(moduleArg = {}) {
     this.downcast = downcast
     this.pureVirtualFunctions = []
   }
-
   var upcastPointer = (ptr, ptrClass, desiredClass) => {
     while (ptrClass !== desiredClass) {
       if (!ptrClass.upcast) {
@@ -4008,7 +3191,6 @@ async function BASIS(moduleArg = {}) {
     }
     return ptr
   }
-
   var embindRepr = (v) => {
     if (v === null) {
       return 'null'
@@ -4020,7 +3202,6 @@ async function BASIS(moduleArg = {}) {
       return '' + v
     }
   }
-  /** @suppress {globalThis} */
   function constNoSmartPtrRawPointerToWireType(destructors, handle) {
     if (handle === null) {
       if (this.isReference) {
@@ -4028,7 +3209,6 @@ async function BASIS(moduleArg = {}) {
       }
       return 0
     }
-
     if (!handle.$$) {
       throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`)
     }
@@ -4041,15 +3221,12 @@ async function BASIS(moduleArg = {}) {
     var ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass)
     return ptr
   }
-
-  /** @suppress {globalThis} */
   function genericPointerToWireType(destructors, handle) {
     var ptr
     if (handle === null) {
       if (this.isReference) {
         throwBindingError(`null is not a valid ${this.name}`)
       }
-
       if (this.isSmartPointer) {
         ptr = this.rawConstructor()
         if (destructors !== null) {
@@ -4060,7 +3237,6 @@ async function BASIS(moduleArg = {}) {
         return 0
       }
     }
-
     if (!handle || !handle.$$) {
       throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`)
     }
@@ -4076,18 +3252,12 @@ async function BASIS(moduleArg = {}) {
     }
     var handleClass = handle.$$.ptrType.registeredClass
     ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass)
-
     if (this.isSmartPointer) {
-      // TODO: this is not strictly true
-      // We could support BY_EMVAL conversions from raw pointers to smart pointers
-      // because the smart pointer can hold a reference to the handle
       if (undefined === handle.$$.smartPtr) {
         throwBindingError('Passing raw pointer to smart pointer is illegal')
       }
-
       switch (this.sharingPolicy) {
-        case 0: // NONE
-          // no upcasting
+        case 0:
           if (handle.$$.smartPtrType === this) {
             ptr = handle.$$.smartPtr
           } else {
@@ -4096,12 +3266,10 @@ async function BASIS(moduleArg = {}) {
             )
           }
           break
-
-        case 1: // INTRUSIVE
+        case 1:
           ptr = handle.$$.smartPtr
           break
-
-        case 2: // BY_EMVAL
+        case 2:
           if (handle.$$.smartPtrType === this) {
             ptr = handle.$$.smartPtr
           } else {
@@ -4115,15 +3283,12 @@ async function BASIS(moduleArg = {}) {
             }
           }
           break
-
         default:
-          throwBindingError('Unsupporting sharing policy')
+          throwBindingError('Unsupported sharing policy')
       }
     }
     return ptr
   }
-
-  /** @suppress {globalThis} */
   function nonConstNoSmartPtrRawPointerToWireType(destructors, handle) {
     if (handle === null) {
       if (this.isReference) {
@@ -4131,7 +3296,6 @@ async function BASIS(moduleArg = {}) {
       }
       return 0
     }
-
     if (!handle.$$) {
       throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`)
     }
@@ -4149,24 +3313,20 @@ async function BASIS(moduleArg = {}) {
     var ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass)
     return ptr
   }
-
   var downcastPointer = (ptr, ptrClass, desiredClass) => {
     if (ptrClass === desiredClass) {
       return ptr
     }
     if (undefined === desiredClass.baseClass) {
-      return null // no conversion
+      return null
     }
-
     var rv = downcastPointer(ptr, ptrClass, desiredClass.baseClass)
     if (rv === null) {
       return null
     }
     return desiredClass.downcast(rv)
   }
-
   var registeredInstances = {}
-
   var getBasestPointer = (class_, ptr) => {
     if (ptr === undefined) {
       throwBindingError('ptr should not be undefined')
@@ -4181,7 +3341,6 @@ async function BASIS(moduleArg = {}) {
     ptr = getBasestPointer(class_, ptr)
     return registeredInstances[ptr]
   }
-
   var makeClassHandle = (prototype, record) => {
     if (!record.ptrType || !record.ptr) {
       throwInternalError('makeClassHandle requires ptr and ptrType')
@@ -4193,44 +3352,30 @@ async function BASIS(moduleArg = {}) {
     }
     record.count = { value: 1 }
     return attachFinalizer(
-      Object.create(prototype, {
-        $$: {
-          value: record,
-          writable: true,
-        },
-      }),
+      Object.create(prototype, { $$: { value: record, writable: true } }),
     )
   }
-  /** @suppress {globalThis} */
   function RegisteredPointer_fromWireType(ptr) {
-    // ptr is a raw pointer (or a raw smartpointer)
-
-    // rawPointer is a maybe-null raw pointer
     var rawPointer = this.getPointee(ptr)
     if (!rawPointer) {
       this.destructor(ptr)
       return null
     }
-
     var registeredInstance = getInheritedInstance(
       this.registeredClass,
       rawPointer,
     )
     if (undefined !== registeredInstance) {
-      // JS object has been neutered, time to repopulate it
       if (0 === registeredInstance.$$.count.value) {
         registeredInstance.$$.ptr = rawPointer
         registeredInstance.$$.smartPtr = ptr
         return registeredInstance['clone']()
       } else {
-        // else, just increment reference count on existing object
-        // it already has a reference to the smart pointer
         var rv = registeredInstance['clone']()
         this.destructor(ptr)
         return rv
       }
     }
-
     function makeDefaultHandle() {
       if (this.isSmartPointer) {
         return makeClassHandle(this.registeredClass.instancePrototype, {
@@ -4246,13 +3391,11 @@ async function BASIS(moduleArg = {}) {
         })
       }
     }
-
     var actualType = this.registeredClass.getActualType(rawPointer)
     var registeredPointerRecord = registeredPointers[actualType]
     if (!registeredPointerRecord) {
       return makeDefaultHandle.call(this)
     }
-
     var toType
     if (this.isConst) {
       toType = registeredPointerRecord.constPointerType
@@ -4296,21 +3439,11 @@ async function BASIS(moduleArg = {}) {
       fromWireType: RegisteredPointer_fromWireType,
     })
   }
-  /** @constructor
-      @param {*=} pointeeType,
-      @param {*=} sharingPolicy,
-      @param {*=} rawGetPointee,
-      @param {*=} rawConstructor,
-      @param {*=} rawShare,
-      @param {*=} rawDestructor,
-       */
   function RegisteredPointer(
     name,
     registeredClass,
     isReference,
     isConst,
-
-    // smart pointer properties
     isSmartPointer,
     pointeeType,
     sharingPolicy,
@@ -4323,8 +3456,6 @@ async function BASIS(moduleArg = {}) {
     this.registeredClass = registeredClass
     this.isReference = isReference
     this.isConst = isConst
-
-    // smart pointer properties
     this.isSmartPointer = isSmartPointer
     this.pointeeType = pointeeType
     this.sharingPolicy = sharingPolicy
@@ -4332,7 +3463,6 @@ async function BASIS(moduleArg = {}) {
     this.rawConstructor = rawConstructor
     this.rawShare = rawShare
     this.rawDestructor = rawDestructor
-
     if (!isSmartPointer && registeredClass.baseClass === undefined) {
       if (isConst) {
         this.toWireType = constNoSmartPtrRawPointerToWireType
@@ -4343,19 +3473,12 @@ async function BASIS(moduleArg = {}) {
       }
     } else {
       this.toWireType = genericPointerToWireType
-      // Here we must leave this.destructorFunction undefined, since whether genericPointerToWireType returns
-      // a pointer that needs to be freed up is runtime-dependent, and cannot be evaluated at registration time.
-      // TODO: Create an alternative mechanism that allows removing the use of var destructors = []; array in
-      //       craftInvokerFunction altogether.
     }
   }
-
-  /** @param {number=} numArguments */
   var replacePublicSymbol = (name, value, numArguments) => {
     if (!Module.hasOwnProperty(name)) {
       throwInternalError('Replacing nonexistent public symbol')
     }
-    // If there's an overload table for this symbol, replace the symbol in the overload table instead.
     if (
       undefined !== Module[name].overloadTable &&
       undefined !== numArguments
@@ -4366,25 +3489,35 @@ async function BASIS(moduleArg = {}) {
       Module[name].argCount = numArguments
     }
   }
-
   var wasmTableMirror = []
-
   var getWasmTableEntry = (funcPtr) => {
     var func = wasmTableMirror[funcPtr]
     if (!func) {
-      /** @suppress {checkTypes} */
       wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr)
     }
     return func
   }
+  var dynCall = (sig, ptr, args = [], promising = false) => {
+    var func = getWasmTableEntry(ptr)
+    var rtn = func(...args)
+    function convert(rtn) {
+      return sig[0] == 'p' ? rtn >>> 0 : rtn
+    }
+    return convert(rtn)
+  }
+  var getDynCaller =
+    (sig, ptr, promising = false) =>
+    (...args) =>
+      dynCall(sig, ptr, args, promising)
   var embind__requireFunction = (signature, rawFunction, isAsync = false) => {
     signature = AsciiToString(signature)
-
     function makeDynCaller() {
+      if (signature.includes('p')) {
+        return getDynCaller(signature, rawFunction, isAsync)
+      }
       var rtn = getWasmTableEntry(rawFunction)
       return rtn
     }
-
     var fp = makeDynCaller()
     if (typeof fp != 'function') {
       throwBindingError(
@@ -4393,9 +3526,7 @@ async function BASIS(moduleArg = {}) {
     }
     return fp
   }
-
   class UnboundTypeError extends Error {}
-
   var getTypeName = (type) => {
     var ptr = ___getTypeName(type)
     var rv = AsciiToString(ptr)
@@ -4420,13 +3551,11 @@ async function BASIS(moduleArg = {}) {
       seen[type] = true
     }
     types.forEach(visit)
-
     throw new UnboundTypeError(
       `${message}: ` + unboundTypes.map(getTypeName).join([', ']),
     )
   }
-
-  var __embind_register_class = (
+  function __embind_register_class(
     rawType,
     rawPointerType,
     rawConstPointerType,
@@ -4440,7 +3569,20 @@ async function BASIS(moduleArg = {}) {
     name,
     destructorSignature,
     rawDestructor,
-  ) => {
+  ) {
+    rawType >>>= 0
+    rawPointerType >>>= 0
+    rawConstPointerType >>>= 0
+    baseClassRawType >>>= 0
+    getActualTypeSignature >>>= 0
+    getActualType >>>= 0
+    upcastSignature >>>= 0
+    upcast >>>= 0
+    downcastSignature >>>= 0
+    downcast >>>= 0
+    name >>>= 0
+    destructorSignature >>>= 0
+    rawDestructor >>>= 0
     name = AsciiToString(name)
     getActualType = embind__requireFunction(
       getActualTypeSignature,
@@ -4450,20 +3592,16 @@ async function BASIS(moduleArg = {}) {
     downcast &&= embind__requireFunction(downcastSignature, downcast)
     rawDestructor = embind__requireFunction(destructorSignature, rawDestructor)
     var legalFunctionName = makeLegalFunctionName(name)
-
     exposePublicSymbol(legalFunctionName, function () {
-      // this code cannot run if baseClassRawType is zero
       throwUnboundTypeError(`Cannot construct ${name} due to unbound types`, [
         baseClassRawType,
       ])
     })
-
     whenDependentTypesAreResolved(
       [rawType, rawPointerType, rawConstPointerType],
       baseClassRawType ? [baseClassRawType] : [],
       (base) => {
         base = base[0]
-
         var baseClass
         var basePrototype
         if (baseClassRawType) {
@@ -4472,7 +3610,6 @@ async function BASIS(moduleArg = {}) {
         } else {
           basePrototype = ClassHandle.prototype
         }
-
         var constructor = createNamedFunction(name, function (...args) {
           if (Object.getPrototypeOf(this) !== instancePrototype) {
             throw new BindingError(`Use 'new' to construct ${name}`)
@@ -4488,13 +3625,10 @@ async function BASIS(moduleArg = {}) {
           }
           return body.apply(this, args)
         })
-
         var instancePrototype = Object.create(basePrototype, {
           constructor: { value: constructor },
         })
-
         constructor.prototype = instancePrototype
-
         var registeredClass = new RegisteredClass(
           name,
           constructor,
@@ -4505,14 +3639,10 @@ async function BASIS(moduleArg = {}) {
           upcast,
           downcast,
         )
-
         if (registeredClass.baseClass) {
-          // Keep track of class hierarchy. Used to allow sub-classes to inherit class functions.
           registeredClass.baseClass.__derivedClasses ??= []
-
           registeredClass.baseClass.__derivedClasses.push(registeredClass)
         }
-
         var referenceConverter = new RegisteredPointer(
           name,
           registeredClass,
@@ -4520,7 +3650,6 @@ async function BASIS(moduleArg = {}) {
           false,
           false,
         )
-
         var pointerConverter = new RegisteredPointer(
           name + '*',
           registeredClass,
@@ -4528,7 +3657,6 @@ async function BASIS(moduleArg = {}) {
           false,
           false,
         )
-
         var constPointerConverter = new RegisteredPointer(
           name + ' const*',
           registeredClass,
@@ -4536,33 +3664,24 @@ async function BASIS(moduleArg = {}) {
           true,
           false,
         )
-
         registeredPointers[rawType] = {
           pointerType: pointerConverter,
           constPointerType: constPointerConverter,
         }
-
         replacePublicSymbol(legalFunctionName, constructor)
-
         return [referenceConverter, pointerConverter, constPointerConverter]
       },
     )
   }
-
   var heap32VectorToArray = (count, firstElement) => {
     var array = []
     for (var i = 0; i < count; i++) {
-      // TODO(https://github.com/emscripten-core/emscripten/issues/17310):
-      // Find a way to hoist the `>> 2` or `>> 3` out of this loop.
-      array.push(HEAPU32[(firstElement + i * 4) >> 2])
+      array.push(HEAPU32[((firstElement + i * 4) >>> 2) >>> 0])
     }
     return array
   }
-
   function usesDestructorStack(argTypes) {
-    // Skip return value at index 0 - it's not deleted here.
     for (var i = 1; i < argTypes.length; ++i) {
-      // The type does not define a destructor function - must use dynamic stack
       if (
         argTypes[i] !== null &&
         argTypes[i].destructorFunction === undefined
@@ -4572,7 +3691,6 @@ async function BASIS(moduleArg = {}) {
     }
     return false
   }
-
   function createJsInvoker(argTypes, isClassMethodFunc, returns, isAsync) {
     var needsDestructorStack = usesDestructorStack(argTypes)
     var argCount = argTypes.length - 2
@@ -4587,13 +3705,10 @@ async function BASIS(moduleArg = {}) {
     }
     argsList = argsList.join(',')
     argsListWired = argsListWired.join(',')
-
     var invokerFnBody = `return function (${argsList}) {\n`
-
     if (needsDestructorStack) {
       invokerFnBody += 'var destructors = [];\n'
     }
-
     var dtorStack = needsDestructorStack ? 'destructors' : 'null'
     var args1 = [
       'humanName',
@@ -4604,27 +3719,20 @@ async function BASIS(moduleArg = {}) {
       'fromRetWire',
       'toClassParamWire',
     ]
-
     if (isClassMethodFunc) {
       invokerFnBody += `var thisWired = toClassParamWire(${dtorStack}, this);\n`
     }
-
     for (var i = 0; i < argCount; ++i) {
       var argName = `toArg${i}Wire`
       invokerFnBody += `var arg${i}Wired = ${argName}(${dtorStack}, arg${i});\n`
       args1.push(argName)
     }
-
     invokerFnBody +=
       (returns || isAsync ? 'var rv = ' : '') + `invoker(${argsListWired});\n`
-
-    var returnVal = returns ? 'rv' : ''
-
     if (needsDestructorStack) {
       invokerFnBody += 'runDestructors(destructors);\n'
     } else {
       for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
-        // Skip return value at index 0 - it's not deleted here. Also skip class type if not a method.
         var paramName = i === 1 ? 'thisWired' : 'arg' + (i - 2) + 'Wired'
         if (argTypes[i].destructorFunction !== null) {
           invokerFnBody += `${paramName}_dtor(${paramName});\n`
@@ -4632,14 +3740,11 @@ async function BASIS(moduleArg = {}) {
         }
       }
     }
-
     if (returns) {
       invokerFnBody += 'var ret = fromRetWire(rv);\n' + 'return ret;\n'
     } else {
     }
-
     invokerFnBody += '}\n'
-
     return new Function(args1, invokerFnBody)
   }
   function craftInvokerFunction(
@@ -4648,42 +3753,17 @@ async function BASIS(moduleArg = {}) {
     classType,
     cppInvokerFunc,
     cppTargetFunc,
-    /** boolean= */ isAsync,
+    isAsync,
   ) {
-    // humanName: a human-readable string name for the function to be generated.
-    // argTypes: An array that contains the embind type objects for all types in the function signature.
-    //    argTypes[0] is the type object for the function return value.
-    //    argTypes[1] is the type object for function this object/class type, or null if not crafting an invoker for a class method.
-    //    argTypes[2...] are the actual function parameters.
-    // classType: The embind type object for the class to be bound, or null if this is not a method of a class.
-    // cppInvokerFunc: JS Function object to the C++-side function that interops into C++ code.
-    // cppTargetFunc: Function pointer (an integer to FUNCTION_TABLE) to the target C++ function the cppInvokerFunc will end up calling.
-    // isAsync: Optional. If true, returns an async function. Async bindings are only supported with JSPI.
     var argCount = argTypes.length
-
     if (argCount < 2) {
       throwBindingError(
         "argTypes array size mismatch! Must at least get return value and 'this' types!",
       )
     }
-
     var isClassMethodFunc = argTypes[1] !== null && classType !== null
-
-    // Free functions with signature "void function()" do not need an invoker that marshalls between wire types.
-    // TODO: This omits argument count check - enable only at -O3 or similar.
-    //    if (ENABLE_UNSAFE_OPTS && argCount == 2 && argTypes[0].name == "void" && !isClassMethodFunc) {
-    //       return FUNCTION_TABLE[fn];
-    //    }
-
-    // Determine if we need to use a dynamic stack to store the destructors for the function parameters.
-    // TODO: Remove this completely once all function invokers are being dynamically generated.
     var needsDestructorStack = usesDestructorStack(argTypes)
-
     var returns = !argTypes[0].isVoid
-
-    var expectedArgCount = argCount - 2
-    // Builld the arguments that will be passed into the closure around the invoker
-    // function.
     var retType = argTypes[0]
     var instType = argTypes[1]
     var closureArgs = [
@@ -4700,14 +3780,12 @@ async function BASIS(moduleArg = {}) {
       closureArgs.push(argType.toWireType.bind(argType))
     }
     if (!needsDestructorStack) {
-      // Skip return value at index 0 - it's not deleted here. Also skip class type if not a method.
       for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
         if (argTypes[i].destructorFunction !== null) {
           closureArgs.push(argTypes[i].destructorFunction)
         }
       }
     }
-
     let invokerFactory = createJsInvoker(
       argTypes,
       isClassMethodFunc,
@@ -4717,23 +3795,24 @@ async function BASIS(moduleArg = {}) {
     var invokerFn = invokerFactory(...closureArgs)
     return createNamedFunction(humanName, invokerFn)
   }
-  var __embind_register_class_constructor = (
+  var __embind_register_class_constructor = function (
     rawClassType,
     argCount,
     rawArgTypesAddr,
     invokerSignature,
     invoker,
     rawConstructor,
-  ) => {
+  ) {
+    rawClassType >>>= 0
+    rawArgTypesAddr >>>= 0
+    invokerSignature >>>= 0
+    invoker >>>= 0
+    rawConstructor >>>= 0
     var rawArgTypes = heap32VectorToArray(argCount, rawArgTypesAddr)
     invoker = embind__requireFunction(invokerSignature, invoker)
-    var args = [rawConstructor]
-    var destructors = []
-
     whenDependentTypesAreResolved([], [rawClassType], (classType) => {
       classType = classType[0]
       var humanName = `constructor ${classType.name}`
-
       if (undefined === classType.registeredClass.constructor_body) {
         classType.registeredClass.constructor_body = []
       }
@@ -4750,9 +3829,7 @@ async function BASIS(moduleArg = {}) {
           rawArgTypes,
         )
       }
-
       whenDependentTypesAreResolved([], rawArgTypes, (argTypes) => {
-        // Insert empty slot for context type (argTypes[1]).
         argTypes.splice(1, 0, null)
         classType.registeredClass.constructor_body[argCount - 1] =
           craftInvokerFunction(
@@ -4767,49 +3844,49 @@ async function BASIS(moduleArg = {}) {
       return []
     })
   }
-
   var getFunctionName = (signature) => {
     signature = signature.trim()
     const argsIndex = signature.indexOf('(')
     if (argsIndex === -1) return signature
     return signature.slice(0, argsIndex)
   }
-  var __embind_register_class_function = (
+  var __embind_register_class_function = function (
     rawClassType,
     methodName,
     argCount,
-    rawArgTypesAddr, // [ReturnType, ThisType, Args...]
+    rawArgTypesAddr,
     invokerSignature,
     rawInvoker,
     context,
     isPureVirtual,
     isAsync,
     isNonnullReturn,
-  ) => {
+  ) {
+    rawClassType >>>= 0
+    methodName >>>= 0
+    rawArgTypesAddr >>>= 0
+    invokerSignature >>>= 0
+    rawInvoker >>>= 0
+    context >>>= 0
     var rawArgTypes = heap32VectorToArray(argCount, rawArgTypesAddr)
     methodName = AsciiToString(methodName)
     methodName = getFunctionName(methodName)
     rawInvoker = embind__requireFunction(invokerSignature, rawInvoker, isAsync)
-
     whenDependentTypesAreResolved([], [rawClassType], (classType) => {
       classType = classType[0]
       var humanName = `${classType.name}.${methodName}`
-
       if (methodName.startsWith('@@')) {
         methodName = Symbol[methodName.substring(2)]
       }
-
       if (isPureVirtual) {
         classType.registeredClass.pureVirtualFunctions.push(methodName)
       }
-
       function unboundTypesHandler() {
         throwUnboundTypeError(
           `Cannot call ${humanName} due to unbound types`,
           rawArgTypes,
         )
       }
-
       var proto = classType.registeredClass.instancePrototype
       var method = proto[methodName]
       if (
@@ -4818,18 +3895,13 @@ async function BASIS(moduleArg = {}) {
           method.className !== classType.name &&
           method.argCount === argCount - 2)
       ) {
-        // This is the first overload to be registered, OR we are replacing a
-        // function in the base class with a function in the derived class.
         unboundTypesHandler.argCount = argCount - 2
         unboundTypesHandler.className = classType.name
         proto[methodName] = unboundTypesHandler
       } else {
-        // There was an existing function with the same name registered. Set up
-        // a function overload routing table.
         ensureOverloadTable(proto, methodName, humanName)
         proto[methodName].overloadTable[argCount - 2] = unboundTypesHandler
       }
-
       whenDependentTypesAreResolved([], rawArgTypes, (argTypes) => {
         var memberFunction = craftInvokerFunction(
           humanName,
@@ -4839,26 +3911,20 @@ async function BASIS(moduleArg = {}) {
           context,
           isAsync,
         )
-
-        // Replace the initial unbound-handler-stub function with the
-        // appropriate member function, now that all types are resolved. If
-        // multiple overloads are registered for this function, the function
-        // goes into an overload table.
         if (undefined === proto[methodName].overloadTable) {
-          // Set argCount in case an overload is registered later
           memberFunction.argCount = argCount - 2
           proto[methodName] = memberFunction
         } else {
           proto[methodName].overloadTable[argCount - 2] = memberFunction
         }
-
         return []
       })
       return []
     })
   }
-
-  var __embind_register_constant = (name, type, value) => {
+  var __embind_register_constant = function (name, type, value) {
+    name >>>= 0
+    type >>>= 0
     name = AsciiToString(name)
     whenDependentTypesAreResolved([], [type], (type) => {
       type = type[0]
@@ -4866,17 +3932,16 @@ async function BASIS(moduleArg = {}) {
       return []
     })
   }
-
   var emval_freelist = []
-
   var emval_handles = [0, 1, , 1, null, 1, true, 1, false, 1]
-  var __emval_decref = (handle) => {
+  function __emval_decref(handle) {
+    handle >>>= 0
     if (handle > 9 && 0 === --emval_handles[handle + 1]) {
+      var value = emval_handles[handle]
       emval_handles[handle] = undefined
       emval_freelist.push(handle)
     }
   }
-
   var Emval = {
     toValue: (handle) => {
       if (!handle) {
@@ -4903,7 +3968,6 @@ async function BASIS(moduleArg = {}) {
       }
     },
   }
-
   var EmValType = {
     name: 'emscripten::val',
     fromWireType: (handle) => {
@@ -4913,64 +3977,113 @@ async function BASIS(moduleArg = {}) {
     },
     toWireType: (destructors, value) => Emval.toHandle(value),
     readValueFromPointer: readPointer,
-    destructorFunction: null, // This type does not need a destructor
-
-    // TODO: do we need a deleteObject here?  write a test where
-    // emval is passed into JS via an interface
+    destructorFunction: null,
   }
-  var __embind_register_emval = (rawType) => registerType(rawType, EmValType)
-
+  function __embind_register_emval(rawType) {
+    rawType >>>= 0
+    return registerType(rawType, EmValType)
+  }
   var enumReadValueFromPointer = (name, width, signed) => {
     switch (width) {
       case 1:
         return signed
           ? function (pointer) {
-              return this.fromWireType(HEAP8[pointer])
+              return this.fromWireType(HEAP8[pointer >>> 0])
             }
           : function (pointer) {
-              return this.fromWireType(HEAPU8[pointer])
+              return this.fromWireType(HEAPU8[pointer >>> 0])
             }
       case 2:
         return signed
           ? function (pointer) {
-              return this.fromWireType(HEAP16[pointer >> 1])
+              return this.fromWireType(HEAP16[(pointer >>> 1) >>> 0])
             }
           : function (pointer) {
-              return this.fromWireType(HEAPU16[pointer >> 1])
+              return this.fromWireType(HEAPU16[(pointer >>> 1) >>> 0])
             }
       case 4:
         return signed
           ? function (pointer) {
-              return this.fromWireType(HEAP32[pointer >> 2])
+              return this.fromWireType(HEAP32[(pointer >>> 2) >>> 0])
             }
           : function (pointer) {
-              return this.fromWireType(HEAPU32[pointer >> 2])
+              return this.fromWireType(HEAPU32[(pointer >>> 2) >>> 0])
             }
       default:
         throw new TypeError(`invalid integer width (${width}): ${name}`)
     }
   }
-
-  /** @suppress {globalThis} */
-  var __embind_register_enum = (rawType, name, size, isSigned) => {
-    name = AsciiToString(name)
-
-    function ctor() {}
-    ctor.values = {}
-
-    registerType(rawType, {
-      name,
-      constructor: ctor,
-      fromWireType: function (c) {
-        return this.constructor.values[c]
-      },
-      toWireType: (destructors, c) => c.value,
-      readValueFromPointer: enumReadValueFromPointer(name, size, isSigned),
-      destructorFunction: null,
-    })
-    exposePublicSymbol(name, ctor)
+  function getEnumValueType(rawValueType) {
+    return rawValueType === 0
+      ? 'object'
+      : rawValueType === 1
+        ? 'number'
+        : 'string'
   }
-
+  function __embind_register_enum(rawType, name, size, isSigned, rawValueType) {
+    rawType >>>= 0
+    name >>>= 0
+    size >>>= 0
+    name = AsciiToString(name)
+    const valueType = getEnumValueType(rawValueType)
+    switch (valueType) {
+      case 'object': {
+        function ctor() {}
+        ctor.values = {}
+        registerType(rawType, {
+          name,
+          constructor: ctor,
+          valueType,
+          fromWireType: function (c) {
+            return this.constructor.values[c]
+          },
+          toWireType: (destructors, c) => c.value,
+          readValueFromPointer: enumReadValueFromPointer(name, size, isSigned),
+          destructorFunction: null,
+        })
+        exposePublicSymbol(name, ctor)
+        break
+      }
+      case 'number': {
+        var keysMap = {}
+        registerType(rawType, {
+          name,
+          keysMap,
+          valueType,
+          fromWireType: (c) => c,
+          toWireType: (destructors, c) => c,
+          readValueFromPointer: enumReadValueFromPointer(name, size, isSigned),
+          destructorFunction: null,
+        })
+        exposePublicSymbol(name, keysMap)
+        delete Module[name].argCount
+        break
+      }
+      case 'string': {
+        var valuesMap = {}
+        var reverseMap = {}
+        var keysMap = {}
+        registerType(rawType, {
+          name,
+          valuesMap,
+          reverseMap,
+          keysMap,
+          valueType,
+          fromWireType: function (c) {
+            return this.reverseMap[c]
+          },
+          toWireType: function (destructors, c) {
+            return this.valuesMap[c]
+          },
+          readValueFromPointer: enumReadValueFromPointer(name, size, isSigned),
+          destructorFunction: null,
+        })
+        exposePublicSymbol(name, keysMap)
+        delete Module[name].argCount
+        break
+      }
+    }
+  }
   var requireRegisteredType = (rawType, humanName) => {
     var impl = registeredTypes[rawType]
     if (undefined === impl) {
@@ -4978,53 +4091,67 @@ async function BASIS(moduleArg = {}) {
     }
     return impl
   }
-  var __embind_register_enum_value = (rawEnumType, name, enumValue) => {
+  function __embind_register_enum_value(rawEnumType, name, enumValue) {
+    rawEnumType >>>= 0
+    name >>>= 0
     var enumType = requireRegisteredType(rawEnumType, 'enum')
     name = AsciiToString(name)
-
-    var Enum = enumType.constructor
-
-    var Value = Object.create(enumType.constructor.prototype, {
-      value: { value: enumValue },
-      constructor: {
-        value: createNamedFunction(`${enumType.name}_${name}`, function () {}),
-      },
-    })
-    Enum.values[enumValue] = Value
-    Enum[name] = Value
+    switch (enumType.valueType) {
+      case 'object': {
+        var Enum = enumType.constructor
+        var Value = Object.create(enumType.constructor.prototype, {
+          value: { value: enumValue },
+          constructor: {
+            value: createNamedFunction(
+              `${enumType.name}_${name}`,
+              function () {},
+            ),
+          },
+        })
+        Enum.values[enumValue] = Value
+        Enum[name] = Value
+        break
+      }
+      case 'number': {
+        enumType.keysMap[name] = enumValue
+        break
+      }
+      case 'string': {
+        enumType.valuesMap[name] = enumValue
+        enumType.reverseMap[enumValue] = name
+        enumType.keysMap[name] = name
+        break
+      }
+    }
   }
-
   var floatReadValueFromPointer = (name, width) => {
     switch (width) {
       case 4:
         return function (pointer) {
-          return this.fromWireType(HEAPF32[pointer >> 2])
+          return this.fromWireType(HEAPF32[(pointer >>> 2) >>> 0])
         }
       case 8:
         return function (pointer) {
-          return this.fromWireType(HEAPF64[pointer >> 3])
+          return this.fromWireType(HEAPF64[(pointer >>> 3) >>> 0])
         }
       default:
         throw new TypeError(`invalid float width (${width}): ${name}`)
     }
   }
-
-  var __embind_register_float = (rawType, name, size) => {
+  var __embind_register_float = function (rawType, name, size) {
+    rawType >>>= 0
+    name >>>= 0
+    size >>>= 0
     name = AsciiToString(name)
     registerType(rawType, {
       name,
       fromWireType: (value) => value,
-      toWireType: (destructors, value) => {
-        // The VM will perform JS to Wasm value conversion, according to the spec:
-        // https://www.w3.org/TR/wasm-js-api-1/#towebassemblyvalue
-        return value
-      },
+      toWireType: (destructors, value) => value,
       readValueFromPointer: floatReadValueFromPointer(name, size),
-      destructorFunction: null, // This type does not need a destructor
+      destructorFunction: null,
     })
   }
-
-  var __embind_register_function = (
+  function __embind_register_function(
     name,
     argCount,
     rawArgTypesAddr,
@@ -5033,13 +4160,16 @@ async function BASIS(moduleArg = {}) {
     fn,
     isAsync,
     isNonnullReturn,
-  ) => {
+  ) {
+    name >>>= 0
+    rawArgTypesAddr >>>= 0
+    signature >>>= 0
+    rawInvoker >>>= 0
+    fn >>>= 0
     var argTypes = heap32VectorToArray(argCount, rawArgTypesAddr)
     name = AsciiToString(name)
     name = getFunctionName(name)
-
     rawInvoker = embind__requireFunction(signature, rawInvoker, isAsync)
-
     exposePublicSymbol(
       name,
       function () {
@@ -5050,18 +4180,14 @@ async function BASIS(moduleArg = {}) {
       },
       argCount - 1,
     )
-
     whenDependentTypesAreResolved([], argTypes, (argTypes) => {
-      var invokerArgsArray = [
-        argTypes[0] /* return value */,
-        null /* no class 'this'*/,
-      ].concat(argTypes.slice(1) /* actual params */)
+      var invokerArgsArray = [argTypes[0], null].concat(argTypes.slice(1))
       replacePublicSymbol(
         name,
         craftInvokerFunction(
           name,
           invokerArgsArray,
-          null /* no class 'this'*/,
+          null,
           rawInvoker,
           fn,
           isAsync,
@@ -5071,44 +4197,39 @@ async function BASIS(moduleArg = {}) {
       return []
     })
   }
-
-  /** @suppress {globalThis} */
-  var __embind_register_integer = (
+  var __embind_register_integer = function (
     primitiveType,
     name,
     size,
     minRange,
     maxRange,
-  ) => {
+  ) {
+    primitiveType >>>= 0
+    name >>>= 0
+    size >>>= 0
     name = AsciiToString(name)
-
     const isUnsignedType = minRange === 0
-
     let fromWireType = (value) => value
     if (isUnsignedType) {
       var bitshift = 32 - 8 * size
       fromWireType = (value) => (value << bitshift) >>> bitshift
       maxRange = fromWireType(maxRange)
     }
-
     registerType(primitiveType, {
       name,
-      fromWireType: fromWireType,
-      toWireType: (destructors, value) => {
-        // The VM will perform JS to Wasm value conversion, according to the spec:
-        // https://www.w3.org/TR/wasm-js-api-1/#towebassemblyvalue
-        return value
-      },
+      fromWireType,
+      toWireType: (destructors, value) => value,
       readValueFromPointer: integerReadValueFromPointer(
         name,
         size,
         minRange !== 0,
       ),
-      destructorFunction: null, // This type does not need a destructor
+      destructorFunction: null,
     })
   }
-
-  var __embind_register_memory_view = (rawType, dataTypeIndex, name) => {
+  function __embind_register_memory_view(rawType, dataTypeIndex, name) {
+    rawType >>>= 0
+    name >>>= 0
     var typeMapping = [
       Int8Array,
       Uint8Array,
@@ -5121,15 +4242,12 @@ async function BASIS(moduleArg = {}) {
       BigInt64Array,
       BigUint64Array,
     ]
-
     var TA = typeMapping[dataTypeIndex]
-
     function decodeMemoryView(handle) {
-      var size = HEAPU32[handle >> 2]
-      var data = HEAPU32[(handle + 4) >> 2]
+      var size = HEAPU32[(handle >>> 2) >>> 0]
+      var data = HEAPU32[((handle + 4) >>> 2) >>> 0]
       return new TA(HEAP8.buffer, data, size)
     }
-
     name = AsciiToString(name)
     registerType(
       rawType,
@@ -5138,51 +4256,39 @@ async function BASIS(moduleArg = {}) {
         fromWireType: decodeMemoryView,
         readValueFromPointer: decodeMemoryView,
       },
-      {
-        ignoreDuplicateRegistrations: true,
-      },
+      { ignoreDuplicateRegistrations: true },
     )
   }
-
-  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
-    return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite)
-  }
-
-  var __embind_register_std_string = (rawType, name) => {
+  var stringToUTF8 = (str, outPtr, maxBytesToWrite) =>
+    stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite)
+  function __embind_register_std_string(rawType, name) {
+    rawType >>>= 0
+    name >>>= 0
     name = AsciiToString(name)
     var stdStringIsUTF8 = true
-
     registerType(rawType, {
       name,
-      // For some method names we use string keys here since they are part of
-      // the public/external API and/or used by the runtime-generated code.
       fromWireType(value) {
-        var length = HEAPU32[value >> 2]
+        var length = HEAPU32[(value >>> 2) >>> 0]
         var payload = value + 4
-
         var str
         if (stdStringIsUTF8) {
           str = UTF8ToString(payload, length, true)
         } else {
           str = ''
           for (var i = 0; i < length; ++i) {
-            str += String.fromCharCode(HEAPU8[payload + i])
+            str += String.fromCharCode(HEAPU8[(payload + i) >>> 0])
           }
         }
-
         _free(value)
-
         return str
       },
       toWireType(destructors, value) {
         if (value instanceof ArrayBuffer) {
           value = new Uint8Array(value)
         }
-
         var length
         var valueIsOfTypeString = typeof value == 'string'
-
-        // We accept `string` or array views with single byte elements
         if (
           !(
             valueIsOfTypeString ||
@@ -5196,11 +4302,9 @@ async function BASIS(moduleArg = {}) {
         } else {
           length = value.length
         }
-
-        // assumes POINTER_SIZE alignment
         var base = _malloc(4 + length + 1)
         var ptr = base + 4
-        HEAPU32[base >> 2] = length
+        HEAPU32[(base >>> 2) >>> 0] = length
         if (valueIsOfTypeString) {
           if (stdStringIsUTF8) {
             stringToUTF8(value, ptr, length + 1)
@@ -5213,13 +4317,12 @@ async function BASIS(moduleArg = {}) {
                   'String has UTF-16 code units that do not fit in 8 bits',
                 )
               }
-              HEAPU8[ptr + i] = charCode
+              HEAPU8[(ptr + i) >>> 0] = charCode
             }
           }
         } else {
-          HEAPU8.set(value, ptr)
+          HEAPU8.set(value, ptr >>> 0)
         }
-
         if (destructors !== null) {
           destructors.push(_free, base)
         }
@@ -5231,106 +4334,80 @@ async function BASIS(moduleArg = {}) {
       },
     })
   }
-
   var UTF16Decoder = globalThis.TextDecoder
     ? new TextDecoder('utf-16le')
     : undefined
-
   var UTF16ToString = (ptr, maxBytesToRead, ignoreNul) => {
-    var idx = ptr >> 1
+    var idx = ptr >>> 1
     var endIdx = findStringEnd(HEAPU16, idx, maxBytesToRead / 2, ignoreNul)
-
-    // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
     if (endIdx - idx > 16 && UTF16Decoder)
-      return UTF16Decoder.decode(HEAPU16.subarray(idx, endIdx))
-
-    // Fallback: decode without UTF16Decoder
+      return UTF16Decoder.decode(HEAPU16.subarray(idx >>> 0, endIdx >>> 0))
     var str = ''
-
-    // If maxBytesToRead is not passed explicitly, it will be undefined, and the
-    // for-loop's condition will always evaluate to true. The loop is then
-    // terminated on the first null char.
     for (var i = idx; i < endIdx; ++i) {
-      var codeUnit = HEAPU16[i]
-      // fromCharCode constructs a character from a UTF-16 code unit, so we can
-      // pass the UTF16 string right through.
+      var codeUnit = HEAPU16[i >>> 0]
       str += String.fromCharCode(codeUnit)
     }
-
     return str
   }
-
   var stringToUTF16 = (str, outPtr, maxBytesToWrite) => {
-    // Backwards compatibility: if max bytes is not specified, assume unsafe unbounded write is allowed.
-    maxBytesToWrite ??= 0x7fffffff
+    maxBytesToWrite ??= 2147483647
     if (maxBytesToWrite < 2) return 0
-    maxBytesToWrite -= 2 // Null terminator.
+    maxBytesToWrite -= 2
     var startPtr = outPtr
     var numCharsToWrite =
       maxBytesToWrite < str.length * 2 ? maxBytesToWrite / 2 : str.length
     for (var i = 0; i < numCharsToWrite; ++i) {
-      // charCodeAt returns a UTF-16 encoded code unit, so it can be directly written to the HEAP.
-      var codeUnit = str.charCodeAt(i) // possibly a lead surrogate
-      HEAP16[outPtr >> 1] = codeUnit
+      var codeUnit = str.charCodeAt(i)
+      HEAP16[(outPtr >>> 1) >>> 0] = codeUnit
       outPtr += 2
     }
-    // Null-terminate the pointer to the HEAP.
-    HEAP16[outPtr >> 1] = 0
+    HEAP16[(outPtr >>> 1) >>> 0] = 0
     return outPtr - startPtr
   }
-
   var lengthBytesUTF16 = (str) => str.length * 2
-
   var UTF32ToString = (ptr, maxBytesToRead, ignoreNul) => {
     var str = ''
-    var startIdx = ptr >> 2
-    // If maxBytesToRead is not passed explicitly, it will be undefined, and this
-    // will always evaluate to true. This saves on code size.
+    var startIdx = ptr >>> 2
     for (var i = 0; !(i >= maxBytesToRead / 4); i++) {
-      var utf32 = HEAPU32[startIdx + i]
+      var utf32 = HEAPU32[(startIdx + i) >>> 0]
       if (!utf32 && !ignoreNul) break
       str += String.fromCodePoint(utf32)
     }
     return str
   }
-
   var stringToUTF32 = (str, outPtr, maxBytesToWrite) => {
-    // Backwards compatibility: if max bytes is not specified, assume unsafe unbounded write is allowed.
-    maxBytesToWrite ??= 0x7fffffff
+    outPtr >>>= 0
+    maxBytesToWrite ??= 2147483647
     if (maxBytesToWrite < 4) return 0
     var startPtr = outPtr
     var endPtr = startPtr + maxBytesToWrite - 4
     for (var i = 0; i < str.length; ++i) {
       var codePoint = str.codePointAt(i)
-      // Gotcha: if codePoint is over 0xFFFF, it is represented as a surrogate pair in UTF-16.
-      // We need to manually skip over the second code unit for correct iteration.
-      if (codePoint > 0xffff) {
+      if (codePoint > 65535) {
         i++
       }
-      HEAP32[outPtr >> 2] = codePoint
+      HEAP32[(outPtr >>> 2) >>> 0] = codePoint
       outPtr += 4
       if (outPtr + 4 > endPtr) break
     }
-    // Null-terminate the pointer to the HEAP.
-    HEAP32[outPtr >> 2] = 0
+    HEAP32[(outPtr >>> 2) >>> 0] = 0
     return outPtr - startPtr
   }
-
   var lengthBytesUTF32 = (str) => {
     var len = 0
     for (var i = 0; i < str.length; ++i) {
       var codePoint = str.codePointAt(i)
-      // Gotcha: if codePoint is over 0xFFFF, it is represented as a surrogate pair in UTF-16.
-      // We need to manually skip over the second code unit for correct iteration.
-      if (codePoint > 0xffff) {
+      if (codePoint > 65535) {
         i++
       }
       len += 4
     }
-
     return len
   }
-  var __embind_register_std_wstring = (rawType, charSize, name) => {
+  function __embind_register_std_wstring(rawType, charSize, name) {
+    rawType >>>= 0
+    charSize >>>= 0
+    name >>>= 0
     name = AsciiToString(name)
     var decodeString, encodeString, lengthBytesUTF
     if (charSize === 2) {
@@ -5345,26 +4422,19 @@ async function BASIS(moduleArg = {}) {
     registerType(rawType, {
       name,
       fromWireType: (value) => {
-        // Code mostly taken from _embind_register_std_string fromWireType
-        var length = HEAPU32[value >> 2]
+        var length = HEAPU32[(value >>> 2) >>> 0]
         var str = decodeString(value + 4, length * charSize, true)
-
         _free(value)
-
         return str
       },
       toWireType: (destructors, value) => {
         if (!(typeof value == 'string')) {
           throwBindingError(`Cannot pass non-string to C++ string type ${name}`)
         }
-
-        // assumes POINTER_SIZE alignment
         var length = lengthBytesUTF(value)
         var ptr = _malloc(4 + length + charSize)
-        HEAPU32[ptr >> 2] = length / charSize
-
+        HEAPU32[(ptr >>> 2) >>> 0] = length / charSize
         encodeString(value, ptr + 4, length + charSize)
-
         if (destructors !== null) {
           destructors.push(_free, ptr)
         }
@@ -5376,15 +4446,20 @@ async function BASIS(moduleArg = {}) {
       },
     })
   }
-
-  var __embind_register_value_object = (
+  function __embind_register_value_object(
     rawType,
     name,
     constructorSignature,
     rawConstructor,
     destructorSignature,
     rawDestructor,
-  ) => {
+  ) {
+    rawType >>>= 0
+    name >>>= 0
+    constructorSignature >>>= 0
+    rawConstructor >>>= 0
+    destructorSignature >>>= 0
+    rawDestructor >>>= 0
     structRegistrations[rawType] = {
       name: AsciiToString(name),
       rawConstructor: embind__requireFunction(
@@ -5398,8 +4473,7 @@ async function BASIS(moduleArg = {}) {
       fields: [],
     }
   }
-
-  var __embind_register_value_object_field = (
+  function __embind_register_value_object_field(
     structType,
     fieldName,
     getterReturnType,
@@ -5410,7 +4484,17 @@ async function BASIS(moduleArg = {}) {
     setterSignature,
     setter,
     setterContext,
-  ) => {
+  ) {
+    structType >>>= 0
+    fieldName >>>= 0
+    getterReturnType >>>= 0
+    getterSignature >>>= 0
+    getter >>>= 0
+    getterContext >>>= 0
+    setterArgumentType >>>= 0
+    setterSignature >>>= 0
+    setter >>>= 0
+    setterContext >>>= 0
     structRegistrations[structType].fields.push({
       fieldName: AsciiToString(fieldName),
       getterReturnType,
@@ -5421,52 +4505,45 @@ async function BASIS(moduleArg = {}) {
       setterContext,
     })
   }
-
-  var __embind_register_void = (rawType, name) => {
+  var __embind_register_void = function (rawType, name) {
+    rawType >>>= 0
+    name >>>= 0
     name = AsciiToString(name)
     registerType(rawType, {
-      isVoid: true, // void return values can be optimized out sometimes
+      isVoid: true,
       name,
       fromWireType: () => undefined,
-      // TODO: assert if anything else is given?
       toWireType: (destructors, o) => undefined,
     })
   }
-
   var __emscripten_throw_longjmp = () => {
-    throw Infinity
+    throw new EmscriptenSjLj()
   }
-
   var emval_methodCallers = []
   var emval_addMethodCaller = (caller) => {
     var id = emval_methodCallers.length
     emval_methodCallers.push(caller)
     return id
   }
-
   var emval_lookupTypes = (argCount, argTypes) => {
     var a = new Array(argCount)
     for (var i = 0; i < argCount; ++i) {
       a[i] = requireRegisteredType(
-        HEAPU32[(argTypes + i * 4) >> 2],
+        HEAPU32[((argTypes + i * 4) >>> 2) >>> 0],
         `parameter ${i}`,
       )
     }
     return a
   }
-
   var emval_returnValue = (toReturnWire, destructorsRef, handle) => {
     var destructors = []
     var result = toReturnWire(destructors, handle)
     if (destructors.length) {
-      // void, primitives and any other types w/o destructors don't need to allocate a handle
-      HEAPU32[destructorsRef >> 2] = Emval.toHandle(destructors)
+      HEAPU32[(destructorsRef >>> 2) >>> 0] = Emval.toHandle(destructors)
     }
     return result
   }
-
   var emval_symbols = {}
-
   var getStringOrSymbol = (address) => {
     var symbol = emval_symbols[address]
     if (symbol === undefined) {
@@ -5474,16 +4551,15 @@ async function BASIS(moduleArg = {}) {
     }
     return symbol
   }
-  var __emval_create_invoker = (argCount, argTypesPtr, kind) => {
+  var __emval_create_invoker = function (argCount, argTypesPtr, kind) {
+    argTypesPtr >>>= 0
     var GenericWireTypeSize = 8
-
     var [retType, ...argTypes] = emval_lookupTypes(argCount, argTypesPtr)
     var toReturnWire = retType.toWireType.bind(retType)
     var argFromPtr = argTypes.map((type) =>
       type.readValueFromPointer.bind(type),
     )
-    argCount-- // remove the extracted return type
-
+    argCount--
     var captures = { toValue: Emval.toValue }
     var args = argFromPtr.map((argFromPtr, i) => {
       var captureName = `argFromPtr${i}`
@@ -5512,10 +4588,7 @@ async function BASIS(moduleArg = {}) {
       captures['emval_returnValue'] = emval_returnValue
       functionBody = `return emval_returnValue(toReturnWire, destructorsRef, ${functionBody})`
     }
-    functionBody = `return function (handle, methodName, destructorsRef, args) {
-  ${functionBody}
-  }`
-
+    functionBody = `return function (handle, methodName, destructorsRef, args) {\n${functionBody}\n}`
     var invokerFunction = new Function(Object.keys(captures), functionBody)(
       ...Object.values(captures),
     )
@@ -5524,68 +4597,71 @@ async function BASIS(moduleArg = {}) {
       createNamedFunction(functionName, invokerFunction),
     )
   }
-
-  var __emval_get_global = (name) => {
+  function __emval_get_global(name) {
+    name >>>= 0
     if (!name) {
       return Emval.toHandle(globalThis)
     }
     name = getStringOrSymbol(name)
     return Emval.toHandle(globalThis[name])
   }
-
-  var __emval_get_module_property = (name) => {
+  function __emval_get_module_property(name) {
+    name >>>= 0
     name = getStringOrSymbol(name)
     return Emval.toHandle(Module[name])
   }
-
-  var __emval_get_property = (handle, key) => {
+  function __emval_get_property(handle, key) {
+    handle >>>= 0
+    key >>>= 0
     handle = Emval.toValue(handle)
     key = Emval.toValue(key)
     return Emval.toHandle(handle[key])
   }
-
-  var __emval_incref = (handle) => {
+  function __emval_incref(handle) {
+    handle >>>= 0
     if (handle > 9) {
       emval_handles[handle + 1] += 1
     }
   }
-
-  var __emval_invoke = (caller, handle, methodName, destructorsRef, args) => {
+  function __emval_invoke(caller, handle, methodName, destructorsRef, args) {
+    caller >>>= 0
+    handle >>>= 0
+    methodName >>>= 0
+    destructorsRef >>>= 0
+    args >>>= 0
     return emval_methodCallers[caller](handle, methodName, destructorsRef, args)
   }
-
-  var __emval_new_cstring = (v) => Emval.toHandle(getStringOrSymbol(v))
-
-  var __emval_run_destructors = (handle) => {
+  function __emval_new_cstring(v) {
+    v >>>= 0
+    return Emval.toHandle(getStringOrSymbol(v))
+  }
+  function __emval_run_destructors(handle) {
+    handle >>>= 0
     var destructors = Emval.toValue(handle)
     runDestructors(destructors)
     __emval_decref(handle)
   }
-
-  var INT53_MAX = 9007199254740992
-
-  var INT53_MIN = -9007199254740992
-  var bigintToI53Checked = (num) =>
-    num < INT53_MIN || num > INT53_MAX ? NaN : Number(num)
   function __mmap_js(len, prot, flags, fd, offset, allocated, addr) {
+    len >>>= 0
     offset = bigintToI53Checked(offset)
-
+    allocated >>>= 0
+    addr >>>= 0
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
       var res = FS.mmap(stream, len, offset, prot, flags)
       var ptr = res.ptr
-      HEAP32[allocated >> 2] = res.allocated
-      HEAPU32[addr >> 2] = ptr
+      HEAP32[(allocated >>> 2) >>> 0] = res.allocated
+      HEAPU32[(addr >>> 2) >>> 0] = ptr
       return 0
     } catch (e) {
       if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
       return -e.errno
     }
   }
-
   function __munmap_js(addr, len, prot, flags, fd, offset) {
+    addr >>>= 0
+    len >>>= 0
     offset = bigintToI53Checked(offset)
-
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
       if (prot & 2) {
@@ -5596,48 +4672,29 @@ async function BASIS(moduleArg = {}) {
       return -e.errno
     }
   }
-
-  var __tzset_js = (timezone, daylight, std_name, dst_name) => {
-    // TODO: Use (malleable) environment variables instead of system settings.
+  var __tzset_js = function (timezone, daylight, std_name, dst_name) {
+    timezone >>>= 0
+    daylight >>>= 0
+    std_name >>>= 0
+    dst_name >>>= 0
     var currentYear = new Date().getFullYear()
     var winter = new Date(currentYear, 0, 1)
     var summer = new Date(currentYear, 6, 1)
     var winterOffset = winter.getTimezoneOffset()
     var summerOffset = summer.getTimezoneOffset()
-
-    // Local standard timezone offset. Local standard time is not adjusted for
-    // daylight savings.  This code uses the fact that getTimezoneOffset returns
-    // a greater value during Standard Time versus Daylight Saving Time (DST).
-    // Thus it determines the expected output during Standard Time, and it
-    // compares whether the output of the given date the same (Standard) or less
-    // (DST).
     var stdTimezoneOffset = Math.max(winterOffset, summerOffset)
-
-    // timezone is specified as seconds west of UTC ("The external variable
-    // `timezone` shall be set to the difference, in seconds, between
-    // Coordinated Universal Time (UTC) and local standard time."), the same
-    // as returned by stdTimezoneOffset.
-    // See http://pubs.opengroup.org/onlinepubs/009695399/functions/tzset.html
-    HEAPU32[timezone >> 2] = stdTimezoneOffset * 60
-
-    HEAP32[daylight >> 2] = Number(winterOffset != summerOffset)
-
+    HEAPU32[(timezone >>> 2) >>> 0] = stdTimezoneOffset * 60
+    HEAP32[(daylight >>> 2) >>> 0] = Number(winterOffset != summerOffset)
     var extractZone = (timezoneOffset) => {
-      // Why inverse sign?
-      // Read here https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTimezoneOffset
       var sign = timezoneOffset >= 0 ? '-' : '+'
-
       var absOffset = Math.abs(timezoneOffset)
       var hours = String(Math.floor(absOffset / 60)).padStart(2, '0')
       var minutes = String(absOffset % 60).padStart(2, '0')
-
       return `UTC${sign}${hours}${minutes}`
     }
-
     var winterName = extractZone(winterOffset)
     var summerName = extractZone(summerOffset)
     if (summerOffset < winterOffset) {
-      // Northern hemisphere
       stringToUTF8(winterName, std_name, 17)
       stringToUTF8(summerName, dst_name, 17)
     } else {
@@ -5645,23 +4702,17 @@ async function BASIS(moduleArg = {}) {
       stringToUTF8(summerName, std_name, 17)
     }
   }
-
   var _emscripten_get_now = () => performance.now()
-
   var _emscripten_date_now = () => Date.now()
-
   var nowIsMonotonic = 1
-
   var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3
-
   function _clock_time_get(clk_id, ignored_precision, ptime) {
     ignored_precision = bigintToI53Checked(ignored_precision)
-
+    ptime >>>= 0
     if (!checkWasiClock(clk_id)) {
       return 28
     }
     var now
-    // all wasi clocks but realtime are monotonic
     if (clk_id === 0) {
       now = _emscripten_date_now()
     } else if (nowIsMonotonic) {
@@ -5669,76 +4720,37 @@ async function BASIS(moduleArg = {}) {
     } else {
       return 52
     }
-    // "now" is in ms, and wasi times are in ns.
-    var nsec = Math.round(now * 1000 * 1000)
-    HEAP64[ptime >> 3] = BigInt(nsec)
+    var nsec = Math.round(now * 1e3 * 1e3)
+    HEAP64[(ptime >>> 3) >>> 0] = BigInt(nsec)
     return 0
   }
-
-  var getHeapMax = () =>
-    // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
-    // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
-    // for any code that deals with heap sizes, which would require special
-    // casing all heap size related code to treat 0 specially.
-    2147483648
-  var _emscripten_get_heap_max = () => getHeapMax()
-
+  var getHeapMax = () => 4294901760
+  function _emscripten_get_heap_max() {
+    return getHeapMax()
+  }
   var growMemory = (size) => {
     var oldHeapSize = wasmMemory.buffer.byteLength
     var pages = ((size - oldHeapSize + 65535) / 65536) | 0
     try {
-      // round size grow request up to wasm page size (fixed 64KB per spec)
-      wasmMemory.grow(pages) // .grow() takes a delta compared to the previous size
+      wasmMemory.grow(pages)
       updateMemoryViews()
-      return 1 /*success*/
+      return 1
     } catch (e) {}
-    // implicit 0 return to save code size (caller will cast "undefined" into 0
-    // anyhow)
   }
-  var _emscripten_resize_heap = (requestedSize) => {
-    var oldSize = HEAPU8.length
-    // With CAN_ADDRESS_2GB or MEMORY64, pointers are already unsigned.
+  function _emscripten_resize_heap(requestedSize) {
     requestedSize >>>= 0
-    // With multithreaded builds, races can happen (another thread might increase the size
-    // in between), so return a failure, and let the caller retry.
-
-    // Memory resize rules:
-    // 1.  Always increase heap size to at least the requested size, rounded up
-    //     to next page multiple.
-    // 2a. If MEMORY_GROWTH_LINEAR_STEP == -1, excessively resize the heap
-    //     geometrically: increase the heap size according to
-    //     MEMORY_GROWTH_GEOMETRIC_STEP factor (default +20%), At most
-    //     overreserve by MEMORY_GROWTH_GEOMETRIC_CAP bytes (default 96MB).
-    // 2b. If MEMORY_GROWTH_LINEAR_STEP != -1, excessively resize the heap
-    //     linearly: increase the heap size by at least
-    //     MEMORY_GROWTH_LINEAR_STEP bytes.
-    // 3.  Max size for the heap is capped at 2048MB-WASM_PAGE_SIZE, or by
-    //     MAXIMUM_MEMORY, or by ASAN limit, depending on which is smallest
-    // 4.  If we were unable to allocate as much memory, it may be due to
-    //     over-eager decision to excessively reserve due to (3) above.
-    //     Hence if an allocation fails, cut down on the amount of excess
-    //     growth, in an attempt to succeed to perform a smaller allocation.
-
-    // A limit is set for how much we can grow. We should not exceed that
-    // (the wasm binary specifies it, so if we tried, we'd fail anyhow).
+    var oldSize = HEAPU8.length
     var maxHeapSize = getHeapMax()
     if (requestedSize > maxHeapSize) {
       return false
     }
-
-    // Loop through potential heap size increases. If we attempt a too eager
-    // reservation that fails, cut down on the attempted size and reserve a
-    // smaller bump instead. (max 3 times, chosen somewhat arbitrarily)
     for (var cutDown = 1; cutDown <= 4; cutDown *= 2) {
-      var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown) // ensure geometric growth
-      // but limit overreserving (default to capping at +96MB overgrowth at most)
+      var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown)
       overGrownHeapSize = Math.min(overGrownHeapSize, requestedSize + 100663296)
-
       var newSize = Math.min(
         maxHeapSize,
         alignMemory(Math.max(requestedSize, overGrownHeapSize), 65536),
       )
-
       var replacement = growMemory(newSize)
       if (replacement) {
         return true
@@ -5746,14 +4758,10 @@ async function BASIS(moduleArg = {}) {
     }
     return false
   }
-
   var ENV = {}
-
   var getExecutableName = () => thisProgram || './this.program'
   var getEnvStrings = () => {
     if (!getEnvStrings.strings) {
-      // Default values.
-      // Browser language detection #8751
       var lang =
         (globalThis.navigator?.language ?? 'C').replace('-', '_') + '.UTF-8'
       var env = {
@@ -5765,11 +4773,7 @@ async function BASIS(moduleArg = {}) {
         LANG: lang,
         _: getExecutableName(),
       }
-      // Apply the user-provided values, if any.
       for (var x in ENV) {
-        // x is a key in ENV; if ENV[x] is undefined, that means it was
-        // explicitly set to be so. We allow user code to do that to
-        // force variables with default values to remain unset.
         if (ENV[x] === undefined) delete env[x]
         else env[x] = ENV[x]
       }
@@ -5781,30 +4785,31 @@ async function BASIS(moduleArg = {}) {
     }
     return getEnvStrings.strings
   }
-
-  var _environ_get = (__environ, environ_buf) => {
+  function _environ_get(__environ, environ_buf) {
+    __environ >>>= 0
+    environ_buf >>>= 0
     var bufSize = 0
     var envp = 0
     for (var string of getEnvStrings()) {
       var ptr = environ_buf + bufSize
-      HEAPU32[(__environ + envp) >> 2] = ptr
+      HEAPU32[((__environ + envp) >>> 2) >>> 0] = ptr
       bufSize += stringToUTF8(string, ptr, Infinity) + 1
       envp += 4
     }
     return 0
   }
-
-  var _environ_sizes_get = (penviron_count, penviron_buf_size) => {
+  function _environ_sizes_get(penviron_count, penviron_buf_size) {
+    penviron_count >>>= 0
+    penviron_buf_size >>>= 0
     var strings = getEnvStrings()
-    HEAPU32[penviron_count >> 2] = strings.length
+    HEAPU32[(penviron_count >>> 2) >>> 0] = strings.length
     var bufSize = 0
     for (var string of strings) {
       bufSize += lengthBytesUTF8(string) + 1
     }
-    HEAPU32[penviron_buf_size >> 2] = bufSize
+    HEAPU32[(penviron_buf_size >>> 2) >>> 0] = bufSize
     return 0
   }
-
   function _fd_close(fd) {
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
@@ -5815,66 +4820,62 @@ async function BASIS(moduleArg = {}) {
       return e.errno
     }
   }
-
-  /** @param {number=} offset */
   var doReadv = (stream, iov, iovcnt, offset) => {
     var ret = 0
     for (var i = 0; i < iovcnt; i++) {
-      var ptr = HEAPU32[iov >> 2]
-      var len = HEAPU32[(iov + 4) >> 2]
+      var ptr = HEAPU32[(iov >>> 2) >>> 0]
+      var len = HEAPU32[((iov + 4) >>> 2) >>> 0]
       iov += 8
       var curr = FS.read(stream, HEAP8, ptr, len, offset)
       if (curr < 0) return -1
       ret += curr
-      if (curr < len) break // nothing more to read
+      if (curr < len) break
       if (typeof offset != 'undefined') {
         offset += curr
       }
     }
     return ret
   }
-
   function _fd_read(fd, iov, iovcnt, pnum) {
+    iov >>>= 0
+    iovcnt >>>= 0
+    pnum >>>= 0
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
       var num = doReadv(stream, iov, iovcnt)
-      HEAPU32[pnum >> 2] = num
+      HEAPU32[(pnum >>> 2) >>> 0] = num
       return 0
     } catch (e) {
       if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
       return e.errno
     }
   }
-
   function _fd_seek(fd, offset, whence, newOffset) {
     offset = bigintToI53Checked(offset)
-
+    newOffset >>>= 0
     try {
       if (isNaN(offset)) return 61
       var stream = SYSCALLS.getStreamFromFD(fd)
       FS.llseek(stream, offset, whence)
-      HEAP64[newOffset >> 3] = BigInt(stream.position)
+      HEAP64[(newOffset >>> 3) >>> 0] = BigInt(stream.position)
       if (stream.getdents && offset === 0 && whence === 0)
-        stream.getdents = null // reset readdir state
+        stream.getdents = null
       return 0
     } catch (e) {
       if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
       return e.errno
     }
   }
-
-  /** @param {number=} offset */
   var doWritev = (stream, iov, iovcnt, offset) => {
     var ret = 0
     for (var i = 0; i < iovcnt; i++) {
-      var ptr = HEAPU32[iov >> 2]
-      var len = HEAPU32[(iov + 4) >> 2]
+      var ptr = HEAPU32[(iov >>> 2) >>> 0]
+      var len = HEAPU32[((iov + 4) >>> 2) >>> 0]
       iov += 8
       var curr = FS.write(stream, HEAP8, ptr, len, offset)
       if (curr < 0) return -1
       ret += curr
       if (curr < len) {
-        // No more space to write.
         break
       }
       if (typeof offset != 'undefined') {
@@ -5883,42 +4884,33 @@ async function BASIS(moduleArg = {}) {
     }
     return ret
   }
-
   function _fd_write(fd, iov, iovcnt, pnum) {
+    iov >>>= 0
+    iovcnt >>>= 0
+    pnum >>>= 0
     try {
       var stream = SYSCALLS.getStreamFromFD(fd)
       var num = doWritev(stream, iov, iovcnt)
-      HEAPU32[pnum >> 2] = num
+      HEAPU32[(pnum >>> 2) >>> 0] = num
       return 0
     } catch (e) {
       if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e
       return e.errno
     }
   }
-
   FS.createPreloadedFile = FS_createPreloadedFile
   FS.preloadFile = FS_preloadFile
   FS.staticInit()
   init_ClassHandle()
   init_RegisteredPointer()
-  // End JS library code
-
-  // include: postlibrary.js
-  // This file is included after the automatically-generated JS library code
-  // but before the wasm module is created.
-
   {
-    // Begin ATMODULES hooks
     if (Module['noExitRuntime']) noExitRuntime = Module['noExitRuntime']
     if (Module['preloadPlugins']) preloadPlugins = Module['preloadPlugins']
     if (Module['print']) out = Module['print']
     if (Module['printErr']) err = Module['printErr']
     if (Module['wasmBinary']) wasmBinary = Module['wasmBinary']
-    // End ATMODULES hooks
-
     if (Module['arguments']) arguments_ = Module['arguments']
     if (Module['thisProgram']) thisProgram = Module['thisProgram']
-
     if (Module['preInit']) {
       if (typeof Module['preInit'] == 'function')
         Module['preInit'] = [Module['preInit']]
@@ -5927,233 +4919,156 @@ async function BASIS(moduleArg = {}) {
       }
     }
   }
-
-  // Begin runtime exports
-  // End runtime exports
-  // Begin JS library exports
-  // End JS library exports
-
-  // end include: postlibrary.js
-
-  // Imports from the Wasm binary.
   var ___getTypeName,
     _free,
     _malloc,
     _emscripten_builtin_memalign,
     _setThrew,
     __emscripten_stack_restore,
-    __emscripten_stack_alloc,
     _emscripten_stack_get_current,
     memory,
     __indirect_function_table,
     wasmMemory,
     wasmTable
-
   function assignWasmExports(wasmExports) {
-    ___getTypeName = wasmExports['__getTypeName']
-    _free = wasmExports['free']
-    _malloc = wasmExports['malloc']
-    _emscripten_builtin_memalign = wasmExports['emscripten_builtin_memalign']
-    _setThrew = wasmExports['setThrew']
-    __emscripten_stack_restore = wasmExports['_emscripten_stack_restore']
-    __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc']
-    _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current']
-    memory = wasmMemory = wasmExports['memory']
-    __indirect_function_table = wasmTable =
-      wasmExports['__indirect_function_table']
+    ___getTypeName = wasmExports['ca']
+    _free = wasmExports['da']
+    _malloc = wasmExports['fa']
+    _emscripten_builtin_memalign = wasmExports['ga']
+    _setThrew = wasmExports['ha']
+    __emscripten_stack_restore = wasmExports['ia']
+    _emscripten_stack_get_current = wasmExports['ja']
+    memory = wasmMemory = wasmExports['aa']
+    __indirect_function_table = wasmTable = wasmExports['ea']
   }
-
   var wasmImports = {
-    /** @export */
-    __cxa_throw: ___cxa_throw,
-    /** @export */
-    __syscall_fcntl64: ___syscall_fcntl64,
-    /** @export */
-    __syscall_fstat64: ___syscall_fstat64,
-    /** @export */
-    __syscall_ioctl: ___syscall_ioctl,
-    /** @export */
-    __syscall_lstat64: ___syscall_lstat64,
-    /** @export */
-    __syscall_newfstatat: ___syscall_newfstatat,
-    /** @export */
-    __syscall_openat: ___syscall_openat,
-    /** @export */
-    __syscall_stat64: ___syscall_stat64,
-    /** @export */
-    _abort_js: __abort_js,
-    /** @export */
-    _embind_finalize_value_object: __embind_finalize_value_object,
-    /** @export */
-    _embind_register_bigint: __embind_register_bigint,
-    /** @export */
-    _embind_register_bool: __embind_register_bool,
-    /** @export */
-    _embind_register_class: __embind_register_class,
-    /** @export */
-    _embind_register_class_constructor: __embind_register_class_constructor,
-    /** @export */
-    _embind_register_class_function: __embind_register_class_function,
-    /** @export */
-    _embind_register_constant: __embind_register_constant,
-    /** @export */
-    _embind_register_emval: __embind_register_emval,
-    /** @export */
-    _embind_register_enum: __embind_register_enum,
-    /** @export */
-    _embind_register_enum_value: __embind_register_enum_value,
-    /** @export */
-    _embind_register_float: __embind_register_float,
-    /** @export */
-    _embind_register_function: __embind_register_function,
-    /** @export */
-    _embind_register_integer: __embind_register_integer,
-    /** @export */
-    _embind_register_memory_view: __embind_register_memory_view,
-    /** @export */
-    _embind_register_std_string: __embind_register_std_string,
-    /** @export */
-    _embind_register_std_wstring: __embind_register_std_wstring,
-    /** @export */
-    _embind_register_value_object: __embind_register_value_object,
-    /** @export */
-    _embind_register_value_object_field: __embind_register_value_object_field,
-    /** @export */
-    _embind_register_void: __embind_register_void,
-    /** @export */
-    _emscripten_throw_longjmp: __emscripten_throw_longjmp,
-    /** @export */
-    _emval_create_invoker: __emval_create_invoker,
-    /** @export */
-    _emval_decref: __emval_decref,
-    /** @export */
-    _emval_get_global: __emval_get_global,
-    /** @export */
-    _emval_get_module_property: __emval_get_module_property,
-    /** @export */
-    _emval_get_property: __emval_get_property,
-    /** @export */
-    _emval_incref: __emval_incref,
-    /** @export */
-    _emval_invoke: __emval_invoke,
-    /** @export */
-    _emval_new_cstring: __emval_new_cstring,
-    /** @export */
-    _emval_run_destructors: __emval_run_destructors,
-    /** @export */
-    _mmap_js: __mmap_js,
-    /** @export */
-    _munmap_js: __munmap_js,
-    /** @export */
-    _tzset_js: __tzset_js,
-    /** @export */
-    clock_time_get: _clock_time_get,
-    /** @export */
-    emscripten_date_now: _emscripten_date_now,
-    /** @export */
-    emscripten_get_heap_max: _emscripten_get_heap_max,
-    /** @export */
-    emscripten_get_now: _emscripten_get_now,
-    /** @export */
-    emscripten_resize_heap: _emscripten_resize_heap,
-    /** @export */
-    environ_get: _environ_get,
-    /** @export */
-    environ_sizes_get: _environ_sizes_get,
-    /** @export */
-    fd_close: _fd_close,
-    /** @export */
-    fd_read: _fd_read,
-    /** @export */
-    fd_seek: _fd_seek,
-    /** @export */
-    fd_write: _fd_write,
-    /** @export */
-    invoke_ii,
-    /** @export */
-    invoke_vi,
-    /** @export */
-    invoke_vii,
-    /** @export */
-    invoke_viii,
+    u: ___cxa_throw,
+    B: ___syscall_fcntl64,
+    P: ___syscall_fstat64,
+    R: ___syscall_ioctl,
+    O: ___syscall_newfstatat,
+    C: ___syscall_openat,
+    U: __abort_js,
+    s: __embind_finalize_value_object,
+    E: __embind_register_bigint,
+    _: __embind_register_bool,
+    w: __embind_register_class,
+    v: __embind_register_class_constructor,
+    a: __embind_register_class_function,
+    e: __embind_register_constant,
+    Y: __embind_register_emval,
+    o: __embind_register_enum,
+    b: __embind_register_enum_value,
+    D: __embind_register_float,
+    j: __embind_register_function,
+    n: __embind_register_integer,
+    k: __embind_register_memory_view,
+    Z: __embind_register_std_string,
+    y: __embind_register_std_wstring,
+    t: __embind_register_value_object,
+    d: __embind_register_value_object_field,
+    $: __embind_register_void,
+    J: __emscripten_throw_longjmp,
+    i: __emval_create_invoker,
+    c: __emval_decref,
+    q: __emval_get_global,
+    p: __emval_get_module_property,
+    l: __emval_get_property,
+    h: __emval_incref,
+    g: __emval_invoke,
+    m: __emval_new_cstring,
+    f: __emval_run_destructors,
+    L: __mmap_js,
+    M: __munmap_js,
+    G: __tzset_js,
+    T: _clock_time_get,
+    S: _emscripten_date_now,
+    F: _emscripten_get_heap_max,
+    z: _emscripten_get_now,
+    K: _emscripten_resize_heap,
+    H: _environ_get,
+    I: _environ_sizes_get,
+    x: _fd_close,
+    Q: _fd_read,
+    N: _fd_seek,
+    A: _fd_write,
+    W: invoke_ii,
+    r: invoke_vi,
+    V: invoke_vii,
+    X: invoke_viii,
   }
-
   function invoke_vi(index, a1) {
     var sp = stackSave()
     try {
       getWasmTableEntry(index)(a1)
     } catch (e) {
       stackRestore(sp)
-      if (e !== e + 0) throw e
+      if (!(e instanceof EmscriptenEH)) throw e
       _setThrew(1, 0)
     }
   }
-
   function invoke_viii(index, a1, a2, a3) {
     var sp = stackSave()
     try {
       getWasmTableEntry(index)(a1, a2, a3)
     } catch (e) {
       stackRestore(sp)
-      if (e !== e + 0) throw e
+      if (!(e instanceof EmscriptenEH)) throw e
       _setThrew(1, 0)
     }
   }
-
   function invoke_ii(index, a1) {
     var sp = stackSave()
     try {
       return getWasmTableEntry(index)(a1)
     } catch (e) {
       stackRestore(sp)
-      if (e !== e + 0) throw e
+      if (!(e instanceof EmscriptenEH)) throw e
       _setThrew(1, 0)
     }
   }
-
   function invoke_vii(index, a1, a2) {
     var sp = stackSave()
     try {
       getWasmTableEntry(index)(a1, a2)
     } catch (e) {
       stackRestore(sp)
-      if (e !== e + 0) throw e
+      if (!(e instanceof EmscriptenEH)) throw e
       _setThrew(1, 0)
     }
   }
-
-  // include: postamble.js
-  // === Auto-generated postamble setup entry stuff ===
-
+  function applySignatureConversions(wasmExports) {
+    wasmExports = Object.assign({}, wasmExports)
+    var makeWrapper_pp = (f) => (a0) => f(a0) >>> 0
+    var makeWrapper_ppp = (f) => (a0, a1) => f(a0, a1) >>> 0
+    var makeWrapper_p = (f) => () => f() >>> 0
+    wasmExports['ca'] = makeWrapper_pp(wasmExports['ca'])
+    wasmExports['fa'] = makeWrapper_pp(wasmExports['fa'])
+    wasmExports['ga'] = makeWrapper_ppp(wasmExports['ga'])
+    wasmExports['_emscripten_stack_alloc'] = makeWrapper_pp(
+      wasmExports['_emscripten_stack_alloc'],
+    )
+    wasmExports['ja'] = makeWrapper_p(wasmExports['ja'])
+    return wasmExports
+  }
   function run() {
     if (runDependencies > 0) {
       dependenciesFulfilled = run
       return
     }
-
     preRun()
-
-    // a preRun added a dependency, run will be called later
     if (runDependencies > 0) {
       dependenciesFulfilled = run
       return
     }
-
     function doRun() {
-      // run may have just been called through dependencies being fulfilled just in this very frame,
-      // or while the async setStatus time below was happening
       Module['calledRun'] = true
-
       if (ABORT) return
-
       initRuntime()
-
       readyPromiseResolve?.(Module)
       Module['onRuntimeInitialized']?.()
-
       postRun()
     }
-
     if (Module['setStatus']) {
       Module['setStatus']('Running...')
       setTimeout(() => {
@@ -6164,38 +5079,17 @@ async function BASIS(moduleArg = {}) {
       doRun()
     }
   }
-
   var wasmExports
-
-  // In modularize mode the generated code is within a factory function so we
-  // can use await here (since it's not top-level-await).
   wasmExports = await createWasm()
-
   run()
-
-  // end include: postamble.js
-
-  // include: postamble_modularize.js
-  // In MODULARIZE mode we wrap the generated code in a factory function
-  // and return either the Module itself, or a promise of the module.
-  //
-  // We assign to the `moduleRtn` global here and configure closure to see
-  // this as and extern so it won't get minified.
-
   if (runtimeInitialized) {
     moduleRtn = Module
   } else {
-    // Set up the promise that indicates the Module is initialized
     moduleRtn = new Promise((resolve, reject) => {
       readyPromiseResolve = resolve
       readyPromiseReject = reject
     })
   }
-
-  // end include: postamble_modularize.js
-
   return moduleRtn
 }
-
-// Export using a UMD style export, or ES6 exports if selected
 export default BASIS

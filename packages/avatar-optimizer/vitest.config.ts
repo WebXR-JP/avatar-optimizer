@@ -52,6 +52,8 @@ export default defineConfig({
   publicDir: 'tests/fixtures',
   test: {
     include: ['tests/**/*.test.ts', '__tests__/**/*.test.ts'],
+    // Node 専用のテストは vitest.node.config.ts で実行する
+    exclude: ['tests/node/**', '**/node_modules/**'],
     environment: 'happy-dom',
     testTimeout: 30_000,
     coverage: {

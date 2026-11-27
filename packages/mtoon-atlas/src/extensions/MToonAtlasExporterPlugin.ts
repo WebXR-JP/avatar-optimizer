@@ -3,6 +3,7 @@ import { encode as encodePng16 } from 'fast-png'
 import { compressToKtx2 } from '@webxr-jp/texture-compression'
 import type { Ktx2CompressionOptions } from '@webxr-jp/texture-compression'
 import type { MToonAtlasMaterialLike, ParameterBufferDescriptor } from '../types'
+import { canvasToPngBlob, createCanvas2D, isCanvas2D, isDrawableImage } from './canvas-utils'
 import { extractRgbaData } from './extract-rgba-data'
 import { getKtx2Source, isCompressedTexture } from './ktx2-source-cache'
 import
@@ -862,6 +863,9 @@ export class MToonAtlasExporterPlugin
 
   /**
    * 画像をBlobに変換する（非同期）
+   *
+   * DOM の無い環境（Worker / Node）でも動くよう、キャンバスは canvas-utils 経由で作り、
+   * HTMLCanvasElement などのグローバルは存在を確認してから instanceof で判定する
    */
   private async imageToBlobAsync(image: any): Promise<Blob>
   {
@@ -871,48 +875,12 @@ export class MToonAtlasExporterPlugin
       return this.createPlaceholderBlob()
     }
 
-    // CanvasからBlob
-    if (image instanceof HTMLCanvasElement)
-    {
-      return new Promise((resolve) =>
-      {
-        image.toBlob((blob) =>
-        {
-          resolve(blob || this.createPlaceholderBlob())
-        }, 'image/png')
-      })
-    }
-
-    // ImageBitmap/HTMLImageElementからBlob
-    // ImageBitmapはブラウザ環境のみで利用可能なため、typeofでチェック
-    if ((typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) ||
-      image instanceof HTMLImageElement)
-    {
-      const canvas = document.createElement('canvas')
-      canvas.width = image.width
-      canvas.height = image.height
-      const ctx = canvas.getContext('2d')
-      if (ctx)
-      {
-        ctx.drawImage(image, 0, 0)
-        return new Promise((resolve) =>
-        {
-          canvas.toBlob((blob) =>
-          {
-            resolve(blob || this.createPlaceholderBlob())
-          }, 'image/png')
-        })
-      }
-    }
-
     // DataTexture（image.data）からBlob
     if (image.data && image.width && image.height)
     {
-      const canvas = document.createElement('canvas')
-      canvas.width = image.width
-      canvas.height = image.height
-      const ctx = canvas.getContext('2d')
-      if (ctx)
+      const canvas = createCanvas2D(image.width, image.height)
+      const ctx = canvas?.getContext('2d')
+      if (canvas && ctx)
       {
         const srcData = image.data
         const isFloatData = srcData instanceof Float32Array ||
@@ -930,14 +898,25 @@ export class MToonAtlasExporterPlugin
 
         const imageData = new ImageData(uint8Data, image.width, image.height)
         ctx.putImageData(imageData, 0, 0)
+        return (await canvasToPngBlob(canvas)) ?? this.createPlaceholderBlob()
+      }
+    }
 
-        return new Promise((resolve) =>
-        {
-          canvas.toBlob((blob) =>
-          {
-            resolve(blob || this.createPlaceholderBlob())
-          }, 'image/png')
-        })
+    // Canvas（HTMLCanvasElement / OffscreenCanvas）からBlob
+    if (isCanvas2D(image))
+    {
+      return (await canvasToPngBlob(image)) ?? this.createPlaceholderBlob()
+    }
+
+    // ImageBitmap/HTMLImageElementからBlob
+    if (isDrawableImage(image))
+    {
+      const canvas = createCanvas2D(image.width, image.height)
+      const ctx = canvas?.getContext('2d')
+      if (canvas && ctx)
+      {
+        ctx.drawImage(image, 0, 0)
+        return (await canvasToPngBlob(canvas)) ?? this.createPlaceholderBlob()
       }
     }
 

@@ -1,4 +1,4 @@
-import { err, ok, Result, safeTry } from 'neverthrow'
+import { err, ok, ResultAsync, safeTry } from 'neverthrow'
 import {
   DataTexture,
   NoColorSpace,
@@ -132,18 +132,18 @@ export function buildLayersForSlot(
  * @param patternMappings - パターンとマテリアルのマッピング
  * @param patternPlacements - パターンごとのUV変換行列
  * @param options - アトラス生成オプション（スロットごとの解像度指定など）
- * @returns スロット名をキーにしたアトラス画像のマップ
+ * @returns スロット名をキーにしたアトラス画像のマップ（合成は非同期）
  */
 export function generateAtlasImagesFromPatterns(
   materials: MToonLikeMaterial[],
   patternMappings: PatternMaterialMapping[],
   patternPlacements: OffsetScale[],
   options?: AtlasGenerationOptions,
-): Result<AtlasImageMap, OptimizationError> {
-  return safeTry(function* () {
+): ResultAsync<AtlasImageMap, OptimizationError> {
+  return safeTry(async function* () {
     if (patternMappings.length !== patternPlacements.length) {
       return err({
-        type: 'INVALID_OPERATION',
+        type: 'INVALID_OPERATION' as const,
         message: 'Pattern mappings and placements length mismatch',
       })
     }
@@ -159,10 +159,11 @@ export function generateAtlasImagesFromPatterns(
       )
 
       const resolution = getSlotResolution(slot, options)
-      const atlas = yield* composeImagesToAtlas(layers, {
+      const atlas = yield* await composeImagesToAtlas(layers, {
         width: resolution,
         height: resolution,
         colorSpace: MTOON_TEXTURE_SLOT_COLOR_SPACES[slot],
+        renderer: options?.renderer,
       })
 
       atlasMap[slot] = atlas

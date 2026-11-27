@@ -13,7 +13,10 @@ import {
 } from '@webxr-jp/mtoon-atlas'
 import { ResultAsync } from 'neverthrow'
 import type { Material } from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {
+  GLTFLoader,
+  type GLTFParser,
+} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { VRMLoaderError } from '../types'
 
@@ -107,6 +110,50 @@ function revokeThumbnailObjectURL(vrm: VRM): void {
   }
 }
 
+/**
+ * DOM の無い環境（Node など）向けに、VRM 1.0 のサムネイル読み込みを差し替える
+ *
+ * three-vrm の VRMMetaLoaderPlugin は VRM 1.0 のサムネイルを ImageLoader（HTMLImageElement）で
+ * 読むため、DOM が無いと失敗してサムネイルが失われる。内部メソッド `_extractGLTFImage` を
+ * bufferView を createImageBitmap でデコードする実装に置き換える。
+ * VRM 0.x のサムネイルはテクスチャ経由で読まれるので影響しない。
+ * three-vrm の更新でメソッドが無くなった場合は何もしない（従来どおりサムネイル無しになる）。
+ */
+function useBitmapThumbnailLoader(
+  metaPlugin: VRMMetaLoaderPlugin,
+  parser: GLTFParser,
+): void {
+  const target = metaPlugin as unknown as {
+    _extractGLTFImage?: (index: number) => Promise<unknown>
+  }
+  if (typeof target._extractGLTFImage !== 'function') return
+  if (typeof createImageBitmap !== 'function') return
+
+  target._extractGLTFImage = async (index: number) => {
+    const imageDef = (
+      parser.json.images as
+        | Array<{ bufferView?: number; mimeType?: string }>
+        | undefined
+    )?.[index]
+    if (imageDef?.bufferView == null) return null
+    try {
+      const buffer = (await parser.getDependency(
+        'bufferView',
+        imageDef.bufferView,
+      )) as ArrayBuffer
+      return await createImageBitmap(
+        new Blob([buffer], { type: imageDef.mimeType }),
+      )
+    } catch (error) {
+      console.warn(
+        'loadVRM: サムネイル画像を読み込めませんでした',
+        error instanceof Error ? error.message : error,
+      )
+      return null
+    }
+  }
+}
+
 export function loadVRM(
   source: VRMSource,
   options: LoadVRMOptions = {},
@@ -114,6 +161,8 @@ export function loadVRM(
   return ResultAsync.fromPromise(
     (async () => {
       const loader = new GLTFLoader()
+      // DOM が無い環境（Node など）では VRM 1.0 のサムネイルを createImageBitmap で読む
+      const hasDOM = typeof document !== 'undefined'
 
       // KTX2Loader を設定（KTX2 テクスチャのサポート）
       // GLTFLoader と MToonAtlasLoaderPlugin で同じインスタンスを共有し、
@@ -150,6 +199,9 @@ export function loadVRM(
             'https://creativecommons.org/licenses/by-nc-nd/4.0/',
           ],
         })
+        if (!hasDOM) {
+          useBitmapThumbnailLoader(metaPlugin, parser)
+        }
 
         // 既定のままなら three-vrm に任せ、指定時のみ差し替える
         const mtoonMaterialPlugin = options.mtoonMaterialType

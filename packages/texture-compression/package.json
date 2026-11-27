@@ -7,8 +7,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "node": "./dist/index.node.js",
+      "import": "./dist/index.js"
     },
     "./wasm/*": "./wasm/*"
   },
@@ -18,6 +19,7 @@
   ],
   "scripts": {
     "build": "pnpm lint:fix && pnpm typecheck && tsup",
+    "build:wasm": "./scripts/build-wasm.sh",
     "dev": "tsup --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix && prettier --write .",

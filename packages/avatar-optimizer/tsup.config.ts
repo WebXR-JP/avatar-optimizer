@@ -4,7 +4,8 @@ export default defineConfig([
   // Library build
   {
     name: 'library',
-    entry: ['src/index.ts'],
+    // index: ブラウザ / Node 共通の本体、node: Node 用のポリフィルと WebGPU レンダラー生成
+    entry: { index: 'src/index.ts', node: 'src/node/index.ts' },
     format: ['esm'],
     dts: {
       resolve: true,
@@ -18,6 +19,11 @@ export default defineConfig([
     minify: false,
     treeshake: true,
     outDir: 'dist',
-    external: ['three', '@pixiv/three-vrm', '@pixiv/three-vrm-materials-mtoon'],
+    external: [
+      'three',
+      'three/webgpu',
+      '@pixiv/three-vrm',
+      '@pixiv/three-vrm-materials-mtoon',
+    ],
   },
 ])

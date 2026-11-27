@@ -1,20 +1,19 @@
 /**
  * BasisEncoder WASM モジュールのロードと管理
- * ブラウザ環境専用
+ * WASM の読み込み元は wasm-source.ts（ブラウザ）/ wasm-source.node.ts（Node）で切り替わる
  */
 
 import { ResultAsync } from 'neverthrow'
 // @ts-expect-error - Emscripten module
 import BASIS from '../wasm/basis_encoder.js'
-// @ts-expect-error - Vite ?url import
-import wasmUrl from '../wasm/basis_encoder.wasm?url'
 import { BasisEncoderModule, CompressionError } from './types'
+import { getBasisModuleArg } from './wasm-source'
 
 /** モジュールキャッシュ */
 let cachedModule: BasisEncoderModule | null = null
 
 /**
- * BasisEncoder WASMモジュールを初期化（ブラウザ環境専用）
+ * BasisEncoder WASMモジュールを初期化
  *
  * @returns 初期化されたBasisEncoderModule
  */
@@ -64,12 +63,12 @@ interface BasisEncoderModuleWithInit extends BasisEncoderModule {
 
 /**
  * BASISモジュールをロード
- * locateFileでWASMのURLを指定
+ * WASM の場所（ブラウザ）またはバイト列（Node）は getBasisModuleArg が決める
  */
 async function loadBasisModule(): Promise<BasisEncoderModule> {
-  const moduleObj = (await BASIS({
-    locateFile: () => wasmUrl,
-  })) as BasisEncoderModuleWithInit
+  const moduleObj = (await BASIS(
+    await getBasisModuleArg(),
+  )) as BasisEncoderModuleWithInit
 
   // Basisエンコーダーの初期化（必須）
   if (moduleObj.initializeBasis) {

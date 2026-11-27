@@ -4,6 +4,8 @@
  * MToonAtlasExporterPlugin および avatar-optimizer の KTX2 圧縮処理で共有する。
  */
 
+import { createCanvas2D, isCanvas2D, isDrawableImage } from './canvas-utils'
+
 /**
  * 様々な画像形式から RGBA データを抽出
  *
@@ -36,21 +38,10 @@ export async function extractRgbaData(image: any): Promise<Uint8Array>
     }
   }
 
-  // HTMLCanvasElement
-  if (image instanceof HTMLCanvasElement)
+  // HTMLCanvasElement / OffscreenCanvas
+  if (isCanvas2D(image))
   {
-    const ctx = image.getContext('2d')
-    if (ctx)
-    {
-      const imageData = ctx.getImageData(0, 0, image.width, image.height)
-      return new Uint8Array(imageData.data)
-    }
-  }
-
-  // OffscreenCanvas
-  if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas)
-  {
-    const ctx = image.getContext('2d')
+    const ctx = image.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
     if (ctx)
     {
       const imageData = ctx.getImageData(0, 0, image.width, image.height)
@@ -59,16 +50,10 @@ export async function extractRgbaData(image: any): Promise<Uint8Array>
   }
 
   // HTMLImageElement または ImageBitmap
-  // ImageBitmap はブラウザ環境のみで利用可能なため、typeof でチェック
-  if (
-    image instanceof HTMLImageElement ||
-    (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap)
-  )
+  if (isDrawableImage(image))
   {
-    const canvas = document.createElement('canvas')
-    canvas.width = image.width
-    canvas.height = image.height
-    const ctx = canvas.getContext('2d')
+    const canvas = createCanvas2D(image.width, image.height)
+    const ctx = canvas?.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null | undefined
     if (ctx)
     {
       ctx.drawImage(image, 0, 0)
@@ -87,10 +72,8 @@ export async function extractRgbaData(image: any): Promise<Uint8Array>
       const img = new Image()
       img.onload = () =>
       {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')
+        const canvas = createCanvas2D(img.width, img.height)
+        const ctx = canvas?.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null | undefined
         if (ctx)
         {
           ctx.drawImage(img, 0, 0)

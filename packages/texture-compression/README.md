@@ -7,7 +7,7 @@ avatar-optimizer向けのテクスチャ圧縮ユーティリティパッケー�
 - **KTX2形式出力**: GPU対応の圧縮テクスチャフォーマット
 - **UASTC圧縮**: 高品質なユニバーサルテクスチャ圧縮
 - **Zstandard超圧縮**: オプションでさらなるファイルサイズ削減
-- **ブラウザ専用**: WebAssemblyベースで高速処理
+- **ブラウザ / Node 対応**: WebAssembly ベース（Node では `exports` の `node` 条件で WASM をファイルから読み込む）
 
 ## インストール
 
@@ -153,6 +153,24 @@ interface Ktx2CompressionResult {
 
 ## 注意事項
 
-- ブラウザ環境専用です（Node.js非対応）
+- ブラウザと Node の両方で動作します
+- 入力画像は最大 4096×4096（16,777,216 ピクセル）です。上流のビルド済み WASM は 6,291,456 ピクセル（2048×3072）が上限ですが、同梱の WASM は上限を引き上げてビルドしています（下記「WASM のビルド」）
 - 2のべき乗でないサイズの画像は警告が出ますが処理は継続します
-- 大きなテクスチャの場合、出力バッファは最大24MBに制限されています
+- 出力バッファは最大24MBです（4096×4096 + ミップマップでも超圧縮なしで約 22MB に収まります）
+
+## WASM のビルド
+
+`wasm/basis_encoder.{js,wasm}` は [Basis Universal](https://github.com/BinomialLLC/basis_universal) の
+`webgl/encoder` を次の変更を加えてビルドしたものです。
+
+- 入力上限 `BASISU_ENCODER_MAX_SOURCE_IMAGE_PIXELS` を 4096×4096 に引き上げ
+- 最大メモリ 4GB、ES モジュール出力（`EXPORT_ES6`）、`ENVIRONMENT=web`
+
+再ビルドするには emscripten（emcmake / emmake）を PATH に通して実行します。
+ソースのコミットと変更内容はスクリプト内に固定されており、同じ emscripten（5.0.6 で確認）なら同一のバイナリになります。
+
+```bash
+pnpm -F @webxr-jp/texture-compression run build:wasm
+# Nix の場合
+nix shell nixpkgs#emscripten nixpkgs#cmake nixpkgs#gnumake -c pnpm -F @webxr-jp/texture-compression run build:wasm
+```
