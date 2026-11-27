@@ -119,6 +119,19 @@ export interface OptimizeModelOptions {
    */
   textureCompression?: TextureCompressionOptions
   /**
+   * KTX2 圧縮したテクスチャを GPU 向けにトランスコードしてマテリアルへ差し替えるか
+   * （`textureCompression` 指定時のみ使用）。
+   *
+   * `false` にすると KTX2 へのエンコードだけを行い、KTX2Loader を使わない。
+   * メモリ上のテクスチャは非圧縮のまま残るが、エンコード結果が記録されるため
+   * `exportVRM` の出力は KTX2 になる。KTX2Loader（Web Worker とトランスコーダー）を
+   * 使えない Node で、最適化結果をファイルへ書き出す用途向け。
+   * `false` のときは `ktx2Loader` / `ktx2TranscoderPath` / `ktx2Renderer` は無視される
+   *
+   * @default true
+   */
+  ktx2Transcode?: boolean
+  /**
    * 使用する KTX2Loader（`textureCompression` 指定時のみ使用）。
    * 渡すインスタンスは `detectSupport(renderer)` 済みである必要がある
    */

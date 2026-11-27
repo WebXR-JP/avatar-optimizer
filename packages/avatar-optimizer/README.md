@@ -79,6 +79,8 @@ const optimizeResult = await optimizeModel(vrm, {
 const exportResult = await exportVRM(vrm)
 ```
 
+`optimizeModel` transcodes the KTX2 textures with `KTX2Loader` (Web Worker) and swaps them into the materials, so the optimized VRM renders with GPU-compressed textures right away. Pass `ktx2Transcode: false` to only encode them (no `KTX2Loader` needed; the in-memory textures stay uncompressed, while `exportVRM` still writes KTX2). This is the way to use KTX2 compression on Node.
+
 ### Mesh Simplification
 
 ```typescript
@@ -171,14 +173,14 @@ renderer.dispose()
 
 - GPU アダプタが必要です（Vulkan / Metal / D3D12）。GPU の無い Linux でも、Mesa の lavapipe（ソフトウェア Vulkan）があれば動きます
 - `installNodePolyfills()` の画像デコード / エンコードは PNG と JPEG のみ対応です（純 JS の pngjs / jpeg-js）
-- `exportVRM` の `textureCompression`（KTX2 エンコード）は Node でも動きます。`optimizeModel` の `textureCompression` は KTX2Loader が Web Worker を使うため Node では使えず、エラーを返します
+- KTX2 圧縮は `optimizeModel(vrm, { textureCompression, ktx2Transcode: false })` で行います。GPU 向けへのトランスコード（KTX2Loader が Web Worker を使う）を省き、エンコード結果を記録するだけにするので、続く `exportVRM(vrm)` の出力が KTX2 になります。`ktx2Transcode` を省略すると KTX2Loader を初期化できずにエラーを返します
 - ブラウザは画像をデコードするときにアルファを premultiply するため、アルファの低い画素の RGB はブラウザ版よりも Node 版の方が元画像に忠実になります（アルファ 128 以上の画素は ±2 以内で一致します）
 
 ブラウザでも、描画に使っている WebGPURenderer を `atlas.renderer` に渡せばアトラス合成をそのレンダラーで行えます（レンダーターゲットとクリア色は合成後に元へ戻します）。
 
 ### Types
 
-- `OptimizeModelOptions` - Configuration for `optimizeModel` pipeline (including `textureCompression`, `ktx2Loader`, `ktx2TranscoderPath`, `ktx2Renderer`)
+- `OptimizeModelOptions` - Configuration for `optimizeModel` pipeline (including `textureCompression`, `ktx2Transcode`, `ktx2Loader`, `ktx2TranscoderPath`, `ktx2Renderer`)
 - `AtlasGenerationOptions` - Atlas resolution and `renderer` (WebGLRenderer / WebGPURenderer) used for atlas composition
 - `NodeAtlasRendererOptions` - Options for `createNodeAtlasRenderer` (`@webxr-jp/avatar-optimizer/node`)
 - `OptimizationOptions` - Legacy optimization options type

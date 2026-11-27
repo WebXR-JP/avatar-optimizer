@@ -5,6 +5,11 @@
  * KTX2Loader.parse() で GPU 向け CompressedTexture へトランスコードして差し替える。
  * 同時に元の KTX2 バイナリを rememberKtx2Source() でキャッシュするため、
  * 後続の exportVRM() では再エンコードなしに KTX2 のままパススルー出力できる。
+ *
+ * KTX2Loader を渡さない場合（`ktx2Transcode: false`。Node など Worker や
+ * トランスコーダーが使えない環境向け）はトランスコードと差し替えを行わず、
+ * エンコードした KTX2 バイナリを元のアトラステクスチャに記録するだけにする。
+ * メモリ上のテクスチャは非圧縮のままだが、exportVRM() の出力は KTX2 になる。
  */
 
 import {
@@ -70,7 +75,8 @@ export function resolveKtx2LoaderForOptimization(
     return err({
       type: 'INTERNAL_ERROR' as const,
       message:
-        'KTX2Loader を初期化できませんでした（WebGL2/WebGPU が利用可能なブラウザ環境、または options.ktx2Loader の指定が必要です）',
+        'KTX2Loader を初期化できませんでした（WebGL2/WebGPU が利用可能なブラウザ環境、または options.ktx2Loader の指定が必要です。' +
+        'Node などでファイル出力だけが目的なら options.ktx2Transcode: false を指定してください）',
     })
   }
 
@@ -150,13 +156,12 @@ function setMaterialSlotTexture(
 }
 
 /**
- * 単一のテクスチャを KTX2 へエンコードし、KTX2Loader で GPU 向けテクスチャへトランスコードする
+ * 単一のテクスチャを KTX2 へエンコードする
  */
-async function encodeAndTranscodeTexture(
+async function encodeTextureToKtx2(
   texture: Texture,
   compression: TextureCompressionOptions,
-  ktx2Loader: KTX2Loader,
-): Promise<Result<Texture, OptimizationError>> {
+): Promise<Result<Uint8Array, OptimizationError>> {
   const image = texture.image as
     | { width?: number; height?: number }
     | null
@@ -205,10 +210,24 @@ async function encodeAndTranscodeTexture(
     })
   }
 
+  return ok(compressResult.value.data)
+}
+
+/**
+ * 単一のテクスチャを KTX2 へエンコードし、KTX2Loader で GPU 向けテクスチャへトランスコードする
+ */
+async function encodeAndTranscodeTexture(
+  texture: Texture,
+  compression: TextureCompressionOptions,
+  ktx2Loader: KTX2Loader,
+): Promise<Result<Texture, OptimizationError>> {
+  const encoded = await encodeTextureToKtx2(texture, compression)
+  if (encoded.isErr()) return err(encoded.error)
+
   // KTX2Loader.parse() は渡した ArrayBuffer を Worker へ transfer して detach するため、
   // キャッシュ保存用と parse 用で必ず独立したバッファを用意する
-  const storedKtx2Bytes = new Uint8Array(compressResult.value.data)
-  const parseBuffer = compressResult.value.data.slice().buffer
+  const storedKtx2Bytes = new Uint8Array(encoded.value)
+  const parseBuffer = encoded.value.slice().buffer
 
   let transcodedTexture: Texture
   try {
@@ -239,7 +258,10 @@ async function encodeAndTranscodeTexture(
  *
  * @param materialInfos - 最適化対象のマテリアル情報配列
  * @param atlasMap - `generateAtlasImagesFromPatterns` が生成したアトラス画像マップ
- * @param options - 圧縮オプションおよび KTX2Loader
+ * `ktx2Loader` が null の場合はトランスコードせず、エンコード結果を元のテクスチャに
+ * rememberKtx2Source() で記録するだけにする（exportVRM でパススルー出力される）。
+ *
+ * @param options - 圧縮オプションおよび KTX2Loader（トランスコードしない場合は null）
  * @returns 成功時は ok(undefined)、失敗時は OptimizationError
  */
 export function compressAtlasTexturesToKtx2(
@@ -247,7 +269,7 @@ export function compressAtlasTexturesToKtx2(
   atlasMap: AtlasImageMap,
   options: {
     compression: TextureCompressionOptions
-    ktx2Loader: KTX2Loader
+    ktx2Loader: KTX2Loader | null
   },
 ): ResultAsync<void, OptimizationError> {
   return safeTry(async function* () {
@@ -283,6 +305,21 @@ export function compressAtlasTexturesToKtx2(
       })
     }
 
+    const ktx2Loader = options.ktx2Loader
+    if (!ktx2Loader) {
+      // 全テクスチャのエンコードに成功してから記録し、途中失敗時に一部だけ KTX2 になるのを防ぐ
+      const encodedTextures: Array<{ texture: Texture; data: Uint8Array }> = []
+      for (const { texture } of texturesToCompress) {
+        const encoded = await encodeTextureToKtx2(texture, options.compression)
+        if (encoded.isErr()) return err(encoded.error)
+        encodedTextures.push({ texture, data: encoded.value })
+      }
+      for (const { texture, data } of encodedTextures) {
+        rememberKtx2Source(texture, data)
+      }
+      return ok(undefined)
+    }
+
     const createdTextures: Texture[] = []
     const replacements = new Map<string, Texture>()
 
@@ -290,7 +327,7 @@ export function compressAtlasTexturesToKtx2(
       const result = await encodeAndTranscodeTexture(
         texture,
         options.compression,
-        options.ktx2Loader,
+        ktx2Loader,
       )
       if (result.isErr()) {
         // 途中失敗時は生成済みの GPU テクスチャを解放してリークを防ぐ

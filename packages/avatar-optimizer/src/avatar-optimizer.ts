@@ -90,8 +90,9 @@ export function optimizeModel(
       }
 
       // KTX2 圧縮指定時はモデルへ変更を加える前に KTX2Loader を解決できるか検証する
-      let resolvedKtx2Loader: KTX2Loader | undefined
-      if (options.textureCompression) {
+      // ktx2Transcode: false のときはトランスコードしないので KTX2Loader は不要
+      let resolvedKtx2Loader: KTX2Loader | null = null
+      if (options.textureCompression && options.ktx2Transcode !== false) {
         resolvedKtx2Loader = yield* resolveKtx2LoaderForOptimization(options)
       }
 
@@ -161,7 +162,7 @@ export function optimizeModel(
 
       // アトラステクスチャを KTX2 へ圧縮し、GPU 向け CompressedTexture に差し替える
       // マテリアル統合前に行うことで、統合マテリアル・アウトライン双方が同じ圧縮テクスチャを共有する
-      if (options.textureCompression && resolvedKtx2Loader) {
+      if (options.textureCompression) {
         yield* await compressAtlasTexturesToKtx2(materialInfos, atlasMap, {
           compression: options.textureCompression,
           ktx2Loader: resolvedKtx2Loader,

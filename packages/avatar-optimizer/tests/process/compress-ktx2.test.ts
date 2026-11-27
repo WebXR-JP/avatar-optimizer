@@ -256,6 +256,45 @@ describe('compress-ktx2', () => {
     expect(material.normalMap).toBe(secondTex)
   })
 
+  it('ktx2Loader が null のときはトランスコードせず、元のテクスチャに KTX2 バイナリを記録する', async () => {
+    const atlasTex = createSolidDataTexture('rawAtlas')
+    const material = new MToonMaterial()
+    material.map = atlasTex
+    const materialInfos: MaterialInfo[] = [
+      {
+        material,
+        meshes: [],
+        hasOutline: false,
+        outlineWidthMode: 'none',
+        renderMode: 'opaque',
+      },
+    ]
+
+    const result = await compressAtlasTexturesToKtx2(
+      materialInfos,
+      createMinimalAtlasMap(atlasTex),
+      { compression: { supercompression: true }, ktx2Loader: null },
+    )
+
+    expect(result.isOk()).toBe(true)
+    expect(material.map).toBe(atlasTex)
+    const ktx2Source = getKtx2Source(atlasTex)
+    expect(ktx2Source).toBeDefined()
+    expect(Array.from(ktx2Source!.subarray(0, 4))).toEqual([
+      0xab, 0x4b, 0x54, 0x58,
+    ])
+  })
+
+  it('ktx2Transcode: false のときは KTX2Loader を解決しない', async () => {
+    vi.mocked(resolveKtx2Loader).mockClear()
+    const { vrm } = createSimpleVrmWithMToon()
+    await optimizeModel(vrm, {
+      textureCompression: { supercompression: true },
+      ktx2Transcode: false,
+    })
+    expect(resolveKtx2Loader).not.toHaveBeenCalled()
+  })
+
   it('MToonMaterial がないモデル（atlasSkipped）に textureCompression を渡してもエラーにならずスキップされる', async () => {
     const scene = new Scene()
     const vrm = { scene } as unknown as VRM

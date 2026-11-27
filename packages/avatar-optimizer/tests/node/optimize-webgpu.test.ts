@@ -181,4 +181,35 @@ describe.runIf(renderer)('Node + WebGPU', () => {
       expect(meshCount).toBeGreaterThan(0)
     },
   )
+
+  it('optimizeModel({ textureCompression, ktx2Transcode: false }) で KTX2Loader なしに圧縮でき、exportVRM が KTX2 を出力する', async () => {
+    const loaded = await loadVRM(readVRM('AliciaSolid.vrm'))
+    expect(loaded.isOk()).toBe(true)
+    if (loaded.isErr()) return
+    const vrm = loaded.value
+
+    const optimized = await optimizeModel(vrm, {
+      atlas: { defaultResolution: 256, renderer: renderer! },
+      textureCompression: { supercompression: true, generateMipmaps: false },
+      ktx2Transcode: false,
+    })
+    expect(
+      optimized.isOk(),
+      optimized.isErr() ? optimized.error.message : '',
+    ).toBe(true)
+
+    // textureCompression を指定しなくても記録済みの KTX2 がパススルー出力される
+    const exported = await exportVRM(vrm)
+    expect(exported.isOk()).toBe(true)
+    if (exported.isErr()) return
+
+    const json = readGlbJson(exported.value) as {
+      extensionsUsed?: string[]
+      images?: Array<{ mimeType?: string }>
+    }
+    expect(json.extensionsUsed).toContain('KHR_texture_basisu')
+    expect(
+      json.images?.filter((image) => image.mimeType === 'image/ktx2').length,
+    ).toBeGreaterThan(0)
+  })
 })
