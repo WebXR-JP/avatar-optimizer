@@ -1648,5 +1648,218 @@ describe('skeleton-migration', () => {
       const afterApplied2Z = afterV2Z + afterMorphDelta2Z
       expect(afterApplied2Z).toBeCloseTo(-1.3)
     })
+
+    it('should rotate shared morphAttributes only once across multi-primitive meshes without mutating originals', () => {
+      // マルチプリミティブ（別々の BufferGeometry が同一の BufferAttribute を共有）を再現
+      const origPos = new BufferAttribute(
+        new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+        3,
+      )
+      const origNorm = new BufferAttribute(
+        new Float32Array([0.6, 0.8, 0, 0, 0, 1, -1, 0, 0]),
+        3,
+      )
+      const origMorphPos = new BufferAttribute(
+        new Float32Array([0.5, 0.1, -0.2, 0, 0, 0, -0.1, 0, 0.3]),
+        3,
+      )
+      const origMorphNorm = new BufferAttribute(
+        new Float32Array([0.2, -0.1, 0.4, 0, 0, 0, 0.1, 0.2, -0.3]),
+        3,
+      )
+      const skinWeights = new BufferAttribute(
+        new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+        4,
+      )
+      const skinIndices = new BufferAttribute(new Float32Array(12).fill(0), 4)
+
+      const makePrimMesh = (name: string, skeleton: Skeleton) => {
+        const geo = new BufferGeometry()
+        geo.setAttribute('position', origPos)
+        geo.setAttribute('normal', origNorm)
+        geo.setAttribute('skinWeight', skinWeights)
+        geo.setAttribute('skinIndex', skinIndices)
+        geo.morphAttributes.position = [origMorphPos]
+        geo.morphAttributes.normal = [origMorphNorm]
+        geo.morphTargetsRelative = true
+        const mesh = new SkinnedMesh(geo)
+        mesh.name = name
+        mesh.bind(skeleton)
+        return mesh
+      }
+
+      const rootBone = new Bone()
+      rootBone.name = 'hips'
+      const skeleton = new Skeleton([rootBone])
+      const meshA = makePrimMesh('Body_prim0', skeleton)
+      const meshB = makePrimMesh('Body_prim1', skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(rootBone)
+      rootNode.add(meshA)
+      rootNode.add(meshB)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // 元の BufferAttribute 配列が破壊されていないこと
+      expect(origPos.getX(0)).toBeCloseTo(1)
+      expect(origPos.getZ(2)).toBeCloseTo(1)
+      expect(origMorphPos.getX(0)).toBeCloseTo(0.5)
+      expect(origMorphPos.getZ(0)).toBeCloseTo(-0.2)
+      expect(origMorphNorm.getX(0)).toBeCloseTo(0.2)
+      expect(origMorphNorm.getZ(0)).toBeCloseTo(0.4)
+
+      // 両プリミティブとも 1 回だけ Y 軸 180 度回転されていること
+      for (const mesh of [meshA, meshB]) {
+        const pos = mesh.geometry.getAttribute('position')
+        const norm = mesh.geometry.getAttribute('normal')
+        const mPos = mesh.geometry.morphAttributes.position![0]
+        const mNorm = mesh.geometry.morphAttributes.normal![0]
+
+        expect(pos.getX(0)).toBeCloseTo(-1)
+        expect(pos.getY(0)).toBeCloseTo(0)
+        expect(pos.getZ(2)).toBeCloseTo(-1)
+
+        expect(norm.getX(0)).toBeCloseTo(-0.6)
+        expect(norm.getY(0)).toBeCloseTo(0.8)
+        expect(norm.getZ(1)).toBeCloseTo(-1)
+
+        expect(mPos.getX(0)).toBeCloseTo(-0.5)
+        expect(mPos.getY(0)).toBeCloseTo(0.1)
+        expect(mPos.getZ(0)).toBeCloseTo(0.2)
+        expect(mPos.getX(2)).toBeCloseTo(0.1)
+        expect(mPos.getZ(2)).toBeCloseTo(-0.3)
+
+        expect(mNorm.getX(0)).toBeCloseTo(-0.2)
+        expect(mNorm.getY(0)).toBeCloseTo(-0.1)
+        expect(mNorm.getZ(0)).toBeCloseTo(-0.4)
+      }
+
+      // 回転後も同一の BufferAttribute インスタンスが共有されていること
+      expect(meshA.geometry.getAttribute('position')).toBe(
+        meshB.geometry.getAttribute('position'),
+      )
+      expect(meshA.geometry.getAttribute('normal')).toBe(
+        meshB.geometry.getAttribute('normal'),
+      )
+      expect(meshA.geometry.morphAttributes.position![0]).toBe(
+        meshB.geometry.morphAttributes.position![0],
+      )
+      expect(meshA.geometry.morphAttributes.normal![0]).toBe(
+        meshB.geometry.morphAttributes.normal![0],
+      )
+    })
+
+    it('should rotate separate BufferAttributes backing the same ArrayBuffer byte range once per geometry', () => {
+      // 同一 ArrayBuffer の同じバイト範囲を指す別々の BufferAttribute インスタンス
+      const sharedBuffer = new ArrayBuffer(4 * 9 * 2)
+      const f32 = new Float32Array(sharedBuffer)
+      // position (0..8)
+      f32.set([1, 0, 0, 0, 1, 0, 0, 0, 1], 0)
+      // morphTarget (9..17)
+      f32.set([0.4, 0.2, -0.3, 0, 0, 0, -0.2, 0, 0.5], 9)
+
+      const makeMesh = (name: string, skeleton: Skeleton) => {
+        const geo = new BufferGeometry()
+        geo.setAttribute(
+          'position',
+          new BufferAttribute(new Float32Array(sharedBuffer, 0, 9), 3),
+        )
+        geo.setAttribute(
+          'skinWeight',
+          new BufferAttribute(
+            new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+            4,
+          ),
+        )
+        geo.setAttribute(
+          'skinIndex',
+          new BufferAttribute(new Float32Array(12).fill(0), 4),
+        )
+        geo.morphAttributes.position = [
+          new BufferAttribute(new Float32Array(sharedBuffer, 36, 9), 3),
+        ]
+        const mesh = new SkinnedMesh(geo)
+        mesh.name = name
+        mesh.bind(skeleton)
+        return mesh
+      }
+
+      const rootBone = new Bone()
+      const skeleton = new Skeleton([rootBone])
+      const meshA = makeMesh('PrimA', skeleton)
+      const meshB = makeMesh('PrimB', skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(rootBone, meshA, meshB)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      for (const mesh of [meshA, meshB]) {
+        const pos = mesh.geometry.getAttribute('position')
+        const mPos = mesh.geometry.morphAttributes.position![0]
+        expect(pos.getX(0)).toBeCloseTo(-1)
+        expect(pos.getZ(2)).toBeCloseTo(-1)
+        expect(mPos.getX(0)).toBeCloseTo(-0.4)
+        expect(mPos.getY(0)).toBeCloseTo(0.2)
+        expect(mPos.getZ(0)).toBeCloseTo(0.3)
+        expect(mPos.getX(2)).toBeCloseTo(0.2)
+        expect(mPos.getZ(2)).toBeCloseTo(-0.5)
+      }
+    })
+
+    it('should rotate shared morphAttributes consistently across 3 primitives including morphNormals', () => {
+      const origPos = new BufferAttribute(
+        new Float32Array([0.5, 0, -0.5, 0, 1, 0, -0.5, 0, 0.5]),
+        3,
+      )
+      const origMorphPos = new BufferAttribute(
+        new Float32Array([0.1, 0.2, 0.3, 0, 0, 0, -0.3, 0, -0.1]),
+        3,
+      )
+      const origMorphNorm = new BufferAttribute(
+        new Float32Array([-0.5, 0.5, 0.5, 0, 0, 0, 0.2, -0.1, 0.8]),
+        3,
+      )
+      const skinWeights = new BufferAttribute(
+        new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+        4,
+      )
+      const skinIndices = new BufferAttribute(new Float32Array(12).fill(0), 4)
+
+      const rootBone = new Bone()
+      const skeleton = new Skeleton([rootBone])
+      const meshes = [0, 1, 2].map((i) => {
+        const geo = new BufferGeometry()
+        geo.setAttribute('position', origPos)
+        geo.setAttribute('skinWeight', skinWeights)
+        geo.setAttribute('skinIndex', skinIndices)
+        geo.morphAttributes.position = [origMorphPos]
+        geo.morphAttributes.normal = [origMorphNorm]
+        const mesh = new SkinnedMesh(geo)
+        mesh.name = `Prim_${i}`
+        mesh.bind(skeleton)
+        return mesh
+      })
+
+      const rootNode = new Object3D()
+      rootNode.add(rootBone, ...meshes)
+
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      for (const mesh of meshes) {
+        const mPos = mesh.geometry.morphAttributes.position![0]
+        const mNorm = mesh.geometry.morphAttributes.normal![0]
+        expect(mPos.getX(0)).toBeCloseTo(-0.1)
+        expect(mPos.getY(0)).toBeCloseTo(0.2)
+        expect(mPos.getZ(0)).toBeCloseTo(-0.3)
+        expect(mNorm.getX(0)).toBeCloseTo(0.5)
+        expect(mNorm.getY(0)).toBeCloseTo(0.5)
+        expect(mNorm.getZ(0)).toBeCloseTo(-0.5)
+      }
+    })
   })
 })

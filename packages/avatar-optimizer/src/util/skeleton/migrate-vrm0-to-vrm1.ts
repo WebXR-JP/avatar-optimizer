@@ -193,8 +193,14 @@ export function migrateSkeletonVRM0ToVRM1(
 /**
  * 全SkinnedMeshの頂点バッファにY軸180度回転を適用
  *
- * editBufferAttribute を使用して安全に新しい BufferAttribute を作成し、
- * 元のバッファを変更せずに処理する。
+ * editBufferAttribute と属性単位のキャッシュ（rotatedAttrCache）を使用して、
+ * 元の配列を変更せずに新しい BufferAttribute を作成する。
+ * マルチプリミティブメッシュなどで複数の BufferGeometry が同一の
+ * BufferAttribute インスタンスを共有している場合でも、重複回転を防ぎつつ
+ * 回転後の共有関係を維持する。また ArrayBuffer 共有や
+ * InterleavedBufferAttribute でも安全に処理できる。
+ * 処理後は geometry の dispose イベントを発火して GPU の morph テクスチャ
+ * キャッシュを無効化する。
  *
  * @param skinnedMeshes - 処理対象のSkinnedMesh配列
  */
@@ -212,6 +218,24 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
     }
   }
 
+  // 共有 BufferAttribute の重複回転を防ぎつつ共有関係を維持するキャッシュ
+  const rotatedAttrCache = new Map<
+    BufferAttribute | InterleavedBufferAttribute,
+    BufferAttribute
+  >()
+
+  function getRotatedVec3Attribute(
+    attr: BufferAttribute | InterleavedBufferAttribute,
+  ): BufferAttribute {
+    const cached = rotatedAttrCache.get(attr)
+    if (cached) {
+      return cached
+    }
+    const rotated = editBufferAttribute<Float32Array>(attr, rotateVec3Array)
+    rotatedAttrCache.set(attr, rotated)
+    return rotated
+  }
+
   /**
    * BufferAttribute を回転して geometry に設定
    */
@@ -222,8 +246,7 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
   ): void {
     if (attr.itemSize !== 3) return
 
-    const rotated = editBufferAttribute<Float32Array>(attr, rotateVec3Array)
-    geometry.setAttribute(attrName, rotated)
+    geometry.setAttribute(attrName, getRotatedVec3Attribute(attr))
   }
 
   // 処理済みのgeometryを追跡（共有geometryの重複処理を防ぐ）
@@ -254,27 +277,21 @@ function rotateAllVertexBuffers(skinnedMeshes: SkinnedMesh[]): void {
     // morphTarget position属性
     const morphPositions = geometry.morphAttributes.position
     if (morphPositions && Array.isArray(morphPositions)) {
-      for (let i = 0; i < morphPositions.length; i++) {
-        const morphAttr = morphPositions[i]
-        if (morphAttr.itemSize !== 3) continue
-        // 既存の配列を直接編集（GPUキャッシュ問題を回避）
-        const array = morphAttr.array as Float32Array
-        rotateVec3Array(array)
-        morphAttr.needsUpdate = true
-      }
+      geometry.morphAttributes.position = morphPositions.map((morphAttr) =>
+        morphAttr.itemSize === 3
+          ? getRotatedVec3Attribute(morphAttr)
+          : morphAttr,
+      )
     }
 
     // morphTarget normal属性
     const morphNormals = geometry.morphAttributes.normal
     if (morphNormals && Array.isArray(morphNormals)) {
-      for (let i = 0; i < morphNormals.length; i++) {
-        const morphAttr = morphNormals[i]
-        if (morphAttr.itemSize !== 3) continue
-        // 既存の配列を直接編集
-        const array = morphAttr.array as Float32Array
-        rotateVec3Array(array)
-        morphAttr.needsUpdate = true
-      }
+      geometry.morphAttributes.normal = morphNormals.map((morphAttr) =>
+        morphAttr.itemSize === 3
+          ? getRotatedVec3Attribute(morphAttr)
+          : morphAttr,
+      )
     }
 
     // Three.jsのmorphテクスチャキャッシュを無効化するためdisposeイベントを発火
