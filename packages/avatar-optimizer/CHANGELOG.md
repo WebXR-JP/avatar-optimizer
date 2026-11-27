@@ -1,5 +1,20 @@
 # @webxr-jp/avatar-optimizer
 
+## 0.8.0
+
+### Minor Changes
+
+- 6b4dbcd: Node でも `loadVRM` → `optimizeModel` → `exportVRM` を実行できるようにしました。`AtlasGenerationOptions.renderer` でアトラス合成に使うレンダラー（WebGLRenderer / WebGPURenderer）を指定でき、Node 向けにはポリフィル（`installNodePolyfills`）と Dawn でアトラス合成用の WebGPURenderer を作る `createNodeAtlasRenderer` を `@webxr-jp/avatar-optimizer/node` から提供します。DOM の無い環境でも VRM 1.0 のサムネイルを保持します。内部のアトラス合成（`composeImagesToAtlas` / `generateAtlasImagesFromPatterns`）は非同期になりましたが、公開 API の `optimizeModel` は従来どおり `ResultAsync` を返します。KTX2 圧縮では `OptimizeModelOptions.ktx2Transcode: false` を指定すると KTX2Loader を使わずにエンコードだけを行い、`exportVRM` で KTX2 を出力できます（Node 向け）。
+- f7f7b6c: VRM の表情（`vrm.expressionManager`）から参照されていない BlendShape（MorphTarget）をまとめて削除する機能を追加しました。`OptimizeModelOptions.removeUnusedBlendShapes: true`（既定は `false`）または単体 API `removeUnusedBlendShapes(vrm)` で実行でき、残存 BlendShape に合わせて表情バインドのインデックスを自動でリマップします。削除統計は `CombinedMeshResult.statistics.blendShapes`（`RemoveUnusedBlendShapesStatistics`）に記録されます。
+
+### Patch Changes
+
+- Updated dependencies [6b4dbcd]
+- Updated dependencies [f7f7b6c]
+- Updated dependencies [6b4dbcd]
+  - @webxr-jp/mtoon-atlas@0.6.2
+  - @webxr-jp/texture-compression@0.2.0
+
 ## 0.7.2
 
 ### Patch Changes
