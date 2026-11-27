@@ -8,7 +8,7 @@
 
 ## プロジェクト概要
 
-**@webxr-jp/avatar-optimizer** は WebXR アプリケーション向けの 3D モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザ環境で動作します。
+**@webxr-jp/avatar-optimizer** は WebXR アプリケーション向けの 3D モデル最適化ユーティリティライブラリです。glTF-Transform ベースの軽量ライブラリで、React 依存がなくブラウザ環境で動作します。Node でも `@webxr-jp/avatar-optimizer/node`（ポリフィルと Dawn による WebGPU アトラス合成）経由で動作します（`packages/avatar-optimizer/README.md` の「Node で実行する」を参照）。
 
 ## プロジェクト構成
 

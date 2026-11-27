@@ -250,5 +250,23 @@ describe('texture-compression', () => {
         )
       }
     })
+
+    it('4096x4096（同梱 WASM の旧上限 6,291,456 ピクセル超）をミップマップ付きで圧縮できる', async () => {
+      // 単色ならエンコードは一瞬で終わるので、サイズ上限の回帰確認だけに使う
+      const size = 4096
+      const imageData = new Uint8Array(size * size * 4).fill(200)
+
+      const result = await compressToKtx2(imageData, size, size, {
+        generateMipmaps: true,
+        supercompression: true,
+      })
+
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        expect(result.value.width).toBe(size)
+        expect(result.value.height).toBe(size)
+        expect(result.value.compressedSize).toBeGreaterThan(0)
+      }
+    })
   })
 })

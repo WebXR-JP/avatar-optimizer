@@ -9,6 +9,7 @@
 - Mesh simplification using meshoptimizer
 - KTX2 texture compression support
 - VRM0 to VRM1 skeleton migration utilities
+- Runs in browsers and in Node (atlas composition via WebGPU / Dawn)
 
 ## Installation
 
@@ -126,9 +127,60 @@ const result = await optimizeModel(vrm, {
 })
 ```
 
+### Node で実行する
+
+アトラス合成は既定でオフスクリーンの WebGLRenderer を使うため、WebGL の無い Node では
+`atlas.renderer` に WebGPURenderer を渡します。`@webxr-jp/avatar-optimizer/node` に、
+Node に足りないブラウザ API のポリフィルと、[`webgpu`](https://www.npmjs.com/package/webgpu)（Dawn）で
+アトラス合成用の WebGPURenderer を作る関数があります。
+
+```bash
+npm install webgpu
+```
+
+```typescript
+import fs from 'node:fs'
+import { create, globals } from 'webgpu'
+import { exportVRM, loadVRM, optimizeModel } from '@webxr-jp/avatar-optimizer'
+import {
+  createNodeAtlasRenderer,
+  installNodePolyfills,
+} from '@webxr-jp/avatar-optimizer/node'
+
+Object.assign(globalThis, globals) // GPUBufferUsage などの定数
+installNodePolyfills() // createImageBitmap / OffscreenCanvas（2D）/ FileReader など
+
+const renderer = (
+  await createNodeAtlasRenderer({ gpu: create([]) })
+)._unsafeUnwrap()
+
+const bytes = fs.readFileSync('input.vrm')
+const vrm = (
+  await loadVRM(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  )
+)._unsafeUnwrap()
+await optimizeModel(vrm, { atlas: { renderer } })
+const output = (await exportVRM(vrm))._unsafeUnwrap()
+fs.writeFileSync('output.vrm', Buffer.from(output))
+
+renderer.dispose()
+```
+
+`tools/optimize-node.mjs` が同じ処理をする CLI です（`node tools/optimize-node.mjs input.vrm output.vrm`）。
+
+- GPU アダプタが必要です（Vulkan / Metal / D3D12）。GPU の無い Linux でも、Mesa の lavapipe（ソフトウェア Vulkan）があれば動きます
+- `installNodePolyfills()` の画像デコード / エンコードは PNG と JPEG のみ対応です（純 JS の pngjs / jpeg-js）
+- `exportVRM` の `textureCompression`（KTX2 エンコード）は Node でも動きます。`optimizeModel` の `textureCompression` は KTX2Loader が Web Worker を使うため Node では使えず、エラーを返します
+- ブラウザは画像をデコードするときにアルファを premultiply するため、アルファの低い画素の RGB はブラウザ版よりも Node 版の方が元画像に忠実になります（アルファ 128 以上の画素は ±2 以内で一致します）
+
+ブラウザでも、描画に使っている WebGPURenderer を `atlas.renderer` に渡せばアトラス合成をそのレンダラーで行えます（レンダーターゲットとクリア色は合成後に元へ戻します）。
+
 ### Types
 
 - `OptimizeModelOptions` - Configuration for `optimizeModel` pipeline (including `textureCompression`, `ktx2Loader`, `ktx2TranscoderPath`, `ktx2Renderer`)
+- `AtlasGenerationOptions` - Atlas resolution and `renderer` (WebGLRenderer / WebGPURenderer) used for atlas composition
+- `NodeAtlasRendererOptions` - Options for `createNodeAtlasRenderer` (`@webxr-jp/avatar-optimizer/node`)
 - `OptimizationOptions` - Legacy optimization options type
 - `ExportVRMOptions` - Export settings (`textureCompression` is `@deprecated`)
 - `SimplifyOptions` - Mesh simplification parameters

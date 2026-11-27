@@ -111,7 +111,7 @@ export function optimizeModel(
       const packLayouts = yield* await pack(patternMappings)
 
       // パターンごとのアトラス画像を生成
-      const atlasMap = yield* generateAtlasImagesFromPatterns(
+      const atlasMap = yield* await generateAtlasImagesFromPatterns(
         materials,
         patternMappings,
         packLayouts.packed,

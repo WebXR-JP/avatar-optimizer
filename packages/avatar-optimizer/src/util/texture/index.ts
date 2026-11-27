@@ -1,5 +1,5 @@
 import { ParameterSemanticId } from '@webxr-jp/mtoon-atlas'
-import { err, ok, Result, safeTry } from 'neverthrow'
+import { err, ok, Result } from 'neverthrow'
 import {
   Color,
   DataTexture,
@@ -10,17 +10,13 @@ import {
   Vector4,
 } from 'three'
 import {
-  AtlasImageMap,
   AtlasTextureDescriptor,
-  MTOON_TEXTURE_SLOTS,
   MToonLikeMaterial,
-  OffsetScale,
   OptimizationError,
   PARAMETER_LAYOUT,
   ParameterLayout,
 } from '../../types'
-import { composeImagesToAtlas } from './composite'
-import { ImageMatrixPair, PackedMaterialParameters } from './types'
+import { PackedMaterialParameters } from './types'
 
 export type { PackedMaterialParameters } from './types'
 
@@ -76,54 +72,6 @@ function roundToNearestPowerOfTwo(value: number): number {
 
   // より近い方を返す
   return value - lower < upper - value ? lower : upper
-}
-
-/**
- * 各チャンネル(例: MainTex, BumpMap)ごとのアトラス画像を生成する
- * 現状はMToonMaterialのみ対応
- *
- * @param materials - アトラス化対象のマテリアル配列
- * @param placements - マテリアルごとのパッキング情報配列
- * @returns スロット名をキーにしたアトラス画像のマップ
- */
-export function generateAtlasImages(
-  materials: MToonLikeMaterial[],
-  placements: OffsetScale[],
-): Result<AtlasImageMap, OptimizationError> {
-  return safeTry(function* () {
-    if (materials.length !== placements.length) {
-      return err({
-        type: 'INVALID_PARAMETER',
-        message: 'Materials and packing infos length mismatch',
-      })
-    }
-
-    const atlasMap: Partial<AtlasImageMap> = {}
-
-    for (const slot of MTOON_TEXTURE_SLOTS) {
-      const layers: ImageMatrixPair[] = []
-
-      for (let i = 0; i < materials.length; i++) {
-        const mat = materials[i]
-        const placement = placements[i]
-
-        const texture = mat[slot]
-        if (texture) {
-          layers.push({
-            image: texture,
-            uvTransform: placement,
-          })
-        }
-      }
-
-      atlasMap[slot] = yield* composeImagesToAtlas(layers, {
-        width: 2048,
-        height: 2048,
-      })
-    }
-
-    return ok(atlasMap as AtlasImageMap)
-  })
 }
 
 /**

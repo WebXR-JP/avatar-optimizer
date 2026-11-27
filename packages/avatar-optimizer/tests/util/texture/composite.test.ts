@@ -93,11 +93,11 @@ describe('composeImagesToAtlas', () => {
     disposeAtlasRenderer()
   })
 
-  it('連続呼び出しでも WebGL コンテキストを 1 回だけ生成して再利用し、各出力が正しく描画される', () => {
+  it('連続呼び出しでも WebGL コンテキストを 1 回だけ生成して再利用し、各出力が正しく描画される', async () => {
     const { contexts } = spyWebGLContextCreation()
 
     // 1回目: 不透明の赤 (8x8)
-    const first = composeImagesToAtlas(
+    const first = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(200, 40, 20, 255),
@@ -116,7 +116,7 @@ describe('composeImagesToAtlas', () => {
     }
 
     // 2回目: 半透明の青 (16x16)
-    const second = composeImagesToAtlas(
+    const second = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(10, 50, 220, 128),
@@ -135,7 +135,7 @@ describe('composeImagesToAtlas', () => {
     }
 
     // 3回目: alpha=0 の RGB 保持 + 分割配置 (8x8)
-    const third = composeImagesToAtlas(
+    const third = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(12, 34, 56, 0),
@@ -164,7 +164,7 @@ describe('composeImagesToAtlas', () => {
     expect(contexts).toHaveLength(1)
   })
 
-  it('generateAtlasImagesFromPatterns を複数回実行しても WebGL コンテキストは 1 回だけ生成される', () => {
+  it('generateAtlasImagesFromPatterns を複数回実行しても WebGL コンテキストは 1 回だけ生成される', async () => {
     const { contexts } = spyWebGLContextCreation()
 
     const mat = new MToonMaterial()
@@ -179,15 +179,20 @@ describe('composeImagesToAtlas', () => {
     ]
     const placements = [{ offset: new Vector2(0, 0), scale: new Vector2(1, 1) }]
 
-    const first = generateAtlasImagesFromPatterns([mat], mappings, placements, {
-      defaultResolution: 16,
-    })
+    const first = await generateAtlasImagesFromPatterns(
+      [mat],
+      mappings,
+      placements,
+      {
+        defaultResolution: 16,
+      },
+    )
     expect(first.isOk()).toBe(true)
     if (first.isOk()) {
       Object.values(first.value).forEach((tex) => tex.dispose())
     }
 
-    const second = generateAtlasImagesFromPatterns(
+    const second = await generateAtlasImagesFromPatterns(
       [mat],
       mappings,
       placements,
@@ -201,11 +206,11 @@ describe('composeImagesToAtlas', () => {
     expect(contexts).toHaveLength(1)
   })
 
-  it('1回目で dispose された同一の Texture インスタンスを 2 回目に渡しても正しく描画される', () => {
+  it('1回目で dispose された同一の Texture インスタンスを 2 回目に渡しても正しく描画される', async () => {
     const { contexts } = spyWebGLContextCreation()
     const sharedTex = createSolidTexture(44, 188, 99, 255)
 
-    const first = composeImagesToAtlas(
+    const first = await composeImagesToAtlas(
       [
         {
           image: sharedTex,
@@ -223,7 +228,7 @@ describe('composeImagesToAtlas', () => {
       first.value.dispose()
     }
 
-    const second = composeImagesToAtlas(
+    const second = await composeImagesToAtlas(
       [
         {
           image: sharedTex,
@@ -244,14 +249,14 @@ describe('composeImagesToAtlas', () => {
     expect(contexts).toHaveLength(1)
   })
 
-  it('disposeAtlasRenderer で WebGL コンテキストが解放され、次回呼び出し時に再生成される', () => {
+  it('disposeAtlasRenderer で WebGL コンテキストが解放され、次回呼び出し時に再生成される', async () => {
     const { contexts } = spyWebGLContextCreation()
 
     // 未生成状態で呼んでもエラーにならない（冪等性）
     expect(() => disposeAtlasRenderer()).not.toThrow()
     expect(contexts).toHaveLength(0)
 
-    const first = composeImagesToAtlas(
+    const first = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(100, 150, 200, 255),
@@ -276,7 +281,7 @@ describe('composeImagesToAtlas', () => {
     // 解放後に再度呼んでもエラーにならない（冪等性）
     expect(() => disposeAtlasRenderer()).not.toThrow()
 
-    const second = composeImagesToAtlas(
+    const second = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(50, 100, 150, 255),
@@ -297,10 +302,10 @@ describe('composeImagesToAtlas', () => {
     expect(contexts[1].isContextLost()).toBe(false)
   })
 
-  it('コンテキストロスト発生後の呼び出しで自動的にレンダラーが再生成される', () => {
+  it('コンテキストロスト発生後の呼び出しで自動的にレンダラーが再生成される', async () => {
     const { contexts } = spyWebGLContextCreation()
 
-    const first = composeImagesToAtlas(
+    const first = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(255, 0, 0, 255),
@@ -323,7 +328,7 @@ describe('composeImagesToAtlas', () => {
     loseExt!.loseContext()
     expect(contexts[0].isContextLost()).toBe(true)
 
-    const second = composeImagesToAtlas(
+    const second = await composeImagesToAtlas(
       [
         {
           image: createSolidTexture(0, 255, 0, 255),
@@ -344,16 +349,19 @@ describe('composeImagesToAtlas', () => {
     expect(contexts[1].isContextLost()).toBe(false)
   })
 
-  it('不正なサイズ（width <= 0 または height <= 0）の場合はエラーを返し WebGL コンテキストを生成しない', () => {
+  it('不正なサイズ（width <= 0 または height <= 0）の場合はエラーを返し WebGL コンテキストを生成しない', async () => {
     const { contexts } = spyWebGLContextCreation()
 
-    const invalidWidth = composeImagesToAtlas([], { width: 0, height: 8 })
+    const invalidWidth = await composeImagesToAtlas([], { width: 0, height: 8 })
     expect(invalidWidth.isErr()).toBe(true)
     if (invalidWidth.isErr()) {
       expect(invalidWidth.error.type).toBe('INVALID_PARAMETER')
     }
 
-    const invalidHeight = composeImagesToAtlas([], { width: 8, height: -4 })
+    const invalidHeight = await composeImagesToAtlas([], {
+      width: 8,
+      height: -4,
+    })
     expect(invalidHeight.isErr()).toBe(true)
     if (invalidHeight.isErr()) {
       expect(invalidHeight.error.type).toBe('INVALID_PARAMETER')
@@ -362,11 +370,11 @@ describe('composeImagesToAtlas', () => {
     expect(contexts).toHaveLength(0)
   })
 
-  it('composeImagesToAtlas 呼び出し後も入力テクスチャの colorSpace が保持される', () => {
+  it('composeImagesToAtlas 呼び出し後も入力テクスチャの colorSpace が保持される', async () => {
     const inputTex = createSolidTexture(255, 128, 64, 255)
     inputTex.colorSpace = SRGBColorSpace
 
-    const result = composeImagesToAtlas(
+    const result = await composeImagesToAtlas(
       [
         {
           image: inputTex,
