@@ -211,7 +211,11 @@ export interface CombinedMeshResult {
   atlasSkipped?: AtlasSkipped
   /** レンダーモードごとのメッシュグループ */
   groups: Map<RenderMode, MeshGroup>
-  /** マテリアルからスロット情報へのマッピング */
+  /**
+   * マテリアルからスロット情報へのマッピング
+   *
+   * `optimizeModel` は元マテリアルへの強参照を残さないよう処理後にこのマップをクリアする
+   */
   materialSlotIndex: Map<MToonLikeMaterial, MaterialSlotInfo>
   /** 統計情報 */
   statistics: {
