@@ -1,8 +1,9 @@
 import type { VRM } from '@pixiv/three-vrm'
 import { ok, Result, safeTry } from 'neverthrow'
-import { Bone } from 'three'
+import { Bone, type Texture } from 'three'
 import { migrateVRM0MetaToVRM1 } from '../exporter/meta'
 import type { OptimizationError } from '../types'
+import { collectActiveSceneResources } from '../util/cleanup-references'
 import { migrateSkeletonVRM0ToVRM1 } from '../util/skeleton'
 import { migrateSpringBone } from '../util/springbone'
 
@@ -163,8 +164,15 @@ export function migrateVRM0ToVRM1(vrm: VRM): Result<void, OptimizationError> {
     // @pixiv/three-vrm-animation の createVRMAnimationClip は vrm.meta.metaVersion を
     // 見て VRM 0.x 用の X/Z 反転を行うため、ここを更新しないと回転向きが反転する
     if (vrm.meta) {
+      const oldMetaTexture = (vrm.meta as { texture?: Texture }).texture
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(vrm as any).meta = migrateVRM0MetaToVRM1(vrm.meta)
+      if (oldMetaTexture) {
+        const active = collectActiveSceneResources(vrm)
+        if (!active.textures.has(oldMetaTexture)) {
+          oldMetaTexture.dispose()
+        }
+      }
     }
 
     // SpringBoneManager を復元して SpringBone 関連の調整を一括実行

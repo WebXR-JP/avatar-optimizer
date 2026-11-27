@@ -18,6 +18,10 @@ import {
   OptimizeModelOptions,
 } from './types'
 import {
+  collectOriginalResources,
+  disposeReplacedResources,
+} from './util/cleanup-references'
+import {
   assignAtlasTexturesToMaterial,
   CombinedMeshResult,
   combineMToonMaterials as combineMeshAndMaterial,
@@ -25,7 +29,6 @@ import {
   getRenderOrderForMode,
   isMToonLikeMaterial,
 } from './util/material'
-import { deleteMesh } from './util/mesh/deleter'
 import {
   collectExpressionMeshes,
   collectNonSkinnedMeshes,
@@ -91,6 +94,9 @@ export function optimizeModel(
       if (options.textureCompression) {
         resolvedKtx2Loader = yield* resolveKtx2LoaderForOptimization(options)
       }
+
+      // アトラス割り当て前に元マテリアル（本体・アウトライン）と元テクスチャを収集
+      const originalResources = collectOriginalResources(materialInfos)
 
       // 後方互換性のためのMap生成
       const materialMeshMap = new Map<MToonLikeMaterial, Mesh[]>()
@@ -233,11 +239,6 @@ export function optimizeModel(
 
       meshesToRemove.forEach((mesh) => mesh.parent?.remove(mesh))
 
-      // バッファを削除
-      for (const mesh of meshesToRemove) {
-        deleteMesh(mesh)
-      }
-
       // 各レンダーモードのメッシュをシーンに追加
       // アウトラインメッシュを先に追加することで、glTF/VRMエクスポート後も
       // 正しい描画順序を維持（ノードの順序が描画順序に影響するため）
@@ -251,6 +252,17 @@ export function optimizeModel(
           firstMeshParent.add(group.mesh)
         }
       }
+
+      // 置換・削除された元リソースへの残留参照（vrm.materials / firstPerson / expressionManager 等）を
+      // 解除し、未使用のリソースを破棄する（新メッシュ追加後に実行すること）
+      disposeReplacedResources({
+        vrm,
+        originalResources,
+        atlasMap,
+        meshesToRemove,
+        materialInfos,
+        combineResult,
+      })
 
       // 簡略化統計を結果に追加
       if (simplifyStats) {

@@ -281,6 +281,15 @@ function processSingleGroup(
       outlineMesh.castShadow = false
     }
 
+    // mergeGeometriesWithSlotAttribute が受け渡し用に入れた一時参照を削除し、
+    // 後段の Skeleton 置き換え後も古い Skeleton への強参照が残らないようにする
+    delete mergedGeometry.userData.skeleton
+    delete mergedGeometry.userData.bindMatrix
+    if (outlineMesh && outlineMesh.geometry !== mergedGeometry) {
+      delete outlineMesh.geometry.userData.skeleton
+      delete outlineMesh.geometry.userData.bindMatrix
+    }
+
     return ok({
       mesh: combinedMesh,
       material: atlasMaterial,
