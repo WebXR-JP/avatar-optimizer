@@ -240,6 +240,8 @@ interface VRMCanvasProps
   onSimplifyOnly: () => Promise<void>
   isSimplifying: boolean
   lastSimplifyStats: SimplifyStatistics | null
+  removeUnusedBlendShapes: boolean
+  onRemoveUnusedBlendShapesChange: (enabled: boolean) => void
   defaultModels: { name: string; path: string }[]
   selectedModel: string
   onSelectModel: (path: string) => void
@@ -291,6 +293,8 @@ function VRMCanvas({
   onSimplifyOnly,
   isSimplifying,
   lastSimplifyStats,
+  removeUnusedBlendShapes,
+  onRemoveUnusedBlendShapesChange,
   defaultModels,
   selectedModel,
   onSelectModel,
@@ -451,6 +455,16 @@ function VRMCanvas({
           >
             {isSimplifying ? 'Simplifying...' : 'Simplify Only'}
           </button>
+          <div className="vrm-checks">
+            <label className="vrm-check">
+              <input
+                type="checkbox"
+                checked={removeUnusedBlendShapes}
+                onChange={(e) => onRemoveUnusedBlendShapesChange(e.target.checked)}
+              />
+              Remove Unused BlendShapes
+            </label>
+          </div>
           {lastSimplifyStats && (
             <dl className="vrm-stats">
               <dt>メッシュ</dt>

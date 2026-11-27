@@ -46,6 +46,7 @@ export type {
   OptimizationError,
   OptimizationOptions,
   OptimizeModelOptions,
+  RemoveUnusedBlendShapesStatistics,
   SimplifyOptions,
   SkeletonOptimizationStatistics,
   SlotAtlasResolution,
@@ -58,7 +59,8 @@ export type {
 // Re-export UastcQuality from texture-compression
 export { UastcQuality } from '@webxr-jp/texture-compression'
 
-// Simplify
+// Simplify / BlendShapes
+export { removeUnusedBlendShapes } from './process/remove-unused-blend-shapes'
 export { simplifyMeshes, type SimplifyStatistics } from './process/simplify'
 
 // Exporter

@@ -209,50 +209,37 @@ export class MToonAtlasExporterPlugin
    */
   private optimizeMorphAttributeSharing(_roots: Object3D[])
   {
-    // データフィンガープリント -> アクセサインデックス のキャッシュ
-    const fingerprintToAccessor = new Map<string, number>()
+    interface CachedAccessorEntry {
+      bytes: Uint8Array
+      accessorIndex: number
+    }
 
-    // フィンガープリント生成関数
-    const getFingerprint = (attribute: BufferAttribute | InterleavedBufferAttribute): string =>
+    // バケットキー -> エントリ配列 のキャッシュ（衝突時は必ず全バイト一致で検証する）
+    const bucketToAccessors = new Map<string, CachedAccessorEntry[]>()
+
+    const computeFnv1a32 = (bytes: Uint8Array): number =>
     {
-      const array = attribute.array as ArrayLike<number>
-      const byteLength = attribute.array.byteLength
-      const itemSize = attribute.itemSize
-      const count = attribute.count
-      const normalized = attribute.normalized
-
-      // サイズ + itemSize + count + normalized + 先頭/中間/末尾のサンプルデータで簡易フィンガープリント
-      const len = array.length
-      if (len === 0) return `${byteLength}:${itemSize}:${count}:${normalized}:`
-
-      const sampleCount = Math.min(16, len)
-      const samples: number[] = []
-
-      // 先頭サンプル
-      for (let i = 0; i < sampleCount && i < len; i++)
+      let hash = 0x811c9dc5
+      for (let i = 0; i < bytes.length; i++)
       {
-        samples.push(array[i])
+        hash ^= bytes[i]
+        hash = Math.imul(hash, 0x01000193)
       }
-      // 中間サンプル
-      const midStart = Math.floor(len / 2) - Math.floor(sampleCount / 2)
-      for (let i = 0; i < sampleCount && midStart + i < len; i++)
-      {
-        samples.push(array[Math.max(0, midStart + i)])
-      }
-      // 末尾サンプル
-      const endStart = Math.max(0, len - sampleCount)
-      for (let i = 0; i < sampleCount && endStart + i < len; i++)
-      {
-        samples.push(array[endStart + i])
-      }
+      return hash >>> 0
+    }
 
-      return `${byteLength}:${itemSize}:${count}:${normalized}:${samples.map(v => v.toFixed(6)).join(',')}`
+    const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
+    {
+      if (a.byteLength !== b.byteLength) return false
+      for (let i = 0; i < a.byteLength; i++)
+      {
+        if (a[i] !== b[i]) return false
+      }
+      return true
     }
 
     // processAccessorをラップして、データ重複を回避
     const originalProcessAccessor = this.writer.processAccessor.bind(this.writer)
-    let cacheHits = 0
-    let totalCalls = 0
 
     this.writer.processAccessor = (
       attribute: BufferAttribute | InterleavedBufferAttribute,
@@ -261,20 +248,56 @@ export class MToonAtlasExporterPlugin
       count?: number
     ): number =>
     {
-      totalCalls++
-      const fingerprint = getFingerprint(attribute)
-
-      // 同一フィンガープリントに対してすでにアクセサを作成済みならそれを返す
-      const cachedAccessor = fingerprintToAccessor.get(fingerprint)
-      if (cachedAccessor !== undefined)
+      // InterleavedBufferAttribute や部分スライスは誤共有を防ぐためキャッシュせず直接出力する
+      const isInterleaved =
+        'isInterleavedBufferAttribute' in attribute && attribute.isInterleavedBufferAttribute
+      const isPartialSlice =
+        (start !== undefined && start !== 0) ||
+        (count !== undefined && count !== Infinity && count !== attribute.count)
+      if (isInterleaved || isPartialSlice)
       {
-        cacheHits++
-        return cachedAccessor
+        return originalProcessAccessor(attribute, geometry, start, count)
       }
 
-      // 新規作成してキャッシュに保存
+      const bytes = new Uint8Array(
+        attribute.array.buffer,
+        attribute.array.byteOffset,
+        attribute.array.byteLength,
+      )
+      const bufferViewTarget =
+        geometry !== undefined
+          ? attribute === geometry.index
+            ? 'INDEX'
+            : 'ARRAY'
+          : 'NONE'
+      const hash = computeFnv1a32(bytes)
+      const bucketKey = `${bufferViewTarget}:${attribute.array.constructor.name}:${bytes.byteLength}:${attribute.itemSize}:${attribute.count}:${attribute.normalized}:${hash}`
+
+      const bucket = bucketToAccessors.get(bucketKey)
+      if (bucket)
+      {
+        for (const entry of bucket)
+        {
+          if (bytesEqual(entry.bytes, bytes))
+          {
+            return entry.accessorIndex
+          }
+        }
+      }
+
+      // 新規作成してバイト列のコピーと共にキャッシュへ保存
       const accessorIndex = originalProcessAccessor(attribute, geometry, start, count)
-      fingerprintToAccessor.set(fingerprint, accessorIndex)
+      const entry: CachedAccessorEntry = {
+        bytes: bytes.slice(),
+        accessorIndex,
+      }
+      if (bucket)
+      {
+        bucket.push(entry)
+      } else
+      {
+        bucketToAccessors.set(bucketKey, [entry])
+      }
       return accessorIndex
     }
 

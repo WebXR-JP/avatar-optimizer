@@ -102,6 +102,16 @@ export interface OptimizeModelOptions {
    */
   simplify?: SimplifyOptions
   /**
+   * VRM の表情（`vrm.expressionManager`）から参照されていない BlendShape（MorphTarget）を
+   * まとめて削除するか。
+   *
+   * ARKit パーフェクトシンクなど VRM 表情外から直接 BlendShape を操作するモデルでは
+   * それらも削除対象になるため、デフォルトは無効（`false`）としている。
+   *
+   * @default false
+   */
+  removeUnusedBlendShapes?: boolean
+  /**
    * 統合後に使うアトラスマテリアルのクラス。
    * 省略時は MToonAtlasMaterial（WebGL 専用）。
    *
@@ -384,6 +394,20 @@ export interface SkeletonOptimizationStatistics {
   originalTotalBones: number
   /** 最適化後の全ユニーク Skeleton の合計ボーン数 */
   optimizedTotalBones: number
+}
+
+/**
+ * 未使用 BlendShape（MorphTarget）削除の統計情報
+ */
+export interface RemoveUnusedBlendShapesStatistics {
+  /** 処理対象となった BlendShape を持つメッシュ数 */
+  processedMeshCount: number
+  /** 処理前の総 BlendShape（MorphTarget）数（全メッシュ合計） */
+  originalBlendShapeCount: number
+  /** 削除した BlendShape（MorphTarget）数（全メッシュ合計） */
+  removedBlendShapeCount: number
+  /** 残存する BlendShape（MorphTarget）数（全メッシュ合計） */
+  remainingBlendShapeCount: number
 }
 
 /**
