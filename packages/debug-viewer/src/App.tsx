@@ -54,6 +54,7 @@ function App()
   const [lastExportSize, setLastExportSize] = useState<number | null>(null)
   const [isSimplifying, setIsSimplifying] = useState(false)
   const [lastSimplifyStats, setLastSimplifyStats] = useState<SimplifyStatistics | null>(null)
+  const [removeUnusedBlendShapes, setRemoveUnusedBlendShapes] = useState(false)
 
   // エラーを設定すると同時にコンソールにも出力するヘルパー
   const setErrorWithLog = useCallback((message: string | null) =>
@@ -208,6 +209,7 @@ function App()
         atlas: atlasOptions,
         atlasMaterialType,
         textureCompression: DEFAULT_TEXTURE_COMPRESSION_OPTIONS,
+        removeUnusedBlendShapes,
       })
 
       if (result.isErr())
@@ -224,7 +226,7 @@ function App()
     {
       setIsOptimizing(false)
     }
-  }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
+  }, [vrm, atlasOptions, removeUnusedBlendShapes, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションなしの最適化のみ（デバッグ用）
   const handleOptimizeOnly = useCallback(async () =>
@@ -242,6 +244,7 @@ function App()
         atlas: atlasOptions,
         atlasMaterialType,
         textureCompression: DEFAULT_TEXTURE_COMPRESSION_OPTIONS,
+        removeUnusedBlendShapes,
       })
 
       if (result.isErr())
@@ -261,7 +264,7 @@ function App()
     {
       setIsOptimizing(false)
     }
-  }, [vrm, atlasOptions, setErrorWithLog, reportOptimizationResult])
+  }, [vrm, atlasOptions, removeUnusedBlendShapes, setErrorWithLog, reportOptimizationResult])
 
   // マイグレーションのみ（デバッグ用）
   const handleMigrateOnly = useCallback(() =>
@@ -656,6 +659,8 @@ function App()
           onSimplifyOnly={handleSimplifyOnly}
           isSimplifying={isSimplifying}
           lastSimplifyStats={lastSimplifyStats}
+          removeUnusedBlendShapes={removeUnusedBlendShapes}
+          onRemoveUnusedBlendShapesChange={setRemoveUnusedBlendShapes}
           defaultModels={defaultModels}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}

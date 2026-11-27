@@ -2,7 +2,7 @@
  * Node で VRM を最適化する CLI（@webxr-jp/avatar-optimizer/node の利用例を兼ねる）
  *
  *   pnpm -F @webxr-jp/avatar-optimizer run build
- *   node tools/optimize-node.mjs input.vrm output.vrm [--resolution 2048]
+ *   node tools/optimize-node.mjs input.vrm output.vrm [--resolution 2048] [--remove-unused-blend-shapes]
  *
  * アトラス合成は WebGPU（`webgpu` パッケージ = Dawn）で行う。
  * GPU の無い環境でも、Vulkan のソフトウェア実装（lavapipe など）があれば動く。
@@ -20,10 +20,11 @@ const [input, output] = args.filter((a) => !a.startsWith('--'))
 const resolutionIndex = args.indexOf('--resolution')
 const resolution =
   resolutionIndex >= 0 ? Number(args[resolutionIndex + 1]) : 2048
+const removeUnusedBlendShapes = args.includes('--remove-unused-blend-shapes')
 
 if (!input || !output) {
   console.error(
-    'usage: node tools/optimize-node.mjs input.vrm output.vrm [--resolution 2048]',
+    'usage: node tools/optimize-node.mjs input.vrm output.vrm [--resolution 2048] [--remove-unused-blend-shapes]',
   )
   process.exit(2)
 }
@@ -55,6 +56,7 @@ const vrm = loaded.value
 const t1 = performance.now()
 const optimized = await optimizeModel(vrm, {
   atlas: { defaultResolution: resolution, renderer },
+  removeUnusedBlendShapes,
 })
 if (optimized.isErr()) fail('最適化', optimized.error)
 if (optimized.value.atlasSkipped) {

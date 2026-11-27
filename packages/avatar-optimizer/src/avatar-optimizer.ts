@@ -9,6 +9,7 @@ import {
 import { generateAtlasImagesFromPatterns } from './process/gen-atlas'
 import { migrateVRM0ToVRM1 } from './process/migrate-vrm'
 import { buildPatternMaterialMappings, pack } from './process/packing'
+import { removeUnusedBlendShapes } from './process/remove-unused-blend-shapes'
 import { applyPlacementsToGeometries } from './process/set-uv'
 import { simplifyMeshes, SimplifyStatistics } from './process/simplify'
 import {
@@ -16,6 +17,7 @@ import {
   OffsetScale,
   OptimizationError,
   OptimizeModelOptions,
+  RemoveUnusedBlendShapesStatistics,
 } from './types'
 import {
   collectOriginalResources,
@@ -66,6 +68,7 @@ export function optimizeModel(
     const materialInfoResult = getMToonMaterialInfoFromObject3D(rootNode)
 
     const excludedMeshes = new Set<Mesh>()
+    let blendShapeStats: RemoveUnusedBlendShapesStatistics | undefined
     let simplifyStats: SimplifyStatistics | undefined
     let combineResult: CombinedMeshResult
 
@@ -148,6 +151,12 @@ export function optimizeModel(
       // 位置の正しさを優先した意図的なトレードオフ
       for (const mesh of collectNonSkinnedMeshes(materialMeshMap)) {
         excludedMeshes.add(mesh)
+      }
+
+      // 未使用 BlendShape（表情から参照されない MorphTarget）の削除
+      // 簡略化より先に実行し、未参照 BlendShape のみを持っていたメッシュも簡略化対象に含める
+      if (options.removeUnusedBlendShapes) {
+        blendShapeStats = yield* removeUnusedBlendShapes(vrm)
       }
 
       // メッシュ簡略化（オプションが設定されている場合）
@@ -265,7 +274,10 @@ export function optimizeModel(
         combineResult,
       })
 
-      // 簡略化統計を結果に追加
+      // 簡略化・BlendShape 削除の統計を結果に追加
+      if (blendShapeStats) {
+        combineResult.statistics.blendShapes = blendShapeStats
+      }
       if (simplifyStats) {
         combineResult.statistics.simplify = simplifyStats
       }
@@ -288,6 +300,11 @@ export function optimizeModel(
         vrm.expressionManager ?? null,
       )) {
         excludedMeshes.add(mesh)
+      }
+
+      // 未使用 BlendShape の削除（重複実行ではスキップ）
+      if (options.removeUnusedBlendShapes && !isAlreadyOptimized) {
+        blendShapeStats = yield* removeUnusedBlendShapes(vrm)
       }
 
       // 簡略化は再実行のたびに頂点が減り続けるので、重複実行では行わない
@@ -319,6 +336,9 @@ export function optimizeModel(
                 'スキップしました（簡略化とマイグレーションのみ実行）。',
             },
       )
+      if (blendShapeStats) {
+        combineResult.statistics.blendShapes = blendShapeStats
+      }
     }
 
     // VRM0.x -> VRM1.0 マイグレーション（メッシュ統合後に実行）

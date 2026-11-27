@@ -12,6 +12,7 @@ import type { SimplifyStatistics } from '../../process/simplify'
 import type {
   MToonLikeMaterial,
   OffsetScale,
+  RemoveUnusedBlendShapesStatistics,
   SkeletonOptimizationStatistics,
 } from '../../types'
 
@@ -227,6 +228,8 @@ export interface CombinedMeshResult {
     reducedDrawCalls: number
     /** メッシュ簡略化の統計（簡略化を実行した場合のみ） */
     simplify?: SimplifyStatistics
+    /** 未使用 BlendShape 削除の統計（実行した場合のみ） */
+    blendShapes?: RemoveUnusedBlendShapesStatistics
     /** スケルトン最適化の統計（実行した場合のみ） */
     skeleton?: SkeletonOptimizationStatistics
   }

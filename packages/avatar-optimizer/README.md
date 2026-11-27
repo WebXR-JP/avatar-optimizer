@@ -7,6 +7,7 @@
 - VRM model loading and export
 - Texture atlas generation for material consolidation
 - Mesh simplification using meshoptimizer
+- Unused BlendShape (MorphTarget) pruning based on VRM expressions
 - KTX2 texture compression support
 - VRM0 to VRM1 skeleton migration utilities
 - Runs in browsers and in Node (atlas composition via WebGPU / Dawn)
@@ -92,6 +93,25 @@ const result = await simplifyMeshes(vrm, {
 })
 ```
 
+### Removing Unused BlendShapes
+
+Remove MorphTargets that are not referenced by any expression in `vrm.expressionManager` and remap the expression bind indices:
+
+```typescript
+import {
+  optimizeModel,
+  removeUnusedBlendShapes,
+} from '@webxr-jp/avatar-optimizer'
+
+// Via optimizeModel option (default: false)
+const optimizedResult = await optimizeModel(vrm, {
+  removeUnusedBlendShapes: true,
+})
+
+// Or standalone
+const pruneResult = removeUnusedBlendShapes(vrm)
+```
+
 ## API
 
 ### Main Functions
@@ -102,6 +122,7 @@ const result = await simplifyMeshes(vrm, {
 | `optimizeModel(vrm, options?)` | Apply optimization pipeline (including KTX2 compression)                 |
 | `exportVRM(vrm, options?)`     | Export VRM to GLB binary (`options.textureCompression` is `@deprecated`) |
 | `simplifyMeshes(vrm, options)` | Reduce polygon count                                                     |
+| `removeUnusedBlendShapes(vrm)` | Remove MorphTargets not referenced by VRM expressions                    |
 
 ### WebGPURenderer で読み込む
 
@@ -186,6 +207,7 @@ renderer.dispose()
 - `OptimizationOptions` - Legacy optimization options type
 - `ExportVRMOptions` - Export settings (`textureCompression` is `@deprecated`)
 - `SimplifyOptions` - Mesh simplification parameters
+- `RemoveUnusedBlendShapesStatistics` - Statistics returned by `removeUnusedBlendShapes`
 - `TextureCompressionOptions` - KTX2 compression settings
 
 ## License
