@@ -1,10 +1,27 @@
 import { type VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { Euler, Quaternion, Vector3 } from 'three'
+import {
+  Bone,
+  BufferAttribute,
+  BufferGeometry,
+  DoubleSide,
+  Euler,
+  MeshBasicMaterial,
+  Object3D,
+  OrthographicCamera,
+  Quaternion,
+  Scene,
+  Skeleton,
+  SkinnedMesh,
+  Vector3,
+  WebGLRenderer,
+  WebGLRenderTarget,
+} from 'three'
 import { describe, expect, it } from 'vitest'
 import { optimizeModel } from '../../src/avatar-optimizer'
 import { exportVRM } from '../../src/io/export'
 import { loadVRM } from '../../src/io/load'
 import { migrateVRM0ToVRM1 } from '../../src/process/migrate-vrm'
+import { migrateSkeletonVRM0ToVRM1 } from '../../src/util/skeleton'
 
 const VRM0_FILE = '/AliciaSolid.vrm'
 const VRM1_FILE = '/VRM1_Constraint_Twist_Sample.vrm'
@@ -300,5 +317,117 @@ describe('VRM 0.x -> 1.0 ランタイムマイグレーションと VRMA 回転�
     expect(dirAfter.x).toBeCloseTo(dirBefore.x, 5)
     expect(dirAfter.y).toBeCloseTo(dirBefore.y, 5)
     expect(dirAfter.z).toBeCloseTo(dirBefore.z, 5)
+  })
+
+  it('共有 morphAttributes を持つマルチプリミティブで WebGL 描画後のマイグレーションが GPU キャッシュ含め正しく反映されること', () => {
+    const size = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const renderer = new WebGLRenderer({ canvas, alpha: true })
+    renderer.setClearColor(0x000000, 0)
+    const target = new WebGLRenderTarget(size, size)
+
+    try {
+      // 上半分 (prim0) と下半分 (prim1) で同一の position / morphAttributes を共有
+      const positions = new BufferAttribute(
+        new Float32Array([
+          // prim0: y in [0.1, 0.6]
+          -0.4, 0.1, 0, 0.4, 0.1, 0, 0.4, 0.6, 0, -0.4, 0.6, 0,
+          // prim1: y in [-0.6, -0.1]
+          -0.4, -0.6, 0, 0.4, -0.6, 0, 0.4, -0.1, 0, -0.4, -0.1, 0,
+        ]),
+        3,
+      )
+      // morphTarget 0: X 方向に +1.0 移動（適用後は x in [0.6, 1.4]）
+      const morphDelta = new Float32Array(8 * 3)
+      for (let i = 0; i < 8; i++) {
+        morphDelta[i * 3] = 1.0
+      }
+      const morphPos = new BufferAttribute(morphDelta, 3)
+      const skinWeights = new BufferAttribute(
+        new Float32Array(8 * 4).map((_, i) => (i % 4 === 0 ? 1 : 0)),
+        4,
+      )
+      const skinIndices = new BufferAttribute(new Float32Array(8 * 4), 4)
+
+      const makePrim = (indices: number[], skeleton: Skeleton) => {
+        const geo = new BufferGeometry()
+        geo.setAttribute('position', positions)
+        geo.setAttribute('skinWeight', skinWeights)
+        geo.setAttribute('skinIndex', skinIndices)
+        geo.setIndex(indices)
+        geo.morphAttributes.position = [morphPos]
+        geo.morphTargetsRelative = true
+        const mat = new MeshBasicMaterial({
+          color: 0xffffff,
+          side: DoubleSide,
+        })
+        const mesh = new SkinnedMesh(geo, mat)
+        mesh.frustumCulled = false
+        mesh.bind(skeleton)
+        mesh.morphTargetInfluences = [1]
+        return mesh
+      }
+
+      const rootBone = new Bone()
+      const skeleton = new Skeleton([rootBone])
+      const prim0 = makePrim([0, 1, 2, 0, 2, 3], skeleton)
+      const prim1 = makePrim([4, 5, 6, 4, 6, 7], skeleton)
+
+      const rootNode = new Object3D()
+      rootNode.add(rootBone, prim0, prim1)
+
+      const scene = new Scene()
+      scene.add(rootNode)
+      const camera = new OrthographicCamera(-2, 2, 2, -2, 0.1, 10)
+      camera.position.set(0, 0, 5)
+      camera.lookAt(0, 0, 0)
+
+      const countHalfPixels = () => {
+        renderer.setRenderTarget(target)
+        renderer.clear()
+        renderer.render(scene, camera)
+        const pixels = new Uint8Array(size * size * 4)
+        renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels)
+        let left = 0
+        let right = 0
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const alpha = pixels[(y * size + x) * 4 + 3]
+            if (alpha > 0) {
+              if (x < size / 2) left++
+              else right++
+            }
+          }
+        }
+        return { left, right }
+      }
+
+      // マイグレーション前: morph (+1.0) により右側 (x > 0) にのみ描画され、WebGLMorphtargets キャッシュが作られる
+      const before = countHalfPixels()
+      expect(before.right).toBeGreaterThan(0)
+      expect(before.left).toBe(0)
+
+      // マイグレーション実行
+      const result = migrateSkeletonVRM0ToVRM1(rootNode)
+      expect(result.isOk()).toBe(true)
+
+      // 合成位置 (position + morph) が Y 軸 180 度回転していること
+      for (const mesh of [prim0, prim1]) {
+        const pos = mesh.geometry.getAttribute('position')
+        const mPos = mesh.geometry.morphAttributes.position![0]
+        // 元の頂点0 (-0.4, 0.1, 0) + morph (1.0, 0, 0) = (0.6, 0.1, 0) -> (-0.6, 0.1, 0)
+        expect(pos.getX(0) + mPos.getX(0)).toBeCloseTo(-0.6, 5)
+      }
+
+      // マイグレーション後: GPU キャッシュが更新され、morph (-1.0) により左側 (x < 0) にのみ描画される
+      const after = countHalfPixels()
+      expect(after.left).toBeGreaterThan(0)
+      expect(after.right).toBe(0)
+    } finally {
+      target.dispose()
+      renderer.dispose()
+    }
   })
 })
