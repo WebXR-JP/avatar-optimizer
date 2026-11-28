@@ -50,15 +50,18 @@ export const shadingToony = property('float').toVar('MToonAtlasShadingToony')
 export const rim = property('vec3').toVar('MToonAtlasRim')
 
 /**
- * three のライトノードのうち、影の分離に使うプロパティ
+ * three のライトノードのうち、影の分離に使うプロパティ（three の private）
  *
- * AnalyticLightNode.setupShadow は影ありの色で colorNode を置き換え、
- * 元の色を baseColorNode に退避する。
+ * AnalyticLightNode.setupShadow は影ありの色（shadowColorNode = baseColorNode × shadowNode）で
+ * colorNode を置き換え、元の色を baseColorNode に退避する。
+ * three を上げたら AnalyticLightNode の setup / setupShadow を読み直し、
+ * tests/mtoon-atlas-lighting-model.test.ts の前提を合わせる。
  */
 interface ShadowedLightNode
 {
   light?: { isDirectionalLight?: boolean }
   shadowNode?: Node | null
+  shadowColorNode?: Node | null
   baseColorNode?: Node | null
 }
 
@@ -68,11 +71,18 @@ interface ShadowedLightNode
  * 平行光源は lightColor = baseColorNode × shadowNode なので分離できる。
  * 点光源・スポットライトは減衰も掛かった値しか渡されないため分離せず、
  * three 既定の「ライト色に影を掛ける」挙動のままにする。
+ *
+ * ライトノードは全オブジェクトで共有され、影を受けるオブジェクト（床など）を一度ビルドすると
+ * shadowNode / baseColorNode が残り続ける。影を受けないオブジェクト（receiveShadow: false）や
+ * shadowMap が無効のときは three が影なしの色（baseColorNode）を渡すので、渡された色が
+ * 影ありの色（shadowColorNode）そのもののときだけ分ける。shadowNode の有無だけで判断すると、
+ * receiveShadow: false のアバターにも bias なしの自己影が乗り、縞（シャドウアクネ）が出る。
  */
-function splitShadow(lightColor: Node, lightNode: Node): { color: Node<'vec3'>, shadow: Node<'float'> }
+export function splitShadow(lightColor: Node, lightNode: Node): { color: Node<'vec3'>, shadow: Node<'float'> }
 {
   const node = lightNode as unknown as ShadowedLightNode
-  if (node.light?.isDirectionalLight && node.shadowNode && node.baseColorNode)
+  const receivesShadow = node.shadowColorNode != null && lightColor === node.shadowColorNode
+  if (node.light?.isDirectionalLight && receivesShadow && node.shadowNode && node.baseColorNode)
   {
     return { color: node.baseColorNode as Node<'vec3'>, shadow: node.shadowNode as Node<'float'> }
   }
