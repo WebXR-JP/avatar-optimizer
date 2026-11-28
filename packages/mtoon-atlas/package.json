@@ -1,6 +1,6 @@
 {
   "name": "@webxr-jp/mtoon-atlas",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "アトラス化したテクスチャのためのMToonMaterial",
   "type": "module",
   "main": "./dist/index.js",
