@@ -7,8 +7,11 @@
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { BackSide, DataTexture, FloatType, FrontSide, RGBAFormat, Texture } from 'three'
+import { materialOpacity } from 'three/tsl'
+import { NodeMaterial } from 'three/webgpu'
+import type { NodeBuilder } from 'three/webgpu'
 import {
   DEFAULT_PARAMETER_LAYOUT,
   getMaxParameterUBOSlots,
@@ -223,6 +226,33 @@ describe('MToonAtlasNodeMaterial', () =>
     expect(cloned.outlineWidthMode).toBe('screenCoordinates')
     expect(cloned.transparent).toBe(true)
     expect(cloned.alphaTest).toBe(0.5)
+  })
+
+  it('スロットのアルファに material.opacity を掛ける（ゴーストなど外から薄くできる）', () =>
+  {
+    const material = new MToonAtlasNodeMaterial({ parameterBuffer: createBufferDescriptor(3) })
+    // NodeMaterial は opacityNode があると materialOpacity を掛けないので、渡された opacityNode を見る
+    let seen: unknown = null
+    const spy = vi
+      .spyOn(NodeMaterial.prototype, 'setupDiffuseColor')
+      .mockImplementation(function (this: NodeMaterial)
+      {
+        seen = this.opacityNode
+      })
+    try
+    {
+      material.setupDiffuseColor({} as NodeBuilder)
+    }
+    finally
+    {
+      spy.mockRestore()
+    }
+
+    const node = seen as { op?: string, bNode?: unknown } | null
+    expect(node?.op).toBe('*')
+    expect(node?.bNode).toBe(materialOpacity)
+    // 呼び出し後は元の opacityNode に戻す
+    expect(material.opacityNode).toBeNull()
   })
 
   it('createOutlineMaterial は元を変えずにアウトライン用を作る', () =>

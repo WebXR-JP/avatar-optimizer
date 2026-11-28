@@ -24,6 +24,7 @@ import {
   int,
   length,
   materialNormal,
+  materialOpacity,
   materialReference,
   mix,
   modelNormalMatrix,
@@ -532,7 +533,9 @@ export class MToonAtlasNodeMaterial extends NodeMaterial
     const prevColor = this.colorNode
     const prevOpacity = this.opacityNode
     this.colorNode = color
-    this.opacityNode = p0.a
+    // opacityNode を置くと NodeMaterial は material.opacity を掛けなくなるので自分で掛ける
+    // （スロットのアルファ × material.opacity。ゴーストなど外から薄くするときに効かせる）
+    this.opacityNode = p0.a.mul(materialOpacity)
     super.setupDiffuseColor(builder)
     this.colorNode = prevColor
     this.opacityNode = prevOpacity
